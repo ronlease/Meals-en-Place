@@ -7,11 +7,11 @@ using Microsoft.OpenApi;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Database ──────────────────────────────────────────────────────────────────
+// -- Database -----------------------------------------------------------------
 builder.Services.AddDbContext<MealsEnPlaceDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// ── Controllers & JSON ────────────────────────────────────────────────────────
+// -- Controllers & JSON -------------------------------------------------------
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -19,18 +19,17 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull;
     });
 
-// ── Swagger / OpenAPI ─────────────────────────────────────────────────────────
+// -- Swagger / OpenAPI --------------------------------------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Description = "Meals en Place API — inventory, recipe matching, meal planning, and waste reduction.",
+        Description = "Meals en Place API - inventory, recipe matching, meal planning, and waste reduction.",
         Title       = "Meals en Place API",
         Version     = "v1"
     });
 
-    // Include XML doc comments
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
     var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
     if (File.Exists(xmlPath))
@@ -39,17 +38,28 @@ builder.Services.AddSwaggerGen(options =>
     }
 });
 
-// ── Application services ──────────────────────────────────────────────────────
+// -- CORS ---------------------------------------------------------------------
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:4200")
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+// -- Application services -----------------------------------------------------
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<UomDisplayConverter>();
 
-// ── Problem details ───────────────────────────────────────────────────────────
+// -- Problem details ----------------------------------------------------------
 builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
-// ── HTTP pipeline ─────────────────────────────────────────────────────────────
+// -- HTTP pipeline ------------------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -59,6 +69,7 @@ if (app.Environment.IsDevelopment())
 
 app.UseExceptionHandler();
 app.UseHttpsRedirection();
+app.UseCors();
 app.MapControllers();
 
 app.Run();

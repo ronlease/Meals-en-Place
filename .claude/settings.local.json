@@ -5,7 +5,8 @@
       "Bash(dotnet sln:*)",
       "Bash(ls:*)",
       "Bash(dotnet add:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(ng version:*)"
     ]
   }
 }

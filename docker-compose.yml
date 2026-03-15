@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:17
+    container_name: mealsenplace-db
+    environment:
+      POSTGRES_USER: mealsenplace
+      POSTGRES_PASSWORD: mealsenplace_dev
+      POSTGRES_DB: mealsenplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

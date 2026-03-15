@@ -1,0 +1,43 @@
+.app-container {
+  height: 100vh;
+}
+
+.app-sidenav {
+  width: 220px;
+  border-right: none;
+  background: #fff;
+}
+
+.sidenav-header {
+  padding: 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+}
+
+.app-brand {
+  font-size: 16px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.87);
+  white-space: nowrap;
+}
+
+.app-content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.app-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.app-main {
+  flex: 1;
+  overflow: auto;
+}
+
+.active-link {
+  background: rgba(0, 0, 0, 0.06);
+  font-weight: 600;
+}
