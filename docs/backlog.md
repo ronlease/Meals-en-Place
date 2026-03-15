@@ -637,3 +637,143 @@ Feature: Canning Guidance
     Then a safety checklist specific to "Tomatoes" is displayed
     And the checklist covers acidity, processing time, and equipment requirements
 ```
+
+---
+
+## [MEP-015] Upcoming Expiration Dates
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+I need clear visibility into which inventory items are approaching their expiry dates so I can plan my cooking and shopping accordingly. While MEP-009 (Waste Reduction Alerts) pairs expiring items with matching recipes, it does not provide a standalone view of all upcoming expirations. Without a dedicated expiration dashboard or view, I have to manually scan through my entire inventory across all three storage locations to identify what needs to be used soon. A sorted, at-a-glance view of upcoming expirations -- ordered by urgency -- lets me make informed decisions about what to cook, what to prioritize, and what to consume before it spoils.
+
+### Acceptance Criteria
+```gherkin
+Feature: Upcoming Expiration Dates
+
+  Scenario: View items approaching expiry sorted by urgency
+    Given I have multiple inventory items with expiry dates set
+    When I view the upcoming expiration dates
+    Then items are listed in ascending order by expiry date
+    And the soonest-expiring items appear first
+
+  Scenario: Display days remaining until expiry
+    Given I have an item "Greek Yogurt" expiring in 3 days
+    When I view the upcoming expiration dates
+    Then "Greek Yogurt" shows "3 days remaining"
+
+  Scenario: Highlight items expiring within a critical window
+    Given I have an item "Milk" expiring in 2 days
+    And I have an item "Butter" expiring in 14 days
+    When I view the upcoming expiration dates
+    Then "Milk" is visually highlighted as critical (expiring within 3 days)
+    And "Butter" is displayed without critical highlighting
+
+  Scenario: Show items already past expiry
+    Given I have an item "Sour Cream" with an expiry date of yesterday
+    When I view the upcoming expiration dates
+    Then "Sour Cream" appears at the top of the list
+    And it is visually marked as expired
+
+  Scenario: Exclude items without an expiry date
+    Given I have an item "Salt" with no expiry date set
+    When I view the upcoming expiration dates
+    Then "Salt" does not appear in the list
+
+  Scenario: Display storage location for each expiring item
+    Given I have an item "Chicken Breast" in the Freezer expiring in 5 days
+    When I view the upcoming expiration dates
+    Then the entry for "Chicken Breast" shows its storage location as "Freezer"
+
+  Scenario: Filter expiring items by storage location
+    Given I have expiring items in Pantry, Fridge, and Freezer
+    When I filter the upcoming expiration dates by location "Fridge"
+    Then only items stored in the Fridge are displayed
+```
+
+---
+
+## [MEP-016] Add Open Source Icons for Edit and Delete
+
+**Status:** Backlog
+**Priority:** Low
+
+### Business Problem
+The inventory table currently uses plain text or basic buttons for edit and delete actions. These controls are functional but do not provide the immediate visual recognition that icon-based controls offer. Replacing them with widely recognized open source icons (such as Material Icons pencil/edit and trash/delete) improves scannability and reduces the cognitive load of identifying available actions in the table. This is a small UI polish item that brings the interface closer to modern application conventions.
+
+### Acceptance Criteria
+```gherkin
+Feature: Edit and Delete Icons in Inventory Table
+
+  Scenario: Display edit icon on each inventory row
+    Given I am viewing the inventory table
+    When I look at any inventory item row
+    Then the edit action is represented by a recognizable pencil/edit icon
+    And the icon is sourced from an open source icon library
+
+  Scenario: Display delete icon on each inventory row
+    Given I am viewing the inventory table
+    When I look at any inventory item row
+    Then the delete action is represented by a recognizable trash/delete icon
+    And the icon is sourced from an open source icon library
+
+  Scenario: Edit icon triggers edit action
+    Given I am viewing the inventory table
+    When I click the edit icon on an inventory item row
+    Then the edit dialog or form opens for that item
+
+  Scenario: Delete icon triggers delete confirmation
+    Given I am viewing the inventory table
+    When I click the delete icon on an inventory item row
+    Then a confirmation prompt is displayed before the item is removed
+
+  Scenario: Icons are accessible
+    Given I am viewing the inventory table
+    When a screen reader reads an inventory item row
+    Then the edit icon has an accessible label of "Edit"
+    And the delete icon has an accessible label of "Delete"
+```
+
+---
+
+## [MEP-017] Dark Mode Toggle
+
+**Status:** Backlog
+**Priority:** Low
+
+### Business Problem
+I often use this application in the evening when a bright white interface causes eye strain. A dark mode toggle would let me switch between light and dark themes based on my preference or ambient lighting conditions. This is a quality-of-life feature that makes the application more comfortable to use across different times of day and environments.
+
+**Deferred Reason:** Post-MVP scope. No blocking dependency; this is a UI preference feature to be addressed after core functionality is complete.
+
+### Acceptance Criteria
+```gherkin
+Feature: Dark Mode Toggle
+
+  Scenario: Switch from light mode to dark mode
+    Given the application is displaying in light mode
+    When I toggle the theme to dark mode
+    Then the application re-renders with a dark color scheme
+    And text, icons, and controls remain legible against the dark background
+
+  Scenario: Switch from dark mode to light mode
+    Given the application is displaying in dark mode
+    When I toggle the theme to light mode
+    Then the application re-renders with the default light color scheme
+
+  Scenario: Persist theme preference across sessions
+    Given I have set my theme preference to dark mode
+    When I close and reopen the application
+    Then the application loads in dark mode
+
+  Scenario: Default theme is light mode
+    Given I have never set a theme preference
+    When I open the application
+    Then the application displays in light mode
+
+  Scenario: Theme toggle is accessible from any screen
+    Given I am on any screen in the application
+    When I look for the theme toggle control
+    Then the toggle is visible and reachable without navigating to a settings page
+```
