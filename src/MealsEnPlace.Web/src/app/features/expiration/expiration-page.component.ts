@@ -155,7 +155,7 @@ interface ExpiringItem extends InventoryItemResponse {
         align-items: center;
         gap: 8px;
         padding: 32px 16px;
-        color: rgba(0, 0, 0, 0.54);
+        color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.54));
         font-size: 14px;
 
         mat-icon {
