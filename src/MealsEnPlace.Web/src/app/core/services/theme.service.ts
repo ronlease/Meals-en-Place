@@ -14,7 +14,11 @@ export class ThemeService {
   constructor() {
     if (isPlatformBrowser(this._platformId)) {
       const stored = localStorage.getItem(STORAGE_KEY);
-      this._isDarkMode.set(stored === 'dark');
+      if (stored) {
+        this._isDarkMode.set(stored === 'dark');
+      } else {
+        this._isDarkMode.set(window.matchMedia('(prefers-color-scheme: dark)').matches);
+      }
     }
 
     effect(() => {
