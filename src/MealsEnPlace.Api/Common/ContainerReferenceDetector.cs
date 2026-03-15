@@ -68,7 +68,7 @@ public static class ContainerReferenceDetector
         while (index >= 0)
         {
             var beforeOk = index == 0 || !char.IsLetter(input[index - 1]);
-            var afterOk  = index + word.Length == input.Length
+            var afterOk = index + word.Length == input.Length
                            || !char.IsLetter(input[index + word.Length]);
 
             if (beforeOk && afterOk)

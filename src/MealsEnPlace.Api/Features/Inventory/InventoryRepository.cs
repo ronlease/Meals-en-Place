@@ -80,10 +80,10 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
         }
 
         item.ExpiryDate = request.ExpiryDate;
-        item.Location   = request.Location;
-        item.Notes      = request.Notes;
-        item.Quantity   = request.Quantity;
-        item.UomId      = request.UomId;
+        item.Location = request.Location;
+        item.Notes = request.Notes;
+        item.Quantity = request.Quantity;
+        item.UomId = request.UomId;
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return item;

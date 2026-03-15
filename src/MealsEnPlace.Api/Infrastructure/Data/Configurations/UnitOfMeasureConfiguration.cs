@@ -12,23 +12,23 @@ namespace MealsEnPlace.Api.Infrastructure.Data.Configurations;
 public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure>
 {
     // ── Base unit IDs ─────────────────────────────────────────────────────────
-    public static readonly Guid EachId   = new("a1000000-0000-0000-0000-000000000001");
-    public static readonly Guid GramId   = new("a1000000-0000-0000-0000-000000000002");
-    public static readonly Guid MlId     = new("a1000000-0000-0000-0000-000000000003");
+    public static readonly Guid EachId = new("a1000000-0000-0000-0000-000000000001");
+    public static readonly Guid GramId = new("a1000000-0000-0000-0000-000000000002");
+    public static readonly Guid MlId = new("a1000000-0000-0000-0000-000000000003");
 
     // ── Volume unit IDs ───────────────────────────────────────────────────────
-    public static readonly Guid CupId    = new("a1000000-0000-0000-0000-000000000004");
-    public static readonly Guid FlOzId   = new("a1000000-0000-0000-0000-000000000005");
-    public static readonly Guid LiterId  = new("a1000000-0000-0000-0000-000000000006");
-    public static readonly Guid PintId   = new("a1000000-0000-0000-0000-000000000007");
-    public static readonly Guid QuartId  = new("a1000000-0000-0000-0000-000000000008");
-    public static readonly Guid TbspId   = new("a1000000-0000-0000-0000-000000000009");
-    public static readonly Guid TspId    = new("a1000000-0000-0000-0000-000000000010");
+    public static readonly Guid CupId = new("a1000000-0000-0000-0000-000000000004");
+    public static readonly Guid FlOzId = new("a1000000-0000-0000-0000-000000000005");
+    public static readonly Guid LiterId = new("a1000000-0000-0000-0000-000000000006");
+    public static readonly Guid PintId = new("a1000000-0000-0000-0000-000000000007");
+    public static readonly Guid QuartId = new("a1000000-0000-0000-0000-000000000008");
+    public static readonly Guid TbspId = new("a1000000-0000-0000-0000-000000000009");
+    public static readonly Guid TspId = new("a1000000-0000-0000-0000-000000000010");
 
     // ── Weight unit IDs ───────────────────────────────────────────────────────
-    public static readonly Guid KgId     = new("a1000000-0000-0000-0000-000000000011");
-    public static readonly Guid LbId     = new("a1000000-0000-0000-0000-000000000012");
-    public static readonly Guid OzId     = new("a1000000-0000-0000-0000-000000000013");
+    public static readonly Guid KgId = new("a1000000-0000-0000-0000-000000000011");
+    public static readonly Guid LbId = new("a1000000-0000-0000-0000-000000000012");
+    public static readonly Guid OzId = new("a1000000-0000-0000-0000-000000000013");
 
     public void Configure(EntityTypeBuilder<UnitOfMeasure> builder)
     {

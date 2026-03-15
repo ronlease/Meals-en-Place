@@ -43,7 +43,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             {
                 Detail = "Name must not be blank.",
                 Status = StatusCodes.Status400BadRequest,
-                Title  = "Bad Request"
+                Title = "Bad Request"
             });
         }
 
@@ -56,7 +56,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             {
                 Detail = $"Unit of measure '{request.DefaultUomId}' was not found.",
                 Status = StatusCodes.Status400BadRequest,
-                Title  = "Bad Request"
+                Title = "Bad Request"
             });
         }
 
@@ -69,16 +69,16 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             {
                 Detail = $"A canonical ingredient named '{request.Name}' already exists.",
                 Status = StatusCodes.Status409Conflict,
-                Title  = "Conflict"
+                Title = "Conflict"
             });
         }
 
         var ingredient = new CanonicalIngredient
         {
-            Category     = request.Category,
+            Category = request.Category,
             DefaultUomId = request.DefaultUomId,
-            Id           = Guid.NewGuid(),
-            Name         = request.Name.Trim()
+            Id = Guid.NewGuid(),
+            Name = request.Name.Trim()
         };
 
         db.CanonicalIngredients.Add(ingredient);
@@ -103,10 +103,10 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             .OrderBy(c => c.Name)
             .Select(c => new CanonicalIngredientDto
             {
-                Category     = c.Category,
+                Category = c.Category,
                 DefaultUomId = c.DefaultUomId,
-                Id           = c.Id,
-                Name         = c.Name
+                Id = c.Id,
+                Name = c.Name
             })
             .ToListAsync(cancellationToken);
 
@@ -129,9 +129,9 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             .Select(u => new UnitOfMeasureDto
             {
                 Abbreviation = u.Abbreviation,
-                Id           = u.Id,
-                Name         = u.Name,
-                UomType      = u.UomType
+                Id = u.Id,
+                Name = u.Name,
+                UomType = u.UomType
             })
             .ToListAsync(cancellationToken);
 
@@ -143,9 +143,9 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
     private static CanonicalIngredientDto MapIngredient(CanonicalIngredient ingredient) =>
         new()
         {
-            Category     = ingredient.Category,
+            Category = ingredient.Category,
             DefaultUomId = ingredient.DefaultUomId,
-            Id           = ingredient.Id,
-            Name         = ingredient.Name
+            Id = ingredient.Id,
+            Name = ingredient.Name
         };
 }

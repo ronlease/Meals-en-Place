@@ -89,46 +89,46 @@ public class InventoryServiceTests
     }
 
     private static readonly Guid IngredientId = Guid.NewGuid();
-    private static readonly Guid UomId        = Guid.NewGuid();
+    private static readonly Guid UomId = Guid.NewGuid();
 
     private static AddInventoryItemRequest BuildPlainRequest(
         StorageLocation location = StorageLocation.Pantry,
-        decimal quantity         = 500m,
-        string notes             = "",
-        DateOnly? expiryDate     = null) =>
+        decimal quantity = 500m,
+        string notes = "",
+        DateOnly? expiryDate = null) =>
         new()
         {
             CanonicalIngredientId = IngredientId,
-            ExpiryDate            = expiryDate,
-            Location              = location,
-            Notes                 = notes,
-            Quantity              = quantity,
-            UomId                 = UomId
+            ExpiryDate = expiryDate,
+            Location = location,
+            Notes = notes,
+            Quantity = quantity,
+            UomId = UomId
         };
 
     private static AddInventoryItemRequest BuildDeclaredRequest(
-        string notes            = "1 can of diced tomatoes",
-        decimal declaredQty     = 14.5m,
-        Guid? declaredUomId     = null) =>
+        string notes = "1 can of diced tomatoes",
+        decimal declaredQty = 14.5m,
+        Guid? declaredUomId = null) =>
         new()
         {
             CanonicalIngredientId = IngredientId,
-            DeclaredQuantity      = declaredQty,
-            DeclaredUomId         = declaredUomId ?? UomId,
-            Location              = StorageLocation.Pantry,
-            Notes                 = notes,
-            Quantity              = 1m,
-            UomId                 = UomId
+            DeclaredQuantity = declaredQty,
+            DeclaredUomId = declaredUomId ?? UomId,
+            Location = StorageLocation.Pantry,
+            Notes = notes,
+            Quantity = 1m,
+            UomId = UomId
         };
 
     private static InventoryItem BuildSavedItem(Guid? id = null) =>
         new()
         {
             CanonicalIngredientId = IngredientId,
-            Id                    = id ?? Guid.NewGuid(),
-            Location              = StorageLocation.Pantry,
-            Quantity              = 500m,
-            UomId                 = UomId
+            Id = id ?? Guid.NewGuid(),
+            Location = StorageLocation.Pantry,
+            Quantity = 500m,
+            UomId = UomId
         };
 
     // ── AddItemAsync — plain item (no container reference) ───────────────────
@@ -137,7 +137,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_PlainRequest_CallsRepositoryAddAsync()
     {
         // Arrange
-        var request   = BuildPlainRequest();
+        var request = BuildPlainRequest();
         var savedItem = BuildSavedItem();
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .ReturnsAsync(savedItem);
@@ -154,7 +154,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_PlainRequest_ReturnsInventoryItem()
     {
         // Arrange
-        var request   = BuildPlainRequest();
+        var request = BuildPlainRequest();
         var savedItem = BuildSavedItem();
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .ReturnsAsync(savedItem);
@@ -170,7 +170,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_RequestWithNullExpiryDate_CreatesItemWithNullExpiryDate()
     {
         // Arrange
-        var request   = BuildPlainRequest(expiryDate: null);
+        var request = BuildPlainRequest(expiryDate: null);
         InventoryItem? captured = null;
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .Callback<InventoryItem, CancellationToken>((item, _) => captured = item)
@@ -247,7 +247,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_ContainerDetected_ResponseOriginalInputMatchesNotes()
     {
         // Arrange
-        const string notes  = "1 can of diced tomatoes";
+        const string notes = "1 can of diced tomatoes";
         var request = BuildPlainRequest(notes: notes);
 
         // Act
@@ -278,7 +278,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_DeclaredSizeProvided_ContainerDetectionSkipped_ItemCreated()
     {
         // Arrange — Notes contains "can" but DeclaredQuantity/DeclaredUomId bypass detection
-        var request   = BuildDeclaredRequest(notes: "1 can of diced tomatoes", declaredQty: 14.5m);
+        var request = BuildDeclaredRequest(notes: "1 can of diced tomatoes", declaredQty: 14.5m);
         var savedItem = BuildSavedItem();
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .ReturnsAsync(savedItem);
@@ -331,7 +331,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_DeclaredSizeProvided_SavedItemPreservesNotesFromRequest()
     {
         // Arrange
-        const string notes  = "1 can of diced tomatoes";
+        const string notes = "1 can of diced tomatoes";
         var request = BuildDeclaredRequest(notes: notes);
         InventoryItem? captured = null;
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
@@ -351,7 +351,7 @@ public class InventoryServiceTests
     public async Task AddItemAsync_FreezerlocationRequest_SavedItemHasFreezerLocation()
     {
         // Arrange
-        var request   = BuildPlainRequest(location: StorageLocation.Freezer);
+        var request = BuildPlainRequest(location: StorageLocation.Freezer);
         InventoryItem? captured = null;
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .Callback<InventoryItem, CancellationToken>((item, _) => captured = item)
@@ -387,7 +387,7 @@ public class InventoryServiceTests
     public async Task GetItemByIdAsync_CallsRepositoryGetByIdAsyncWithCorrectId()
     {
         // Arrange
-        var id   = Guid.NewGuid();
+        var id = Guid.NewGuid();
         var item = BuildSavedItem(id);
         _repositoryMock.Setup(r => r.GetByIdAsync(id, It.IsAny<CancellationToken>()))
                        .ReturnsAsync(item);
@@ -466,7 +466,7 @@ public class InventoryServiceTests
     public async Task UpdateItemAsync_CallsRepositoryUpdateAsyncWithCorrectId()
     {
         // Arrange
-        var id      = Guid.NewGuid();
+        var id = Guid.NewGuid();
         var request = new UpdateInventoryItemRequest { Location = StorageLocation.Freezer, Quantity = 6m, UomId = UomId };
         var updated = BuildSavedItem(id);
         _repositoryMock.Setup(r => r.UpdateAsync(id, request, It.IsAny<CancellationToken>()))
@@ -484,7 +484,7 @@ public class InventoryServiceTests
     public async Task UpdateItemAsync_RepositoryReturnsNull_ReturnsNull()
     {
         // Arrange
-        var id      = Guid.NewGuid();
+        var id = Guid.NewGuid();
         var request = new UpdateInventoryItemRequest { Location = StorageLocation.Fridge, Quantity = 1m, UomId = UomId };
         _repositoryMock.Setup(r => r.UpdateAsync(id, request, It.IsAny<CancellationToken>()))
                        .ReturnsAsync((InventoryItem?)null);

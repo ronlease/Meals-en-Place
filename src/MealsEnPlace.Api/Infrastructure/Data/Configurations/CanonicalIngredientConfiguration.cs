@@ -11,16 +11,16 @@ namespace MealsEnPlace.Api.Infrastructure.Data.Configurations;
 public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<CanonicalIngredient>
 {
     // ── Seed ingredient IDs (produce required for seasonality windows) ─────────
-    public static readonly Guid ApplesId      = new("b1000000-0000-0000-0000-000000000001");
-    public static readonly Guid AsparagusId   = new("b1000000-0000-0000-0000-000000000002");
-    public static readonly Guid BroccoliId    = new("b1000000-0000-0000-0000-000000000003");
-    public static readonly Guid CornId        = new("b1000000-0000-0000-0000-000000000004");
-    public static readonly Guid KaleId        = new("b1000000-0000-0000-0000-000000000005");
-    public static readonly Guid PeachesId     = new("b1000000-0000-0000-0000-000000000006");
-    public static readonly Guid PumpkinId     = new("b1000000-0000-0000-0000-000000000007");
+    public static readonly Guid ApplesId = new("b1000000-0000-0000-0000-000000000001");
+    public static readonly Guid AsparagusId = new("b1000000-0000-0000-0000-000000000002");
+    public static readonly Guid BroccoliId = new("b1000000-0000-0000-0000-000000000003");
+    public static readonly Guid CornId = new("b1000000-0000-0000-0000-000000000004");
+    public static readonly Guid KaleId = new("b1000000-0000-0000-0000-000000000005");
+    public static readonly Guid PeachesId = new("b1000000-0000-0000-0000-000000000006");
+    public static readonly Guid PumpkinId = new("b1000000-0000-0000-0000-000000000007");
     public static readonly Guid StrawberriesId = new("b1000000-0000-0000-0000-000000000008");
-    public static readonly Guid TomatoesId    = new("b1000000-0000-0000-0000-000000000009");
-    public static readonly Guid ZucchiniId    = new("b1000000-0000-0000-0000-000000000010");
+    public static readonly Guid TomatoesId = new("b1000000-0000-0000-0000-000000000009");
+    public static readonly Guid ZucchiniId = new("b1000000-0000-0000-0000-000000000010");
 
     public void Configure(EntityTypeBuilder<CanonicalIngredient> builder)
     {
