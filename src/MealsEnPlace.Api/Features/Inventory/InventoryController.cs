@@ -70,7 +70,7 @@ public class InventoryController(
             {
                 Detail = $"Inventory item '{id}' was not found.",
                 Status = StatusCodes.Status404NotFound,
-                Title  = "Not Found"
+                Title = "Not Found"
             });
         }
 
@@ -99,7 +99,7 @@ public class InventoryController(
             {
                 Detail = $"Inventory item '{id}' was not found.",
                 Status = StatusCodes.Status404NotFound,
-                Title  = "Not Found"
+                Title = "Not Found"
             });
         }
 
@@ -156,7 +156,7 @@ public class InventoryController(
             {
                 Detail = $"Inventory item '{id}' was not found.",
                 Status = StatusCodes.Status404NotFound,
-                Title  = "Not Found"
+                Title = "Not Found"
             });
         }
 
@@ -175,15 +175,15 @@ public class InventoryController(
 
         return new InventoryItemResponse
         {
-            CanonicalIngredientId   = item.CanonicalIngredientId,
+            CanonicalIngredientId = item.CanonicalIngredientId,
             CanonicalIngredientName = item.CanonicalIngredient?.Name ?? string.Empty,
-            ExpiryDate              = item.ExpiryDate,
-            Id                      = item.Id,
-            Location                = item.Location,
-            Notes                   = item.Notes,
-            Quantity                = displayQty,
-            UomAbbreviation         = displayAbbr,
-            UomId                   = item.UomId
+            ExpiryDate = item.ExpiryDate,
+            Id = item.Id,
+            Location = item.Location,
+            Notes = item.Notes,
+            Quantity = displayQty,
+            UomAbbreviation = displayAbbr,
+            UomId = item.UomId
         };
     }
 }

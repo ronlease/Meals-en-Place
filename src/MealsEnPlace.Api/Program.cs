@@ -26,8 +26,8 @@ builder.Services.AddSwaggerGen(options =>
     options.SwaggerDoc("v1", new OpenApiInfo
     {
         Description = "Meals en Place API - inventory, recipe matching, meal planning, and waste reduction.",
-        Title       = "Meals en Place API",
-        Version     = "v1"
+        Title = "Meals en Place API",
+        Version = "v1"
     });
 
     var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";

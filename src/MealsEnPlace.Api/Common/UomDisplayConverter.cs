@@ -50,7 +50,7 @@ public class UomDisplayConverter(MealsEnPlaceDbContext dbContext)
             {
                 UomType.Volume => "ml",
                 UomType.Weight => "g",
-                _              => "ea"
+                _ => "ea"
             };
             return (baseQuantity, abbreviation);
         }
@@ -60,7 +60,7 @@ public class UomDisplayConverter(MealsEnPlaceDbContext dbContext)
         {
             UomType.Volume => ConvertVolumeToImperial(baseQuantity),
             UomType.Weight => ConvertWeightToImperial(baseQuantity),
-            _              => (baseQuantity, "ea")
+            _ => (baseQuantity, "ea")
         };
     }
 
@@ -70,9 +70,9 @@ public class UomDisplayConverter(MealsEnPlaceDbContext dbContext)
     {
         return ml switch
         {
-            < 59m    => (Math.Round(ml / 29.574m, 2), "fl oz"),
-            <= 946m  => (Math.Round(ml / 236.588m, 2), "cups"),
-            _        => (Math.Round(ml / 946.353m, 2), "qt")
+            < 59m => (Math.Round(ml / 29.574m, 2), "fl oz"),
+            <= 946m => (Math.Round(ml / 236.588m, 2), "cups"),
+            _ => (Math.Round(ml / 946.353m, 2), "qt")
         };
     }
 
@@ -81,7 +81,7 @@ public class UomDisplayConverter(MealsEnPlaceDbContext dbContext)
         return g switch
         {
             < 454m => (Math.Round(g / 28.350m, 2), "oz"),
-            _      => (Math.Round(g / 453.592m, 2), "lb")
+            _ => (Math.Round(g / 453.592m, 2), "lb")
         };
     }
 

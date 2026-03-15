@@ -37,12 +37,12 @@ public class InventoryService(IInventoryRepository repository) : IInventoryServi
         var item = new InventoryItem
         {
             CanonicalIngredientId = request.CanonicalIngredientId,
-            ExpiryDate            = request.ExpiryDate,
-            Id                    = Guid.NewGuid(),
-            Location              = request.Location,
-            Notes                 = hasDeclaredSize ? request.Notes : null,
-            Quantity              = hasDeclaredSize ? request.DeclaredQuantity!.Value : request.Quantity,
-            UomId                 = hasDeclaredSize ? request.DeclaredUomId!.Value    : request.UomId
+            ExpiryDate = request.ExpiryDate,
+            Id = Guid.NewGuid(),
+            Location = request.Location,
+            Notes = hasDeclaredSize ? request.Notes : null,
+            Quantity = hasDeclaredSize ? request.DeclaredQuantity!.Value : request.Quantity,
+            UomId = hasDeclaredSize ? request.DeclaredUomId!.Value : request.UomId
         };
 
         return await repository.AddAsync(item, cancellationToken);

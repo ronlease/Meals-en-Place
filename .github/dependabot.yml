@@ -1,0 +1,46 @@
+version: 2
+
+updates:
+  # NuGet packages for the API project
+  - package-ecosystem: nuget
+    directory: /src/MealsEnPlace.Api
+    schedule:
+      interval: weekly
+    target-branch: main
+    open-pull-requests-limit: 5
+    groups:
+      efcore:
+        patterns:
+          - "Microsoft.EntityFrameworkCore*"
+          - "Npgsql.EntityFrameworkCore*"
+      aspnetcore:
+        patterns:
+          - "Microsoft.AspNetCore*"
+
+  # npm packages for the Angular frontend
+  - package-ecosystem: npm
+    directory: /src/MealsEnPlace.Web
+    schedule:
+      interval: weekly
+    target-branch: main
+    open-pull-requests-limit: 5
+    groups:
+      angular:
+        patterns:
+          - "@angular/*"
+      angular-material:
+        patterns:
+          - "@angular/material"
+          - "@angular/cdk"
+
+  # GitHub Actions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    target-branch: main
+    open-pull-requests-limit: 5
+    groups:
+      github-actions:
+        patterns:
+          - "*"

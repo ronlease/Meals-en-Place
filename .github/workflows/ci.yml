@@ -1,0 +1,177 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # -- .NET: restore, build, and test (unit + integration) --------------------
+  dotnet-build-test:
+    name: .NET Build & Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MealsEnPlace.slnx
+
+      - name: Build
+        run: dotnet build MealsEnPlace.slnx --no-restore --configuration Release
+
+      - name: Run tests
+        run: dotnet test MealsEnPlace.slnx --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dotnet-test-results
+          path: ./test-results/*.trx
+          retention-days: 7
+
+  # -- .NET: format check ----------------------------------------------------
+  dotnet-format:
+    name: .NET Format Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MealsEnPlace.slnx
+
+      - name: Check formatting
+        run: dotnet format MealsEnPlace.slnx --verify-no-changes --verbosity diagnostic
+
+  # -- .NET: dependency vulnerability scan -----------------------------------
+  dotnet-dependency-scan:
+    name: .NET Dependency Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: nuget-
+
+      - name: Restore dependencies
+        run: dotnet restore MealsEnPlace.slnx
+
+      - name: Scan for vulnerable packages
+        run: |
+          output=$(dotnet list MealsEnPlace.slnx package --vulnerable --include-transitive 2>&1)
+          echo "$output"
+          if echo "$output" | grep -qi "has the following vulnerable packages"; then
+            echo "Vulnerable packages detected. Failing the build."
+            exit 1
+          fi
+
+  # -- Angular: production build ---------------------------------------------
+  angular-build:
+    name: Angular Build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/MealsEnPlace.Web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: src/MealsEnPlace.Web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
+        run: npx ng build --configuration production
+
+  # -- npm: audit for high/critical vulnerabilities --------------------------
+  npm-audit:
+    name: npm Audit
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: src/MealsEnPlace.Web
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node 22
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: src/MealsEnPlace.Web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high
+
+  # -- Secret scanning via Gitleaks ------------------------------------------
+  secret-scan:
+    name: Secret Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
