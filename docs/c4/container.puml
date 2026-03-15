@@ -1,0 +1,27 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Container Diagram for Meals en Place
+
+Person(user, "User", "Single local user")
+
+System_Boundary(app, "Meals en Place") {
+    Container(web, "Angular Web App", "Angular 21, Angular Material, ApexCharts", "Pantry UI, meal plan board, recipe browser, container reference resolution prompts, seasonal produce dashboard")
+    Container(api, "API", "ASP.NET Core 10, EF Core 10", "REST API under /api/v1/. Recipe matching, meal plan generation, UOM normalization, display conversion via UomDisplayConverter, Claude integration, external API orchestration")
+    ContainerDb(db, "Database", "PostgreSQL", "Inventory items, canonical ingredients, recipes, recipe ingredients, meal plans, meal plan slots, shopping lists, seasonality windows, user display preferences")
+}
+
+System_Ext(claude, "Claude API", "UOM normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
+System_Ext(openfoodfacts, "Open Food Facts API", "Ingredient metadata and nutritional data")
+
+Rel(user, web, "Uses", "HTTP localhost")
+Rel(web, api, "Calls", "HTTP/JSON")
+Rel(api, db, "Reads/Writes", "EF Core")
+Rel(api, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
+Rel(api, themealdb, "Imports recipes", "HTTPS/JSON")
+Rel(api, openfoodfacts, "Resolves ingredient metadata", "HTTPS/JSON")
+
+@enduml
