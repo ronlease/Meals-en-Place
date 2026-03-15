@@ -1,4 +1,25 @@
+export interface CanonicalIngredientDto {
+  abbreviation: string;
+  category: string;
+  defaultUomId: string;
+  id: string;
+  name: string;
+}
+
+export interface CreateIngredientRequest {
+  category: string;
+  defaultUomId: string;
+  name: string;
+}
+
 export type InventoryLocation = 'Pantry' | 'Fridge' | 'Freezer';
+
+export interface UnitOfMeasureDto {
+  abbreviation: string;
+  id: string;
+  name: string;
+  uomType: string;
+}
 
 export interface AddInventoryItemRequest {
   canonicalIngredientId: string;
