@@ -51,7 +51,7 @@ Feature: Inventory Management
 
 ## [MEP-002] UOM Normalization
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -100,7 +100,7 @@ Feature: UOM Normalization
 
 ## [MEP-003] Container Reference Resolution
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
