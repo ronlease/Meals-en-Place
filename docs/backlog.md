@@ -2,7 +2,7 @@
 
 ## [MEP-001] Inventory Management
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -642,7 +642,7 @@ Feature: Canning Guidance
 
 ## [MEP-015] Upcoming Expiration Dates
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem
@@ -696,7 +696,7 @@ Feature: Upcoming Expiration Dates
 
 ## [MEP-016] Add Open Source Icons for Edit and Delete
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
 
 ### Business Problem
@@ -739,7 +739,7 @@ Feature: Edit and Delete Icons in Inventory Table
 
 ## [MEP-017] Dark Mode Toggle
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
 
 ### Business Problem

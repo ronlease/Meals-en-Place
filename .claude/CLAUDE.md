@@ -146,6 +146,8 @@ Before any PR is opened, verify the following:
 5. All tests pass (`dotnet test`)
 6. Code coverage is at least 90% (excluding EF migrations, generated code, property-only DTOs, and Program.cs)
 7. Delete any leftover `coverage-*/` and `**/TestResults/` directories before committing
+8. Update `docs/backlog.md` — mark completed items as `Done`, verify no stale statuses
+9. Run `dotnet format` and fix any violations
 
 ## Post-MVP Feature Stubs
 The following feature folders are pre-created but contain no implementation. Do not implement
