@@ -98,13 +98,17 @@ public class UomNormalizationService(
     {
         var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
 
-        // Step 1: deterministic lookup by abbreviation.
+        // Step 1: deterministic lookup by abbreviation (with plural stripping).
         if (!string.IsNullOrWhiteSpace(unitToken))
         {
+            var normalizedToken = unitToken.ToLower().TrimEnd('s');
             var uom = await dbContext.UnitsOfMeasure
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    u => u.Abbreviation.ToLower() == unitToken.ToLower(),
+                    u => u.Abbreviation.ToLower() == unitToken.ToLower()
+                         || u.Abbreviation.ToLower() == normalizedToken
+                         || u.Name.ToLower() == unitToken.ToLower()
+                         || u.Name.ToLower() == normalizedToken,
                     cancellationToken);
 
             if (uom is not null)
