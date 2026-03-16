@@ -158,7 +158,7 @@ Feature: Container Reference Resolution
 
 ## [MEP-004] Recipe Library Import
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -268,7 +268,7 @@ Feature: Recipe Dietary Classification
 
 ## [MEP-006] Recipe Matching -- What Can I Make?
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem

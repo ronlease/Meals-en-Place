@@ -62,6 +62,7 @@ builder.Services.AddScoped<IClaudeService, ClaudeService>();
 builder.Services.AddScoped<IContainerResolutionService, ContainerResolutionService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
+builder.Services.AddScoped<IRecipeMatchingService, RecipeMatchingService>();
 builder.Services.AddScoped<ITheMealDbClient, TheMealDbClient>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IUomConversionService, UomConversionService>();

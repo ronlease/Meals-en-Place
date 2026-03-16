@@ -44,7 +44,8 @@ public class ClaudeService : IClaudeService
 
     /// <inheritdoc />
     public Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(
-        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry)
+        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry,
+        CancellationToken cancellationToken = default)
     {
         return Task.FromResult<IReadOnlyList<SubstitutionSuggestion>>([]);
     }

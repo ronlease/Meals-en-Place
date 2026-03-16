@@ -87,7 +87,8 @@ public interface IClaudeService
     /// Suggests substitutions for missing ingredients in a near-match recipe.
     /// </summary>
     Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(
-        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry);
+        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>A missing ingredient for substitution suggestions.</summary>
