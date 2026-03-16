@@ -777,3 +777,88 @@ Feature: Dark Mode Toggle
     When I look for the theme toggle control
     Then the toggle is visible and reachable without navigating to a settings page
 ```
+
+---
+
+## [MEP-018] Recipe Detail and Manual Recipe Management
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+When browsing my recipe library, I can see recipe titles but cannot view the full ingredient list without leaving the list view. I need a recipe detail view that shows all ingredients so I can quickly decide whether a recipe is practical for me right now. From that detail view, I also want to add all the recipe's ingredients to a shopping list in one action, eliminating the need to transcribe items manually. Additionally, imported recipes from TheMealDB should link back to their original source website so I can reference the author's notes, photos, or comments. Finally, not every recipe I want to cook comes from TheMealDB -- I need the ability to manually create my own recipes directly in the application, entering a title, ingredients with quantities and units, instructions, cuisine, and season affinity, so my full cooking repertoire is captured in one place.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe Detail and Manual Recipe Management
+
+  Scenario: View recipe ingredients from the recipe list
+    Given I am viewing my recipe library
+    When I select a recipe "Spaghetti Aglio e Olio"
+    Then a detail view opens showing the recipe title, instructions, cuisine, and dietary tags
+    And the detail view lists all ingredients with their quantities and units of measure
+
+  Scenario: View container reference notes on recipe ingredients
+    Given a recipe ingredient was resolved from a container reference
+    And the Notes field contains "1 can chopped tomatoes"
+    When I view the recipe detail
+    Then the ingredient row displays the resolved quantity and unit
+    And the original container reference "1 can chopped tomatoes" is shown as a note
+
+  Scenario: Add all recipe ingredients to a shopping list
+    Given I am viewing the detail view of a recipe
+    When I click "Add to Shopping List"
+    Then all ingredients from the recipe are added to my shopping list
+    And each shopping list item reflects the recipe's required quantity and unit
+
+  Scenario: Shopping list aggregates quantities for duplicate ingredients
+    Given my shopping list already contains "Olive Oil" at 30 ml
+    And the recipe I am viewing requires 45 ml of "Olive Oil"
+    When I click "Add to Shopping List"
+    Then the shopping list entry for "Olive Oil" is updated to 75 ml
+    And no duplicate entry is created
+
+  Scenario: Link to original source website for imported recipes
+    Given a recipe was imported from TheMealDB
+    And the recipe has a source URL stored
+    When I view the recipe detail
+    Then a "View Original Source" link is displayed
+    And clicking the link opens the source website in a new browser tab
+
+  Scenario: No source link for manually created recipes
+    Given a recipe was manually created by me
+    When I view the recipe detail
+    Then no "View Original Source" link is displayed
+
+  Scenario: Manually create a new recipe
+    Given I am on the recipe library screen
+    When I click "Create Recipe"
+    Then a form opens for entering a new recipe
+    And the form includes fields for title, instructions, cuisine, and season affinity
+
+  Scenario: Add ingredients to a manually created recipe
+    Given I am creating a new recipe
+    When I add an ingredient with name "Garlic", quantity 3, and unit "cloves"
+    Then the ingredient appears in the recipe's ingredient list
+    And I can add additional ingredients
+
+  Scenario: Save a manually created recipe
+    Given I have entered a title "Grandma's Tomato Soup"
+    And I have added at least one ingredient
+    And I have entered instructions
+    When I save the recipe
+    Then the recipe "Grandma's Tomato Soup" appears in my recipe library
+    And the recipe is available for matching, meal planning, and dietary classification
+
+  Scenario: Validate required fields on manual recipe creation
+    Given I am creating a new recipe
+    When I attempt to save without entering a title
+    Then the system displays a validation error indicating the title is required
+    And the recipe is not saved
+
+  Scenario: Container reference detection on manual recipe entry
+    Given I am creating a new recipe
+    When I add an ingredient with a container reference such as "1 can" for "Diced Tomatoes"
+    Then the system detects "can" as a container reference
+    And the ingredient is flagged for user declaration of net weight or volume
+```
