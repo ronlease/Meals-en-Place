@@ -10,6 +10,9 @@ public sealed class TheMealDbClient(IHttpClientFactory httpClientFactory, ILogge
 {
     private const string ClientName = "TheMealDb";
 
+    private static string SanitizeForLogging(string value) =>
+        value?.Replace("\r", string.Empty).Replace("\n", string.Empty) ?? string.Empty;
+
     /// <inheritdoc />
     public async Task<IReadOnlyList<TheMealDbMeal>> FilterByCategoryAsync(string category, CancellationToken cancellationToken = default)
     {
@@ -22,7 +25,7 @@ public sealed class TheMealDbClient(IHttpClientFactory httpClientFactory, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "TheMealDB FilterByCategory failed for '{Category}'.", category);
+            logger.LogWarning(ex, "TheMealDB FilterByCategory failed for '{Category}'.", SanitizeForLogging(category));
             return [];
         }
     }
@@ -39,7 +42,7 @@ public sealed class TheMealDbClient(IHttpClientFactory httpClientFactory, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "TheMealDB GetById failed for '{MealId}'.", mealId);
+            logger.LogWarning(ex, "TheMealDB GetById failed for '{MealId}'.", SanitizeForLogging(mealId));
             return null;
         }
     }
@@ -56,7 +59,7 @@ public sealed class TheMealDbClient(IHttpClientFactory httpClientFactory, ILogge
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "TheMealDB SearchByName failed for '{Query}'.", query);
+            logger.LogWarning(ex, "TheMealDB SearchByName failed for '{Query}'.", SanitizeForLogging(query));
             return [];
         }
     }
