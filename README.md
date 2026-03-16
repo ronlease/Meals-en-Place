@@ -33,7 +33,7 @@ dotnet run --project src/MealsEnPlace.Api --launch-profile https
 # In a separate terminal, start the frontend (HTTPS on port 4280)
 cd src/MealsEnPlace.Web
 npm install
-ng serve --ssl --port 4280
+ng serve
 ```
 
 Open `https://localhost:4280` in your browser.
@@ -51,30 +51,44 @@ dotnet test
 ```
 src/
   MealsEnPlace.Api/          # ASP.NET Core Web API
-    Common/                   # Shared types, UOM conversion, container detection
-    Features/Inventory/       # Inventory CRUD, reference data endpoints
-    Infrastructure/Data/      # EF Core DbContext, migrations, configurations
+    Common/                   # Shared types, UOM conversion/normalization, container detection
+    Features/
+      Inventory/              # Inventory CRUD, reference data endpoints
+      Recipes/                # Recipe import, matching, container resolution
+    Infrastructure/
+      Claude/                 # Claude API client (stub) and prompt types
+      Data/                   # EF Core DbContext, migrations, configurations
+      ExternalApis/           # TheMealDB and Open Food Facts clients
     Models/Entities/          # Domain entities and enums
   MealsEnPlace.Web/           # Angular 21 frontend
-    src/app/features/         # Feature modules (inventory, etc.)
+    src/app/features/
+      inventory/              # Pantry/Fridge/Freezer management
+      recipes/                # Recipe browser, import, matching
+      expiration/             # Upcoming expiration dates view
     src/app/core/             # Shared services and models
 tests/
-  MealsEnPlace.Unit/          # Unit tests (82 tests)
-  MealsEnPlace.Integration/   # Integration tests (WebApplicationFactory)
+  MealsEnPlace.Unit/          # Unit tests (170 tests)
+  MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-017)
+  backlog.md                  # Product backlog (MEP-001 through MEP-018)
   c4/                         # PlantUML C4 architecture diagrams
 ```
 
-## Key Features (MVP Roadmap)
+## Implemented Features
 
 - **Inventory Management** (MEP-001) -- Track items across Pantry, Fridge, and Freezer with quantity, UOM, and expiry dates
 - **UOM Normalization** (MEP-002) -- Convert between units; Claude resolves colloquial measures
 - **Container Reference Resolution** (MEP-003) -- Detect "1 can", "1 jar" and prompt for actual weight/volume
 - **Recipe Import** (MEP-004) -- Import from TheMealDB by name, cuisine, or category
-- **Dietary Classification** (MEP-005) -- Claude auto-tags recipes (Vegetarian, Vegan, GlutenFree, etc.)
-- **Recipe Matching** (MEP-006) -- "What can I make?" ranked by ingredient coverage
-- **Meal Plan Generation** (MEP-007) -- Weekly plans optimized for waste reduction and seasonality
+- **Recipe Matching** (MEP-006) -- "What can I make?" ranked by ingredient coverage with waste bonus
+- **Upcoming Expiration Dates** (MEP-015) -- Dashboard view of items approaching expiry
+- **Material Icons** (MEP-016) -- Edit and delete icons in inventory table
+- **Dark Mode** (MEP-017) -- Theme toggle with OS preference detection and localStorage persistence
+
+## MVP Roadmap (Remaining)
+
+- **Dietary Classification** (MEP-005) -- Claude auto-tags recipes
+- **Meal Plan Generation** (MEP-007) -- Weekly plans optimized for waste reduction
 - **Shopping List** (MEP-008) -- Auto-generated from meal plan gaps
 - **Waste Alerts** (MEP-009) -- Notify when expiring items match available recipes
 - **Seasonal Produce** (MEP-010) -- USDA Zone 7a growing season guidance

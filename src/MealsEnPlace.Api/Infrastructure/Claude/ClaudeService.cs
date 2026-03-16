@@ -1,3 +1,5 @@
+using MealsEnPlace.Api.Models.Entities;
+
 namespace MealsEnPlace.Api.Infrastructure.Claude;
 
 /// <summary>
@@ -32,5 +34,19 @@ public class ClaudeService : IClaudeService
         };
 
         return Task.FromResult(result);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<DietaryTag>> ClassifyDietaryTagsAsync(Recipe recipe)
+    {
+        return Task.FromResult<IReadOnlyList<DietaryTag>>([]);
+    }
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(
+        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult<IReadOnlyList<SubstitutionSuggestion>>([]);
     }
 }

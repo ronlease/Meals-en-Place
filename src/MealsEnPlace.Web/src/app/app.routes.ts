@@ -16,6 +16,13 @@ export const routes: Routes = [
     path: 'inventory',
   },
   {
+    loadChildren: () =>
+      import('./features/recipes/recipes.routes').then(
+        (m) => m.recipesRoutes
+      ),
+    path: 'recipes',
+  },
+  {
     path: '',
     pathMatch: 'full',
     redirectTo: 'inventory',
