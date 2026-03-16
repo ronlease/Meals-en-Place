@@ -5,18 +5,17 @@
 .app-sidenav {
   width: 220px;
   border-right: none;
-  background: #fff;
 }
 
 .sidenav-header {
   padding: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.12);
+  border-bottom: 1px solid var(--mat-sys-outline-variant, rgba(0, 0, 0, 0.12));
 }
 
 .app-brand {
   font-size: 16px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.87);
+  color: var(--mat-sys-on-surface, rgba(0, 0, 0, 0.87));
   white-space: nowrap;
 }
 
@@ -32,12 +31,16 @@
   z-index: 100;
 }
 
+.toolbar-spacer {
+  flex: 1 1 auto;
+}
+
 .app-main {
   flex: 1;
   overflow: auto;
 }
 
 .active-link {
-  background: rgba(0, 0, 0, 0.06);
+  background: var(--mat-sys-secondary-container, rgba(0, 0, 0, 0.06));
   font-weight: 600;
 }

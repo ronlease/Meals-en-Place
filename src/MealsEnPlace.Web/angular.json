@@ -83,7 +83,9 @@
         "serve": {
           "builder": "@angular/build:dev-server",
           "options": {
-            "proxyConfig": "proxy.conf.json"
+            "port": 4280,
+            "proxyConfig": "proxy.conf.json",
+            "ssl": true
           },
           "configurations": {
             "production": {
