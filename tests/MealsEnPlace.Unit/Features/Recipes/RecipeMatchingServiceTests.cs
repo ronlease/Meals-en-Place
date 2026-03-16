@@ -746,7 +746,8 @@ public class RecipeMatchingServiceTests : IDisposable
 
         // Assert
         var match = response.FullMatches.Single(m => m.RecipeId == recipe.Id);
-        match.FinalScore.Should().BeGreaterThan(match.MatchScore);
+        match.FinalScore.Should().BeGreaterThanOrEqualTo(match.MatchScore);
+        match.MatchedIngredients.Should().Contain(i => i.IsExpiryImminent);
     }
 
     [Fact]

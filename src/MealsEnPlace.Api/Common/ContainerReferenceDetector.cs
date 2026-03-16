@@ -50,7 +50,7 @@ public static class ContainerReferenceDetector
 
         foreach (var keyword in ContainerKeywords)
         {
-            if (ContainsWholeWord(input, keyword))
+            if (ContainsWholeWord(input, keyword) || ContainsWholeWord(input, keyword + "s"))
             {
                 return ContainerReferenceDetectionResult.Detected(input, keyword);
             }
