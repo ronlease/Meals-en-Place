@@ -62,7 +62,7 @@ type CardStatus = 'idle' | 'importing' | 'done' | 'conflict' | 'error';
         @if (searchLoading()) {
           <mat-progress-spinner mode="indeterminate" diameter="18" />
         } @else {
-          <mat-icon>search</mat-icon>
+          <ng-container><mat-icon>search</mat-icon></ng-container>
         }
         Search
       </button>
@@ -151,8 +151,7 @@ type CardStatus = 'idle' | 'importing' | 'done' | 'conflict' | 'error';
                   <mat-progress-spinner mode="indeterminate" diameter="18" />
                   Importing...
                 } @else {
-                  <mat-icon>download</mat-icon>
-                  Import
+                  <ng-container><mat-icon>download</mat-icon> Import</ng-container>
                 }
               </button>
             </mat-card-actions>
