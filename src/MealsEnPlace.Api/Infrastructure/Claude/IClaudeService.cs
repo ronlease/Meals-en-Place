@@ -1,3 +1,5 @@
+using MealsEnPlace.Api.Models.Entities;
+
 namespace MealsEnPlace.Api.Infrastructure.Claude;
 
 /// <summary>
@@ -71,5 +73,36 @@ public interface IClaudeService
     /// If <see cref="UomResolutionResult.Confidence"/> is <see cref="ClaudeConfidence.Low"/>,
     /// the caller must surface a prompt to the user rather than applying the result silently.
     /// </returns>
+    /// <summary>
+    /// Classifies a recipe's dietary tags by analyzing its ingredients and instructions.
+    /// </summary>
+    Task<IReadOnlyList<DietaryTag>> ClassifyDietaryTagsAsync(Recipe recipe);
+
+    /// <summary>
+    /// Resolves a colloquial or unmappable measure string to a canonical quantity and unit.
+    /// </summary>
     Task<UomResolutionResult> ResolveUomAsync(string colloquialQuantity, string ingredientName);
+
+    /// <summary>
+    /// Suggests substitutions for missing ingredients in a near-match recipe.
+    /// </summary>
+    Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(
+        Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry);
+}
+
+/// <summary>A missing ingredient for substitution suggestions.</summary>
+public sealed class MissingIngredient
+{
+    public string CanonicalIngredientName { get; init; } = string.Empty;
+    public decimal RequiredQuantity { get; init; }
+    public string RequiredUom { get; init; } = string.Empty;
+}
+
+/// <summary>A Claude-suggested substitution for a missing ingredient.</summary>
+public sealed class SubstitutionSuggestion
+{
+    public ClaudeConfidence Confidence { get; init; }
+    public string MissingIngredientName { get; init; } = string.Empty;
+    public string Notes { get; init; } = string.Empty;
+    public string SuggestedSubstitute { get; init; } = string.Empty;
 }
