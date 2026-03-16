@@ -21,6 +21,23 @@
         <mat-icon matListItemIcon>schedule</mat-icon>
         <span matListItemTitle>Expiring Soon</span>
       </a>
+      <a
+        mat-list-item
+        routerLink="/recipes"
+        routerLinkActive="active-link"
+        [routerLinkActiveOptions]="{ exact: false }"
+      >
+        <mat-icon matListItemIcon>restaurant</mat-icon>
+        <span matListItemTitle>Recipes</span>
+      </a>
+      <a
+        mat-list-item
+        routerLink="/recipes/import"
+        routerLinkActive="active-link"
+      >
+        <mat-icon matListItemIcon>cloud_download</mat-icon>
+        <span matListItemTitle>Import Recipes</span>
+      </a>
     </mat-nav-list>
   </mat-sidenav>
 
