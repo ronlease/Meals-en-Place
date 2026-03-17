@@ -43,6 +43,18 @@ public class ClaudeService : IClaudeService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Stub: returns candidates unchanged. Real implementation would send the full plan
+    /// to Claude for variety and waste-reduction optimization.
+    /// </remarks>
+    public Task<IReadOnlyList<MealPlanSlotCandidate>> OptimizeMealPlanAsync(
+        IReadOnlyList<MealPlanSlotCandidate> candidates, IReadOnlyList<InventoryItem> expiringItems,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.FromResult(candidates);
+    }
+
+    /// <inheritdoc />
     public Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(
         Recipe recipe, IReadOnlyList<MissingIngredient> missing, IReadOnlyList<InventoryItem> pantry,
         CancellationToken cancellationToken = default)

@@ -23,6 +23,14 @@
       </a>
       <a
         mat-list-item
+        routerLink="/meal-plan"
+        routerLinkActive="active-link"
+      >
+        <mat-icon matListItemIcon>calendar_month</mat-icon>
+        <span matListItemTitle>Meal Plan</span>
+      </a>
+      <a
+        mat-list-item
         routerLink="/recipes"
         routerLinkActive="active-link"
         [routerLinkActiveOptions]="{ exact: false }"
@@ -37,6 +45,22 @@
       >
         <mat-icon matListItemIcon>cloud_download</mat-icon>
         <span matListItemTitle>Import Recipes</span>
+      </a>
+      <a
+        mat-list-item
+        routerLink="/shopping-list"
+        routerLinkActive="active-link"
+      >
+        <mat-icon matListItemIcon>shopping_cart</mat-icon>
+        <span matListItemTitle>Shopping List</span>
+      </a>
+      <a
+        mat-list-item
+        routerLink="/waste-alerts"
+        routerLinkActive="active-link"
+      >
+        <mat-icon matListItemIcon>compost</mat-icon>
+        <span matListItemTitle>Waste Alerts</span>
       </a>
     </mat-nav-list>
   </mat-sidenav>

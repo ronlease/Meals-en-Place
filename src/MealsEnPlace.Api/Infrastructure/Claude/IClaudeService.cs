@@ -84,6 +84,13 @@ public interface IClaudeService
     Task<UomResolutionResult> ResolveUomAsync(string colloquialQuantity, string ingredientName);
 
     /// <summary>
+    /// Reviews a generated meal plan and optimizes slot assignments for variety and waste reduction.
+    /// </summary>
+    Task<IReadOnlyList<MealPlanSlotCandidate>> OptimizeMealPlanAsync(
+        IReadOnlyList<MealPlanSlotCandidate> candidates, IReadOnlyList<InventoryItem> expiringItems,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Suggests substitutions for missing ingredients in a near-match recipe.
     /// </summary>
     Task<IReadOnlyList<SubstitutionSuggestion>> SuggestSubstitutionsAsync(

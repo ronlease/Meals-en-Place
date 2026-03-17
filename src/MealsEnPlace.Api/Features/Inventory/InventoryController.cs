@@ -12,6 +12,7 @@ namespace MealsEnPlace.Api.Features.Inventory;
 [Produces("application/json")]
 public class InventoryController(
     IInventoryService inventoryService,
+    IUomConversionService uomConversionService,
     UomDisplayConverter displayConverter) : ControllerBase
 {
     /// <summary>
@@ -170,8 +171,11 @@ public class InventoryController(
         CancellationToken cancellationToken)
     {
         var uomType = item.Uom?.UomType ?? UomType.Arbitrary;
+        var baseConversion = await uomConversionService.ConvertToBaseUnitsAsync(
+            item.Quantity, item.UomId, cancellationToken);
+        var baseQuantity = baseConversion.Success ? baseConversion.ConvertedQuantity : item.Quantity;
         var (displayQty, displayAbbr) = await displayConverter.ConvertAsync(
-            item.Quantity, uomType, cancellationToken);
+            baseQuantity, uomType, cancellationToken);
 
         return new InventoryItemResponse
         {

@@ -17,10 +17,31 @@ export const routes: Routes = [
   },
   {
     loadChildren: () =>
+      import('./features/meal-plan/meal-plan.routes').then(
+        (m) => m.mealPlanRoutes
+      ),
+    path: 'meal-plan',
+  },
+  {
+    loadChildren: () =>
       import('./features/recipes/recipes.routes').then(
         (m) => m.recipesRoutes
       ),
     path: 'recipes',
+  },
+  {
+    loadChildren: () =>
+      import('./features/shopping-list/shopping-list.routes').then(
+        (m) => m.shoppingListRoutes
+      ),
+    path: 'shopping-list',
+  },
+  {
+    loadChildren: () =>
+      import('./features/waste-alerts/waste-alerts.routes').then(
+        (m) => m.wasteAlertsRoutes
+      ),
+    path: 'waste-alerts',
   },
   {
     path: '',

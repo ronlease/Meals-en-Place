@@ -329,7 +329,7 @@ Feature: Recipe Matching
 
 ## [MEP-007] Meal Plan Generation
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -384,7 +384,7 @@ Feature: Meal Plan Generation
 
 ## [MEP-008] Shopping List Derivation
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -430,7 +430,7 @@ Feature: Shopping List Derivation
 
 ## [MEP-009] Waste Reduction Alerts
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -861,4 +861,255 @@ Feature: Recipe Detail and Manual Recipe Management
     When I add an ingredient with a container reference such as "1 can" for "Diced Tomatoes"
     Then the system detects "can" as a container reference
     And the ingredient is flagged for user declaration of net weight or volume
+```
+
+---
+
+## [MEP-019] Audit Code for Over-Complication
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+The codebase has grown quickly with multiple agents contributing code across the API, frontend, and test projects. Without periodic review, unnecessary abstraction layers, dead code, unused imports, overly complex logic, and gold-plated features accumulate and make the system harder to understand, maintain, and debug. I need a thorough audit of all services, controllers, and components to simplify the codebase, remove anything that is not earning its keep, and ensure every public API surface is actually consumed. This is a code health item that reduces future maintenance burden and keeps the project approachable.
+
+### Acceptance Criteria
+```gherkin
+Feature: Codebase Over-Complication Audit
+
+  Scenario: Identify and remove dead code
+    Given the full codebase has been reviewed
+    When dead code is identified (methods, classes, or files that are never called or referenced)
+    Then all dead code is removed
+    And the solution still builds successfully
+    And all existing tests still pass
+
+  Scenario: Simplify overly abstract patterns
+    Given a service, controller, or component uses abstraction layers that add indirection without clear benefit
+    When the abstraction is reviewed
+    Then the unnecessary abstraction is collapsed or inlined
+    And the resulting code is functionally equivalent
+    And all existing tests still pass
+
+  Scenario: Reduce unnecessary indirection
+    Given a code path passes through intermediate classes or methods that add no logic, transformation, or branching
+    When the indirection is reviewed
+    Then the pass-through layers are removed or consolidated
+    And the calling code is updated to reference the simplified path
+    And all existing tests still pass
+
+  Scenario: Verify all public APIs are consumed
+    Given all public methods and properties on services, controllers, and components have been inventoried
+    When each public member is checked for at least one caller or consumer
+    Then any public member with zero consumers is either removed or reduced to internal/private visibility
+    And the solution still builds successfully
+
+  Scenario: Remove unused imports and dependencies
+    Given all source files have been reviewed
+    When unused using directives, import statements, or package references are identified
+    Then they are removed
+    And the solution still builds successfully
+    And all existing tests still pass
+
+  Scenario: Confirm no gold-plating exists
+    Given the implemented features have been compared against their backlog acceptance criteria
+    When functionality beyond the stated acceptance criteria is identified
+    Then that functionality is evaluated for removal or simplification
+    And any removed functionality does not break existing acceptance criteria
+```
+
+---
+
+## [MEP-020] Audit GitHub Workflows
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+The project uses GitHub Actions for CI, CodeQL analysis, Dependabot, and auto-merge. As the project structure evolves -- new projects, changed dependencies, updated frameworks -- the workflow configurations can fall out of alignment with the actual codebase. Misconfigured triggers, stale cache keys, missing steps, redundant jobs, or incomplete Dependabot coverage lead to wasted CI minutes, false confidence in passing builds, or missed vulnerability scans. I need a thorough audit of all GitHub Actions workflows to ensure they are correct, efficient, and aligned with the current project structure.
+
+### Acceptance Criteria
+```gherkin
+Feature: GitHub Workflow Audit
+
+  Scenario: All workflow jobs pass on a clean checkout
+    Given each GitHub Actions workflow file has been reviewed
+    When every workflow is run against a clean checkout of the main branch
+    Then all jobs complete successfully without errors or warnings
+
+  Scenario: Cache keys match current project files
+    Given workflows use caching for dependencies (NuGet, npm, etc.)
+    When the cache key patterns are reviewed
+    Then each cache key references the correct lock files or project files for the current project structure
+    And no cache key references files that no longer exist
+
+  Scenario: No unnecessary jobs run
+    Given the workflow trigger conditions have been reviewed
+    When a change is pushed that only affects frontend files
+    Then backend-only jobs do not run (and vice versa)
+    And no jobs run that produce no actionable output for the given change
+
+  Scenario: Dependabot config covers all package ecosystems
+    Given the project uses NuGet (.NET) and npm (Angular) package managers
+    When the Dependabot configuration is reviewed
+    Then both NuGet and npm ecosystems are configured for dependency updates
+    And the directory paths in the Dependabot config match the actual project structure
+    And GitHub Actions workflows are also covered for action version updates
+
+  Scenario: CodeQL is configured for the correct languages
+    Given the project contains C# and TypeScript source code
+    When the CodeQL workflow configuration is reviewed
+    Then CodeQL analysis is configured to scan both C# and TypeScript (or JavaScript)
+    And no languages are listed that are not present in the project
+
+  Scenario: Workflow steps are complete and correctly ordered
+    Given each workflow has been reviewed step by step
+    When the steps are evaluated against the project's pre-PR checklist and build requirements
+    Then no required steps are missing (e.g., restore, build, test, format check)
+    And steps are ordered so that dependencies are satisfied before dependent steps run
+```
+
+---
+
+## [MEP-021] Progressive Web App (PWA)
+
+**Status:** Backlog
+**Priority:** Low
+
+### Business Problem
+I need to access Meals en Place from my phone and my wife's phone while in the kitchen or at the grocery store, without needing to carry a laptop or sit at a desktop. Currently the application is only usable through a desktop browser. Converting the Angular frontend into a Progressive Web App would let both of us install the app on our home screens (iOS and Android), load previously viewed data when connectivity is spotty in the store, and have a layout that works well on smaller screens. This is a post-MVP quality-of-life item that makes the application practical for its most common real-world usage scenarios.
+
+### Acceptance Criteria
+```gherkin
+Feature: Progressive Web App (PWA)
+
+  Scenario: Install on Android device
+    Given I open the application in Chrome on an Android phone
+    When the browser displays an "Add to Home Screen" prompt
+    And I accept the prompt
+    Then the application is installed on my Android home screen
+    And launching it from the home screen opens the app in standalone mode without browser chrome
+
+  Scenario: Install on iOS device
+    Given I open the application in Safari on an iPhone
+    When I use the Share menu and select "Add to Home Screen"
+    Then the application is added to my iOS home screen with the configured icon
+    And launching it from the home screen opens the app in standalone mode without browser chrome
+
+  Scenario: Display home screen icon
+    Given the application has been installed on a mobile device
+    When I view my home screen
+    Then the Meals en Place icon is displayed at the correct resolution for the device
+    And the icon is not a generic browser favicon
+
+  Scenario: Web app manifest is present and valid
+    Given I navigate to the application URL
+    When the browser reads the web app manifest
+    Then the manifest includes a name, short_name, start_url, display mode set to "standalone", theme_color, background_color, and at least three icon sizes (192x192, 384x384, 512x512)
+
+  Scenario: Service worker is registered
+    Given I open the application in a supported browser
+    When the page finishes loading
+    Then a service worker is registered and active
+    And the service worker caches the application shell (HTML, CSS, JS, fonts, icons)
+
+  Scenario: Offline access to previously loaded data
+    Given I have previously viewed my inventory list while online
+    And the service worker has cached the response
+    When I lose network connectivity
+    And I open the application from the home screen
+    Then the application shell loads without error
+    And my most recently cached inventory data is displayed
+    And a visible indicator informs me that I am viewing offline data
+
+  Scenario: Offline access to previously loaded recipes
+    Given I have previously viewed a recipe detail page while online
+    And the service worker has cached the response
+    When I lose network connectivity
+    And I navigate to that recipe detail page
+    Then the cached recipe detail is displayed including ingredients and instructions
+
+  Scenario: Offline access to previously loaded shopping list
+    Given I have previously viewed my shopping list while online
+    And the service worker has cached the response
+    When I lose network connectivity
+    And I navigate to the shopping list
+    Then the cached shopping list is displayed
+
+  Scenario: Responsive layout on mobile screens
+    Given I open the application on a phone with a viewport width of 375 pixels
+    When I view the inventory list, recipe library, and shopping list screens
+    Then all content is readable without horizontal scrolling
+    And interactive controls (buttons, inputs, icons) are large enough to tap accurately
+    And navigation is accessible without requiring a wide sidebar
+
+  Scenario: Responsive layout on tablet screens
+    Given I open the application on a tablet with a viewport width of 768 pixels
+    When I view the inventory list, recipe library, and shopping list screens
+    Then the layout adapts to use available space without excessive whitespace
+    And all features remain fully functional
+
+  Scenario: Push notification readiness
+    Given the service worker is registered
+    When I check the service worker capabilities
+    Then the service worker includes a push event listener stub
+    And the application requests notification permission from the user
+    And granting permission registers the subscription with the backend
+    And no push notifications are sent until a future feature (such as waste alerts) activates them
+```
+
+---
+
+## [MEP-022] User-Controlled Display Unit for Inventory Items
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+When I add an inventory item in a specific unit -- for example, "32 fl oz" of chicken broth -- the system converts it to metric base units internally and then applies automatic threshold-based display conversion rules that may show it back to me in a completely different unit, such as "1 qt." This is confusing because the quantity on my shelf says "32 fl oz" and I expect to see that same unit in the application. I have no way to control which display unit is used; the system decides for me based on quantity ranges. I need the application to remember the unit I entered and display the item in that unit by default. When I want to see the quantity in a different compatible unit (for example, converting 32 fl oz to quarts for easier mental math), I should be able to choose that conversion explicitly, and the application should then display the item in my chosen unit going forward.
+
+### Acceptance Criteria
+```gherkin
+Feature: User-Controlled Display Unit for Inventory Items
+
+  Scenario: Display item in the unit it was entered in
+    Given I add an inventory item "Chicken Broth" with quantity 32 and unit "fl oz"
+    When I view the inventory list
+    Then "Chicken Broth" displays as "32 fl oz"
+    And the display does not automatically convert to a different unit such as "1 qt"
+
+  Scenario: Display item in the entry unit after editing quantity
+    Given I have an inventory item "Olive Oil" entered with unit "ml" and quantity 500
+    When I edit the quantity to 750
+    Then "Olive Oil" displays as "750 ml"
+    And the display unit remains "ml"
+
+  Scenario: Convert display unit to a compatible unit
+    Given I have an inventory item "Chicken Broth" displaying as "32 fl oz"
+    When I choose to convert the display unit to "qt"
+    Then "Chicken Broth" displays as "1 qt"
+    And the internal stored quantity remains unchanged in metric base units
+
+  Scenario: Persist the user-chosen display unit across sessions
+    Given I have converted "Chicken Broth" to display as "1 qt"
+    When I close and reopen the application
+    Then "Chicken Broth" still displays as "1 qt"
+
+  Scenario: Only compatible units are offered for conversion
+    Given I have an inventory item "Flour" entered with unit "lb"
+    When I open the display unit conversion options
+    Then the options include weight-compatible units such as "oz", "g", and "kg"
+    And the options do not include volume units such as "fl oz", "cup", or "ml"
+
+  Scenario: New items default to their entry unit
+    Given I add an inventory item "Soy Sauce" with quantity 15 and unit "fl oz"
+    And I do not choose a different display unit
+    When I view the inventory list
+    Then "Soy Sauce" displays as "15 fl oz"
+
+  Scenario: Metric entry unit is preserved for metric users
+    Given I add an inventory item "Butter" with quantity 250 and unit "g"
+    When I view the inventory list
+    Then "Butter" displays as "250 g"
+    And the display does not automatically convert to "oz" or "lb"
 ```
