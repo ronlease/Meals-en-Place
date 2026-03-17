@@ -37,15 +37,22 @@ jobs:
       - name: Build
         run: dotnet build MealsEnPlace.slnx --no-restore --configuration Release
 
-      - name: Run tests
-        run: dotnet test MealsEnPlace.slnx --no-build --configuration Release --verbosity normal --logger "trx;LogFileName=test-results.trx" --results-directory ./test-results
+      - name: Run tests with coverage
+        run: >
+          dotnet test MealsEnPlace.slnx
+          --no-build --configuration Release --verbosity normal
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./test-results
+          --collect:"XPlat Code Coverage"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dotnet-test-results
-          path: ./test-results/*.trx
+          path: |
+            ./test-results/*.trx
+            ./test-results/**/coverage.cobertura.xml
           retention-days: 7
 
   # -- .NET: format check ----------------------------------------------------

@@ -22,8 +22,8 @@ public class RecipeMatchingService(
     /// <inheritdoc />
     public async Task<RecipeMatchResponse> MatchRecipesAsync(RecipeMatchRequest request, CancellationToken cancellationToken = default)
     {
-        var inventory = await LoadInventoryAsync(cancellationToken);
-        var inventoryBase = await ConvertInventoryToBaseUnitsAsync(inventory, cancellationToken);
+        var inventory = await InventoryBaseHelper.LoadInventoryAsync(dbContext, cancellationToken);
+        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, uomConversionService, cancellationToken);
         var candidates = await LoadCandidateRecipesAsync(request, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -52,25 +52,6 @@ public class RecipeMatchingService(
             NearMatches = enrichedNear.OrderByDescending(r => r.FinalScore).ToList(),
             PartialMatches = partialMatches.OrderByDescending(r => r.FinalScore).ToList()
         };
-    }
-
-    private async Task<Dictionary<Guid, List<InventoryBaseEntry>>> ConvertInventoryToBaseUnitsAsync(
-        List<InventoryItem> inventory, CancellationToken cancellationToken)
-    {
-        var result = new Dictionary<Guid, List<InventoryBaseEntry>>();
-        foreach (var item in inventory)
-        {
-            var conversion = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
-            if (!conversion.Success) continue;
-
-            if (!result.TryGetValue(item.CanonicalIngredientId, out var entries))
-            {
-                entries = [];
-                result[item.CanonicalIngredientId] = entries;
-            }
-            entries.Add(new InventoryBaseEntry(conversion.ConvertedQuantity, item.Uom!.UomType, item.ExpiryDate));
-        }
-        return result;
     }
 
     private async Task<List<RecipeMatchDto>> EnrichNearMatchesAsync(
@@ -103,14 +84,6 @@ public class RecipeMatchingService(
         return enriched;
     }
 
-    private static bool IsInSeason(Month currentMonth, Month start, Month end)
-    {
-        var current = (int)currentMonth;
-        var s = (int)start;
-        var e = (int)end;
-        return s <= e ? current >= s && current <= e : current >= s || current <= e;
-    }
-
     private async Task<List<Recipe>> LoadCandidateRecipesAsync(RecipeMatchRequest request, CancellationToken cancellationToken)
     {
         var query = dbContext.Recipes.AsNoTracking()
@@ -141,18 +114,10 @@ public class RecipeMatchingService(
             var currentMonth = (Month)DateTime.UtcNow.Month;
             recipes = recipes.Where(r => r.RecipeIngredients.Any(ri =>
                 ri.CanonicalIngredient.SeasonalityWindows.Any(sw =>
-                    IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))).ToList();
+                    SeasonalityHelper.IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))).ToList();
         }
 
         return recipes;
-    }
-
-    private async Task<List<InventoryItem>> LoadInventoryAsync(CancellationToken cancellationToken)
-    {
-        return await dbContext.InventoryItems.AsNoTracking()
-            .Include(i => i.CanonicalIngredient)
-            .Include(i => i.Uom)
-            .ToListAsync(cancellationToken);
     }
 
     private async Task<RecipeMatchDto?> ScoreRecipeAsync(
@@ -233,6 +198,4 @@ public class RecipeMatchingService(
         var (qty, uom) = await uomDisplayConverter.ConvertAsync(conv.ConvertedQuantity, ri.Uom.UomType, cancellationToken);
         return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = qty, RequiredUom = uom };
     }
-
-    private sealed record InventoryBaseEntry(decimal BaseQuantity, UomType UomType, DateOnly? ExpiryDate);
 }

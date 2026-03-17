@@ -27,8 +27,8 @@ public class MealPlanService(
         var slotPreferences = request.SlotPreferences ?? BuildDefaultSlotPreferences();
 
         // Load inventory in base units
-        var inventory = await LoadInventoryAsync(cancellationToken);
-        var inventoryBase = await ConvertInventoryToBaseUnitsAsync(inventory, cancellationToken);
+        var inventory = await InventoryBaseHelper.LoadInventoryAsync(dbContext, cancellationToken);
+        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, uomConversionService, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Load candidate recipes
@@ -209,25 +209,6 @@ public class MealPlanService(
         return days.ToDictionary(d => d, _ => new List<MealSlot> { MealSlot.Lunch, MealSlot.Dinner });
     }
 
-    private async Task<Dictionary<Guid, List<InventoryBaseEntry>>> ConvertInventoryToBaseUnitsAsync(
-        List<InventoryItem> inventory, CancellationToken cancellationToken)
-    {
-        var result = new Dictionary<Guid, List<InventoryBaseEntry>>();
-        foreach (var item in inventory)
-        {
-            var conversion = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
-            if (!conversion.Success) continue;
-
-            if (!result.TryGetValue(item.CanonicalIngredientId, out var entries))
-            {
-                entries = [];
-                result[item.CanonicalIngredientId] = entries;
-            }
-            entries.Add(new InventoryBaseEntry(conversion.ConvertedQuantity, item.Uom!.UomType, item.ExpiryDate));
-        }
-        return result;
-    }
-
     private static DateOnly GetCurrentWeekMonday()
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -245,14 +226,6 @@ public class MealPlanService(
             .Select(s => s.RecipeId)
             .ToListAsync(cancellationToken);
         return recentSlots.ToHashSet();
-    }
-
-    private static bool IsInSeason(Month currentMonth, Month start, Month end)
-    {
-        var current = (int)currentMonth;
-        var s = (int)start;
-        var e = (int)end;
-        return s <= e ? current >= s && current <= e : current >= s || current <= e;
     }
 
     private async Task<List<Recipe>> LoadCandidateRecipesAsync(GenerateMealPlanRequest request, CancellationToken cancellationToken)
@@ -279,18 +252,10 @@ public class MealPlanService(
             var currentMonth = (Month)DateTime.UtcNow.Month;
             recipes = recipes.Where(r => r.RecipeIngredients.Any(ri =>
                 ri.CanonicalIngredient.SeasonalityWindows.Any(sw =>
-                    IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))).ToList();
+                    SeasonalityHelper.IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))).ToList();
         }
 
         return recipes;
-    }
-
-    private async Task<List<InventoryItem>> LoadInventoryAsync(CancellationToken cancellationToken)
-    {
-        return await dbContext.InventoryItems.AsNoTracking()
-            .Include(i => i.CanonicalIngredient)
-            .Include(i => i.Uom)
-            .ToListAsync(cancellationToken);
     }
 
     private static MealPlanResponse MapToResponse(Models.Entities.MealPlan plan)
@@ -338,7 +303,7 @@ public class MealPlanService(
             }
 
             if (ri.CanonicalIngredient.SeasonalityWindows.Any(sw =>
-                    IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))
+                    SeasonalityHelper.IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd)))
                 seasonalAffinity = true;
         }
 
@@ -356,8 +321,6 @@ public class MealPlanService(
             WasteBonus = wasteBonus
         };
     }
-
-    private sealed record InventoryBaseEntry(decimal BaseQuantity, UomType UomType, DateOnly? ExpiryDate);
 
     private sealed class ScoredRecipe
     {

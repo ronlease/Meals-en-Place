@@ -11,9 +11,12 @@ namespace MealsEnPlace.Api.Features.WasteReduction;
 public class WasteAlertController(IWasteAlertService wasteAlertService) : ControllerBase
 {
     /// <summary>Dismisses an active waste alert.</summary>
+    /// <param name="id">The waste alert ID to dismiss.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>204 on success; 404 if the alert is not found.</returns>
     [HttpPost("{id:guid}/dismiss")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DismissAlert(Guid id, CancellationToken cancellationToken = default)
     {
         var dismissed = await wasteAlertService.DismissAlertAsync(id, cancellationToken);
@@ -21,6 +24,8 @@ public class WasteAlertController(IWasteAlertService wasteAlertService) : Contro
     }
 
     /// <summary>Evaluates inventory for expiry-imminent items and returns active waste alerts with suggested recipes.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the list of active waste alerts.</returns>
     [HttpGet]
     [ProducesResponseType(typeof(List<WasteAlertResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<WasteAlertResponse>>> GetAlerts(CancellationToken cancellationToken = default)

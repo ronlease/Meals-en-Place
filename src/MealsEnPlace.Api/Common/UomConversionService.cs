@@ -5,7 +5,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MealsEnPlace.Api.Common;
 
 /// <summary>
-/// The result of a <see cref="IUomConversionService.ConvertBetweenAsync"/> operation.
+/// The result of a UOM conversion operation.
 /// On failure, <see cref="ConvertedQuantity"/> is zero and <see cref="ErrorMessage"/> describes the reason.
 /// </summary>
 public sealed class ConversionResult
@@ -35,18 +35,6 @@ public sealed class ConversionResult
     public static ConversionResult Ok(decimal convertedQuantity, string fromUom, string toUom) =>
         new() { ConvertedQuantity = convertedQuantity, FromUom = fromUom, Success = true, ToUom = toUom };
 
-    /// <summary>Creates a failure result representing an incompatible cross-type conversion.</summary>
-    public static ConversionResult CrossTypeFailure(string fromUom, string toUom) =>
-        new()
-        {
-            ErrorMessage = $"Cannot convert between incompatible unit types: '{fromUom}' and '{toUom}'. " +
-                           "Cross-type conversions (e.g., Volume to Weight) require ingredient-specific " +
-                           "density data and are not supported.",
-            FromUom = fromUom,
-            Success = false,
-            ToUom = toUom
-        };
-
     /// <summary>Creates a failure result when a UOM ID is not found in the database.</summary>
     public static ConversionResult NotFound(Guid uomId) =>
         new()
@@ -63,21 +51,6 @@ public sealed class ConversionResult
 /// </summary>
 public interface IUomConversionService
 {
-    /// <summary>
-    /// Converts a quantity between two canonical units via their shared base unit.
-    /// Returns a <see cref="ConversionResult"/> indicating success or failure.
-    /// Cross-type conversions (e.g., Volume to Weight) always return a failure result.
-    /// </summary>
-    /// <param name="quantity">The numeric quantity in <paramref name="fromUomId"/> units.</param>
-    /// <param name="fromUomId">The <see cref="UnitOfMeasure.Id"/> of the source unit.</param>
-    /// <param name="toUomId">The <see cref="UnitOfMeasure.Id"/> of the target unit.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    Task<ConversionResult> ConvertBetweenAsync(
-        decimal quantity,
-        Guid fromUomId,
-        Guid toUomId,
-        CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Converts a quantity in the given unit to the metric base unit for its <see cref="UomType"/>
     /// (ml for Volume, g for Weight, ea for Count).
@@ -101,37 +74,6 @@ public interface IUomConversionService
 /// </summary>
 public class UomConversionService(MealsEnPlaceDbContext dbContext) : IUomConversionService
 {
-    /// <inheritdoc />
-    public async Task<ConversionResult> ConvertBetweenAsync(
-        decimal quantity,
-        Guid fromUomId,
-        Guid toUomId,
-        CancellationToken cancellationToken = default)
-    {
-        var fromUom = await FindUomAsync(fromUomId, cancellationToken);
-        if (fromUom is null)
-        {
-            return ConversionResult.NotFound(fromUomId);
-        }
-
-        var toUom = await FindUomAsync(toUomId, cancellationToken);
-        if (toUom is null)
-        {
-            return ConversionResult.NotFound(toUomId);
-        }
-
-        if (fromUom.UomType != toUom.UomType)
-        {
-            return ConversionResult.CrossTypeFailure(fromUom.Abbreviation, toUom.Abbreviation);
-        }
-
-        // Convert from source → base → target
-        var baseQuantity = quantity * fromUom.ConversionFactor;
-        var convertedQuantity = baseQuantity / toUom.ConversionFactor;
-
-        return ConversionResult.Ok(convertedQuantity, fromUom.Abbreviation, toUom.Abbreviation);
-    }
-
     /// <inheritdoc />
     public async Task<ConversionResult> ConvertToBaseUnitsAsync(
         decimal quantity,

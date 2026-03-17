@@ -11,6 +11,9 @@ namespace MealsEnPlace.Api.Features.MealPlan;
 public class MealPlanController(IMealPlanService mealPlanService) : ControllerBase
 {
     /// <summary>Generates a new weekly meal plan.</summary>
+    /// <param name="request">Generation parameters including optional filters and slot preferences.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the generated meal plan.</returns>
     [HttpPost("generate")]
     [ProducesResponseType(typeof(MealPlanResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<MealPlanResponse>> Generate(
@@ -21,9 +24,11 @@ public class MealPlanController(IMealPlanService mealPlanService) : ControllerBa
     }
 
     /// <summary>Returns the most recent meal plan.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the active meal plan; 404 if no plans exist.</returns>
     [HttpGet("active")]
     [ProducesResponseType(typeof(MealPlanResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MealPlanResponse>> GetActive(CancellationToken cancellationToken = default)
     {
         var plan = await mealPlanService.GetActiveMealPlanAsync(cancellationToken);
@@ -31,9 +36,12 @@ public class MealPlanController(IMealPlanService mealPlanService) : ControllerBa
     }
 
     /// <summary>Returns a meal plan by ID.</summary>
+    /// <param name="id">The meal plan ID.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the meal plan; 404 if not found.</returns>
     [HttpGet("{id:guid}")]
     [ProducesResponseType(typeof(MealPlanResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MealPlanResponse>> GetById(Guid id, CancellationToken cancellationToken = default)
     {
         var plan = await mealPlanService.GetMealPlanAsync(id, cancellationToken);
@@ -41,6 +49,8 @@ public class MealPlanController(IMealPlanService mealPlanService) : ControllerBa
     }
 
     /// <summary>Returns all meal plans.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the list of all meal plans.</returns>
     [HttpGet]
     [ProducesResponseType(typeof(List<MealPlanResponse>), StatusCodes.Status200OK)]
     public async Task<ActionResult<List<MealPlanResponse>>> List(CancellationToken cancellationToken = default)
@@ -50,9 +60,13 @@ public class MealPlanController(IMealPlanService mealPlanService) : ControllerBa
     }
 
     /// <summary>Swaps a meal plan slot to a different recipe.</summary>
+    /// <param name="slotId">The ID of the slot to swap.</param>
+    /// <param name="request">The new recipe assignment.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the updated slot; 404 if the slot or recipe is not found.</returns>
     [HttpPut("slots/{slotId:guid}")]
     [ProducesResponseType(typeof(MealPlanSlotResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MealPlanSlotResponse>> SwapSlot(
         Guid slotId, [FromBody] SwapSlotRequest request, CancellationToken cancellationToken = default)
     {

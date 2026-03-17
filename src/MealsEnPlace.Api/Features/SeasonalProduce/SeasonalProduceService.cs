@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -33,18 +34,10 @@ public class SeasonalProduceService(MealsEnPlaceDbContext dbContext) : ISeasonal
             .ToListAsync(cancellationToken);
 
         return windows
-            .Where(sw => IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd))
+            .Where(sw => SeasonalityHelper.IsInSeason(currentMonth, sw.PeakSeasonStart, sw.PeakSeasonEnd))
             .OrderBy(sw => sw.CanonicalIngredient.Name)
             .Select(MapToResponse)
             .ToList();
-    }
-
-    private static bool IsInSeason(Month currentMonth, Month start, Month end)
-    {
-        var current = (int)currentMonth;
-        var s = (int)start;
-        var e = (int)end;
-        return s <= e ? current >= s && current <= e : current >= s || current <= e;
     }
 
     private static SeasonalProduceResponse MapToResponse(SeasonalityWindow sw)
