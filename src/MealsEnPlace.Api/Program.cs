@@ -1,7 +1,10 @@
 using System.Text.Json.Serialization;
 using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.Inventory;
+using MealsEnPlace.Api.Features.MealPlan;
 using MealsEnPlace.Api.Features.Recipes;
+using MealsEnPlace.Api.Features.ShoppingList;
+using MealsEnPlace.Api.Features.WasteReduction;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
@@ -61,12 +64,15 @@ builder.Services.AddHttpClient("TheMealDb", client =>
 builder.Services.AddScoped<IClaudeService, ClaudeService>();
 builder.Services.AddScoped<IContainerResolutionService, ContainerResolutionService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
+builder.Services.AddScoped<IMealPlanService, MealPlanService>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<IRecipeMatchingService, RecipeMatchingService>();
+builder.Services.AddScoped<IShoppingListService, ShoppingListService>();
 builder.Services.AddScoped<ITheMealDbClient, TheMealDbClient>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IUomConversionService, UomConversionService>();
 builder.Services.AddScoped<IUomNormalizationService, UomNormalizationService>();
+builder.Services.AddScoped<IWasteAlertService, WasteAlertService>();
 builder.Services.AddScoped<UomDisplayConverter>();
 
 // -- Problem details ----------------------------------------------------------
