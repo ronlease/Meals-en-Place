@@ -1057,3 +1057,59 @@ Feature: Progressive Web App (PWA)
     And granting permission registers the subscription with the backend
     And no push notifications are sent until a future feature (such as waste alerts) activates them
 ```
+
+---
+
+## [MEP-022] User-Controlled Display Unit for Inventory Items
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+When I add an inventory item in a specific unit -- for example, "32 fl oz" of chicken broth -- the system converts it to metric base units internally and then applies automatic threshold-based display conversion rules that may show it back to me in a completely different unit, such as "1 qt." This is confusing because the quantity on my shelf says "32 fl oz" and I expect to see that same unit in the application. I have no way to control which display unit is used; the system decides for me based on quantity ranges. I need the application to remember the unit I entered and display the item in that unit by default. When I want to see the quantity in a different compatible unit (for example, converting 32 fl oz to quarts for easier mental math), I should be able to choose that conversion explicitly, and the application should then display the item in my chosen unit going forward.
+
+### Acceptance Criteria
+```gherkin
+Feature: User-Controlled Display Unit for Inventory Items
+
+  Scenario: Display item in the unit it was entered in
+    Given I add an inventory item "Chicken Broth" with quantity 32 and unit "fl oz"
+    When I view the inventory list
+    Then "Chicken Broth" displays as "32 fl oz"
+    And the display does not automatically convert to a different unit such as "1 qt"
+
+  Scenario: Display item in the entry unit after editing quantity
+    Given I have an inventory item "Olive Oil" entered with unit "ml" and quantity 500
+    When I edit the quantity to 750
+    Then "Olive Oil" displays as "750 ml"
+    And the display unit remains "ml"
+
+  Scenario: Convert display unit to a compatible unit
+    Given I have an inventory item "Chicken Broth" displaying as "32 fl oz"
+    When I choose to convert the display unit to "qt"
+    Then "Chicken Broth" displays as "1 qt"
+    And the internal stored quantity remains unchanged in metric base units
+
+  Scenario: Persist the user-chosen display unit across sessions
+    Given I have converted "Chicken Broth" to display as "1 qt"
+    When I close and reopen the application
+    Then "Chicken Broth" still displays as "1 qt"
+
+  Scenario: Only compatible units are offered for conversion
+    Given I have an inventory item "Flour" entered with unit "lb"
+    When I open the display unit conversion options
+    Then the options include weight-compatible units such as "oz", "g", and "kg"
+    And the options do not include volume units such as "fl oz", "cup", or "ml"
+
+  Scenario: New items default to their entry unit
+    Given I add an inventory item "Soy Sauce" with quantity 15 and unit "fl oz"
+    And I do not choose a different display unit
+    When I view the inventory list
+    Then "Soy Sauce" displays as "15 fl oz"
+
+  Scenario: Metric entry unit is preserved for metric users
+    Given I add an inventory item "Butter" with quantity 250 and unit "g"
+    When I view the inventory list
+    Then "Butter" displays as "250 g"
+    And the display does not automatically convert to "oz" or "lb"
+```
