@@ -22,6 +22,7 @@ public sealed class RecipeImportService(
     {
         var recipes = await dbContext.Recipes
             .AsNoTracking()
+            .Include(r => r.DietaryTags)
             .Include(r => r.RecipeIngredients)
                 .ThenInclude(ri => ri.CanonicalIngredient)
             .OrderBy(r => r.Title)
@@ -33,6 +34,7 @@ public sealed class RecipeImportService(
             return new RecipeListItemDto
             {
                 CuisineType = r.CuisineType,
+                DietaryTags = r.DietaryTags.Select(dt => dt.Tag).OrderBy(t => t).ToList(),
                 Id = r.Id,
                 IngredientNames = r.RecipeIngredients
                     .Select(ri => ri.CanonicalIngredient.Name)

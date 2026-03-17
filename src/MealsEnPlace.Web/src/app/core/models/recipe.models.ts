@@ -24,6 +24,7 @@ export interface RecipeImportResultDto {
 
 export interface RecipeListItemDto {
   cuisineType: string;
+  dietaryTags: DietaryTag[];
   id: string;
   ingredientNames: string[];
   isFullyResolved: boolean;

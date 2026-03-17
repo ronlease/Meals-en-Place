@@ -1,4 +1,3 @@
-using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 
@@ -11,9 +10,7 @@ namespace MealsEnPlace.Api.Features.Inventory;
 [Route("api/v1/[controller]")]
 [Produces("application/json")]
 public class InventoryController(
-    IInventoryService inventoryService,
-    IUomConversionService uomConversionService,
-    UomDisplayConverter displayConverter) : ControllerBase
+    IInventoryService inventoryService) : ControllerBase
 {
     /// <summary>
     /// Adds a new inventory item.
@@ -48,7 +45,7 @@ public class InventoryController(
         }
 
         var item = (InventoryItem)result;
-        var response = await MapToResponseAsync(item, cancellationToken);
+        var response = MapToResponse(item);
         return CreatedAtAction(nameof(GetItem), new { id = item.Id }, response);
     }
 
@@ -104,7 +101,7 @@ public class InventoryController(
             });
         }
 
-        return Ok(await MapToResponseAsync(item, cancellationToken));
+        return Ok(MapToResponse(item));
     }
 
     /// <summary>
@@ -123,14 +120,7 @@ public class InventoryController(
         CancellationToken cancellationToken)
     {
         var items = await inventoryService.ListItemsAsync(location, cancellationToken);
-        var responses = new List<InventoryItemResponse>(items.Count);
-
-        foreach (var item in items)
-        {
-            responses.Add(await MapToResponseAsync(item, cancellationToken));
-        }
-
-        return Ok(responses);
+        return Ok(items.Select(MapToResponse).ToList());
     }
 
     /// <summary>
@@ -161,22 +151,13 @@ public class InventoryController(
             });
         }
 
-        return Ok(await MapToResponseAsync(item, cancellationToken));
+        return Ok(MapToResponse(item));
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private async Task<InventoryItemResponse> MapToResponseAsync(
-        InventoryItem item,
-        CancellationToken cancellationToken)
+    private static InventoryItemResponse MapToResponse(InventoryItem item)
     {
-        var uomType = item.Uom?.UomType ?? UomType.Arbitrary;
-        var baseConversion = await uomConversionService.ConvertToBaseUnitsAsync(
-            item.Quantity, item.UomId, cancellationToken);
-        var baseQuantity = baseConversion.Success ? baseConversion.ConvertedQuantity : item.Quantity;
-        var (displayQty, displayAbbr) = await displayConverter.ConvertAsync(
-            baseQuantity, uomType, cancellationToken);
-
         return new InventoryItemResponse
         {
             CanonicalIngredientId = item.CanonicalIngredientId,
@@ -185,8 +166,8 @@ public class InventoryController(
             Id = item.Id,
             Location = item.Location,
             Notes = item.Notes,
-            Quantity = displayQty,
-            UomAbbreviation = displayAbbr,
+            Quantity = item.Quantity,
+            UomAbbreviation = item.Uom?.Abbreviation ?? string.Empty,
             UomId = item.UomId
         };
     }

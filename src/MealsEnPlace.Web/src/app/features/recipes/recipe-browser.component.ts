@@ -9,6 +9,7 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterModule } from '@angular/router';
 import {
+  DietaryTag,
   RecipeListItemDto,
   RecipeMatchResponse,
 } from '../../core/models/recipe.models';
@@ -75,6 +76,15 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
                   <mat-cell *matCellDef="let r">{{ r.totalIngredients }}</mat-cell>
                 </ng-container>
 
+                <ng-container matColumnDef="dietaryTags">
+                  <mat-header-cell *matHeaderCellDef>Dietary Tags</mat-header-cell>
+                  <mat-cell *matCellDef="let r">
+                    @for (tag of r.dietaryTags; track tag) {
+                      <span class="dietary-chip">{{ tag }}</span>
+                    }
+                  </mat-cell>
+                </ng-container>
+
                 <ng-container matColumnDef="status">
                   <mat-header-cell *matHeaderCellDef>Status</mat-header-cell>
                   <mat-cell *matCellDef="let r">
@@ -120,6 +130,15 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
                 }
                 Find Matches
               </button>
+              <mat-chip-listbox
+                [multiple]="true"
+                (change)="onDietaryFilterChange($event)"
+                aria-label="Dietary tag filter"
+              >
+                @for (tag of allDietaryTags; track tag) {
+                  <mat-chip-option [value]="tag">{{ tag }}</mat-chip-option>
+                }
+              </mat-chip-listbox>
             </div>
 
             <app-recipe-match-results
@@ -211,14 +230,30 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
         align-items: center;
         gap: 12px;
         margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+
+      .dietary-chip {
+        display: inline-block;
+        padding: 1px 7px;
+        border-radius: 10px;
+        font-size: 11px;
+        font-weight: 500;
+        background: #ede9fe;
+        color: #5b21b6;
+        margin-right: 4px;
       }
     `,
   ],
 })
 export class RecipeBrowserComponent implements OnInit {
+  readonly allDietaryTags: DietaryTag[] = [
+    'Vegetarian', 'Vegan', 'Carnivore', 'LowCarb', 'GlutenFree', 'DairyFree',
+  ];
   protected readonly libraryColumns = [
     'title',
     'cuisineType',
+    'dietaryTags',
     'totalIngredients',
     'status',
   ];
@@ -231,11 +266,12 @@ export class RecipeBrowserComponent implements OnInit {
 
   private readonly recipeService = inject(RecipeService);
   private readonly snackBar = inject(MatSnackBar);
+  private selectedDietaryTags: string[] = [];
 
   findMatches(): void {
     this.matchError.set(false);
     this.matchLoading.set(true);
-    this.recipeService.matchRecipes().subscribe({
+    this.recipeService.matchRecipes(undefined, this.selectedDietaryTags.length > 0 ? this.selectedDietaryTags : undefined).subscribe({
       error: () => {
         this.matchLoading.set(false);
         this.matchError.set(true);
@@ -267,5 +303,9 @@ export class RecipeBrowserComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadLibrary();
+  }
+
+  onDietaryFilterChange(event: any): void {
+    this.selectedDietaryTags = event.value ?? [];
   }
 }

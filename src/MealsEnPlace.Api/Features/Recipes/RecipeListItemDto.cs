@@ -1,3 +1,5 @@
+using MealsEnPlace.Api.Models.Entities;
+
 namespace MealsEnPlace.Api.Features.Recipes;
 
 /// <summary>
@@ -7,6 +9,9 @@ public sealed class RecipeListItemDto
 {
     /// <summary>Cuisine type.</summary>
     public string CuisineType { get; init; } = string.Empty;
+
+    /// <summary>Dietary tags classified for this recipe.</summary>
+    public IReadOnlyList<DietaryTag> DietaryTags { get; init; } = [];
 
     /// <summary>Local database ID.</summary>
     public Guid Id { get; init; }

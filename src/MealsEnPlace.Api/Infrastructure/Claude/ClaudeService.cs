@@ -37,10 +37,76 @@ public class ClaudeService : IClaudeService
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Rule-based stub: classifies dietary tags by scanning ingredient names for
+    /// known animal products and gluten-containing grains. Will be replaced by
+    /// Claude API calls for more nuanced classification.
+    /// </remarks>
     public Task<IReadOnlyList<DietaryTag>> ClassifyDietaryTagsAsync(Recipe recipe)
     {
-        return Task.FromResult<IReadOnlyList<DietaryTag>>([]);
+        var ingredientNames = recipe.RecipeIngredients
+            .Select(ri => ri.CanonicalIngredient?.Name?.ToLowerInvariant() ?? string.Empty)
+            .Where(n => n.Length > 0)
+            .ToList();
+
+        if (ingredientNames.Count == 0)
+            return Task.FromResult<IReadOnlyList<DietaryTag>>([]);
+
+        var hasMeat = ingredientNames.Any(n =>
+            MeatKeywords.Any(k => n.Contains(k)));
+        var hasDairy = ingredientNames.Any(n =>
+            DairyKeywords.Any(k => n.Contains(k)));
+        var hasEggs = ingredientNames.Any(n =>
+            EggKeywords.Any(k => n.Contains(k)));
+        var hasGluten = ingredientNames.Any(n =>
+            GlutenKeywords.Any(k => n.Contains(k)));
+
+        var tags = new List<DietaryTag>();
+
+        // Carnivore: primarily meat/animal-based
+        if (hasMeat)
+            tags.Add(DietaryTag.Carnivore);
+
+        // Vegetarian: no meat
+        if (!hasMeat)
+            tags.Add(DietaryTag.Vegetarian);
+
+        // Vegan: no animal products at all
+        if (!hasMeat && !hasDairy && !hasEggs)
+            tags.Add(DietaryTag.Vegan);
+
+        // DairyFree
+        if (!hasDairy)
+            tags.Add(DietaryTag.DairyFree);
+
+        // GlutenFree
+        if (!hasGluten)
+            tags.Add(DietaryTag.GlutenFree);
+
+        return Task.FromResult<IReadOnlyList<DietaryTag>>(tags);
     }
+
+    private static readonly string[] DairyKeywords =
+    [
+        "butter", "cheese", "cream", "ghee", "milk", "parmesan",
+        "ricotta", "yogurt", "yoghurt", "whey", "mozzarella", "cheddar"
+    ];
+
+    private static readonly string[] EggKeywords = ["egg"];
+
+    private static readonly string[] GlutenKeywords =
+    [
+        "barley", "bread", "couscous", "flour", "noodle", "pasta",
+        "rye", "semolina", "spaghetti", "wheat"
+    ];
+
+    private static readonly string[] MeatKeywords =
+    [
+        "anchovy", "bacon", "beef", "chicken", "chorizo", "clam", "cod",
+        "crab", "duck", "fish", "ham", "lamb", "lobster", "mackerel",
+        "mince", "mussel", "oyster", "pork", "prawn", "salami", "salmon",
+        "sardine", "sausage", "shrimp", "steak", "tuna", "turkey", "veal"
+    ];
 
     /// <inheritdoc />
     /// <remarks>
