@@ -45,13 +45,6 @@ export class RecipeService {
     });
   }
 
-  searchByCategory(category: string): Observable<RecipeSearchResultDto[]> {
-    return this.http.get<RecipeSearchResultDto[]>(
-      `${this.baseUrl}/search/category`,
-      { params: { category } }
-    );
-  }
-
   searchByQuery(query: string): Observable<RecipeSearchResultDto[]> {
     return this.http.get<RecipeSearchResultDto[]>(`${this.baseUrl}/search`, {
       params: { query },

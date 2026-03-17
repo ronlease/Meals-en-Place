@@ -54,7 +54,7 @@ export interface MissingIngredientDto {
   requiredUom: string;
 }
 
-export type ClaudeConfidence = 'High' | 'Medium' | 'Low' | 'Arbitrary';
+export type ClaudeConfidence = 'High' | 'Medium' | 'Low';
 
 export interface SubstitutionSuggestion {
   confidence: ClaudeConfidence;

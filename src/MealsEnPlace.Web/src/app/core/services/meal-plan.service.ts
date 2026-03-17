@@ -6,7 +6,7 @@ import {
   GenerateMealPlanRequest,
   MealPlanResponse,
   MealPlanSlotResponse,
-  SwapSlotRequest,
+  SwapSlotRequest
 } from '../models/meal-plan.models';
 
 @Injectable({ providedIn: 'root' })
@@ -25,14 +25,6 @@ export class MealPlanService {
 
   getActivePlan(): Observable<MealPlanResponse> {
     return this.http.get<MealPlanResponse>(`${this.baseUrl}/active`);
-  }
-
-  getPlan(id: string): Observable<MealPlanResponse> {
-    return this.http.get<MealPlanResponse>(`${this.baseUrl}/${id}`);
-  }
-
-  listPlans(): Observable<MealPlanResponse[]> {
-    return this.http.get<MealPlanResponse[]>(this.baseUrl);
   }
 
   swapSlot(

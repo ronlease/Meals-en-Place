@@ -1,5 +1,4 @@
 export interface CanonicalIngredientDto {
-  abbreviation: string;
   category: string;
   defaultUomId: string;
   id: string;

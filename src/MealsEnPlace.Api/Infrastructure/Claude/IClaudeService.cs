@@ -98,16 +98,28 @@ public interface IClaudeService
 /// <summary>A missing ingredient for substitution suggestions.</summary>
 public sealed class MissingIngredient
 {
+    /// <summary>Display name of the canonical ingredient that is missing.</summary>
     public string CanonicalIngredientName { get; init; } = string.Empty;
+
+    /// <summary>Quantity required by the recipe, in base units.</summary>
     public decimal RequiredQuantity { get; init; }
+
+    /// <summary>Abbreviation of the required unit of measure.</summary>
     public string RequiredUom { get; init; } = string.Empty;
 }
 
 /// <summary>A Claude-suggested substitution for a missing ingredient.</summary>
 public sealed class SubstitutionSuggestion
 {
+    /// <summary>Claude's confidence in this substitution suggestion.</summary>
     public ClaudeConfidence Confidence { get; init; }
+
+    /// <summary>Name of the ingredient that is missing from inventory.</summary>
     public string MissingIngredientName { get; init; } = string.Empty;
+
+    /// <summary>Explanatory notes about the substitution (e.g., quantity adjustments, flavor differences).</summary>
     public string Notes { get; init; } = string.Empty;
+
+    /// <summary>Name of the suggested substitute ingredient.</summary>
     public string SuggestedSubstitute { get; init; } = string.Empty;
 }

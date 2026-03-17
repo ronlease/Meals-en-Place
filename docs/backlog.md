@@ -867,7 +867,7 @@ Feature: Recipe Detail and Manual Recipe Management
 
 ## [MEP-019] Audit Code for Over-Complication
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem
@@ -922,7 +922,7 @@ Feature: Codebase Over-Complication Audit
 
 ## [MEP-020] Audit GitHub Workflows
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem

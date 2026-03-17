@@ -140,14 +140,15 @@ table produces silently wrong math.
 ## Pre-PR Checklist
 Before any PR is opened, verify the following:
 1. All README files in the repo are up-to-date
-2. All PlantUML C4 diagrams in `docs/c4/` are up-to-date
-3. All Swagger/OpenAPI docs are up-to-date (new endpoints documented, descriptions accurate)
-4. All projects build successfully (`dotnet build`, `ng build`)
-5. All tests pass (`dotnet test`)
-6. Code coverage is at least 90% (excluding EF migrations, generated code, property-only DTOs, and Program.cs)
-7. Delete any leftover `coverage-*/` and `**/TestResults/` directories before committing
-8. Update `docs/backlog.md` — mark completed items as `Done`, verify no stale statuses
-9. Run `dotnet format` and fix any violations
+2. Every vertical slice (feature folder) under `Features/` (API) and `features/` (Angular) has a README.md
+3. All PlantUML C4 diagrams in `docs/c4/` are up-to-date
+4. All Swagger/OpenAPI docs are up-to-date (new endpoints documented, descriptions accurate)
+5. All projects build successfully (`dotnet build`, `ng build`)
+6. All tests pass (`dotnet test`)
+7. Code coverage is at least 90% (excluding EF migrations, generated code, property-only DTOs, and Program.cs)
+8. Delete any leftover `coverage-*/` and `**/TestResults/` directories before committing
+9. Update `docs/backlog.md` — mark completed items as `Done`, verify no stale statuses
+10. Run `dotnet format` and fix any violations
 
 ## Post-MVP Feature Stubs
 The following feature folders are pre-created but contain no implementation. Do not implement

@@ -11,6 +11,8 @@ namespace MealsEnPlace.Api.Features.Recipes;
 public sealed class RecipeImportController(IRecipeImportService recipeImportService) : ControllerBase
 {
     /// <summary>Returns all local recipes with resolution status.</summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the list of imported recipes.</returns>
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyList<RecipeListItemDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<RecipeListItemDto>>> GetAllLocalRecipes(CancellationToken cancellationToken)
@@ -20,6 +22,9 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     }
 
     /// <summary>Imports a recipe from TheMealDB by meal ID.</summary>
+    /// <param name="mealDbId">The TheMealDB meal identifier.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>201 with the import result; 404 if not found on TheMealDB; 409 if already imported.</returns>
     [HttpPost("import/{mealDbId}")]
     [ProducesResponseType(typeof(RecipeImportResultDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
@@ -52,6 +57,9 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     }
 
     /// <summary>Searches TheMealDB by recipe name.</summary>
+    /// <param name="query">The search term (recipe name).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with search results; 400 if query is empty.</returns>
     [HttpGet("search")]
     [ProducesResponseType(typeof(IReadOnlyList<RecipeSearchResultDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -65,6 +73,9 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     }
 
     /// <summary>Searches TheMealDB by category.</summary>
+    /// <param name="category">The category name (e.g., "Seafood", "Beef").</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with search results; 400 if category is empty.</returns>
     [HttpGet("search/category")]
     [ProducesResponseType(typeof(IReadOnlyList<RecipeSearchResultDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]

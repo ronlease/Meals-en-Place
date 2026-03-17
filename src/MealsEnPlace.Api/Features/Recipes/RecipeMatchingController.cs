@@ -12,6 +12,11 @@ namespace MealsEnPlace.Api.Features.Recipes;
 public class RecipeMatchingController(IRecipeMatchingService recipeMatchingService) : ControllerBase
 {
     /// <summary>Returns recipes the user can make based on current inventory.</summary>
+    /// <param name="cuisine">Optional cuisine filter (e.g., "Italian").</param>
+    /// <param name="dietaryTags">Optional comma-separated dietary tags (e.g., "Vegetarian,GlutenFree").</param>
+    /// <param name="seasonalOnly">When true, only returns recipes with seasonal ingredients.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with full, near, and partial recipe matches.</returns>
     [HttpGet]
     [ProducesResponseType(typeof(RecipeMatchResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<RecipeMatchResponse>> GetMatches(

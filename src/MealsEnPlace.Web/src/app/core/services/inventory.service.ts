@@ -27,10 +27,6 @@ export class InventoryService {
     return this.http.delete<void>(`${this.baseUrl}/${id}`);
   }
 
-  getItem(id: string): Observable<InventoryItemResponse> {
-    return this.http.get<InventoryItemResponse>(`${this.baseUrl}/${id}`);
-  }
-
   getItems(location: InventoryLocation): Observable<InventoryItemResponse[]> {
     return this.http.get<InventoryItemResponse[]>(this.baseUrl, {
       params: { location },
