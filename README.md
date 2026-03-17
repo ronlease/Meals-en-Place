@@ -54,7 +54,11 @@ src/
     Common/                   # Shared types, UOM conversion/normalization, container detection
     Features/
       Inventory/              # Inventory CRUD, reference data endpoints
-      Recipes/                # Recipe import, matching, container resolution
+      MealPlan/               # Meal plan generation, slot swapping
+      Recipes/                # Recipe import, matching, container resolution, dietary tags
+      SeasonalProduce/        # Seasonal produce guidance (Zone 7a)
+      ShoppingList/           # Shopping list derived from meal plan vs inventory
+      WasteReduction/         # Waste alerts for expiring items with recipe suggestions
     Infrastructure/
       Claude/                 # Claude API client (stub) and prompt types
       Data/                   # EF Core DbContext, migrations, configurations
@@ -63,14 +67,18 @@ src/
   MealsEnPlace.Web/           # Angular 21 frontend
     src/app/features/
       inventory/              # Pantry/Fridge/Freezer management
-      recipes/                # Recipe browser, import, matching
       expiration/             # Upcoming expiration dates view
+      meal-plan/              # Weekly meal plan board with generate/swap
+      recipes/                # Recipe browser, import, matching, dietary filters
+      seasonal-produce/       # In-season produce list (Zone 7a)
+      shopping-list/          # Shopping list from meal plan gaps
+      waste-alerts/           # Expiry alerts with recipe suggestions
     src/app/core/             # Shared services and models
 tests/
-  MealsEnPlace.Unit/          # Unit tests (170 tests)
+  MealsEnPlace.Unit/          # Unit tests (208 tests)
   MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-018)
+  backlog.md                  # Product backlog (MEP-001 through MEP-022)
   c4/                         # PlantUML C4 architecture diagrams
 ```
 
@@ -80,18 +88,16 @@ docs/
 - **UOM Normalization** (MEP-002) -- Convert between units; Claude resolves colloquial measures
 - **Container Reference Resolution** (MEP-003) -- Detect "1 can", "1 jar" and prompt for actual weight/volume
 - **Recipe Import** (MEP-004) -- Import from TheMealDB by name, cuisine, or category
-- **Recipe Matching** (MEP-006) -- "What can I make?" ranked by ingredient coverage with waste bonus
+- **Dietary Classification** (MEP-005) -- Rule-based dietary tagging (Vegetarian, Vegan, GlutenFree, etc.) with library filtering
+- **Recipe Matching** (MEP-006) -- "What can I make?" ranked by ingredient coverage with waste bonus and dietary tag filters
+- **Meal Plan Generation** (MEP-007) -- Weekly plans optimized for waste reduction, seasonal affinity, and variety; manual slot swapping
+- **Shopping List** (MEP-008) -- Auto-generated from meal plan ingredient needs vs current inventory
+- **Waste Alerts** (MEP-009) -- Surfaces expiring items with matching recipe suggestions; dismiss support
+- **Seasonal Produce** (MEP-010) -- USDA Zone 7a in-season produce list with full calendar view
 - **Upcoming Expiration Dates** (MEP-015) -- Dashboard view of items approaching expiry
 - **Material Icons** (MEP-016) -- Edit and delete icons in inventory table
 - **Dark Mode** (MEP-017) -- Theme toggle with OS preference detection and localStorage persistence
-
-## MVP Roadmap (Remaining)
-
-- **Dietary Classification** (MEP-005) -- Claude auto-tags recipes
-- **Meal Plan Generation** (MEP-007) -- Weekly plans optimized for waste reduction
-- **Shopping List** (MEP-008) -- Auto-generated from meal plan gaps
-- **Waste Alerts** (MEP-009) -- Notify when expiring items match available recipes
-- **Seasonal Produce** (MEP-010) -- USDA Zone 7a growing season guidance
+- **User-Controlled Display Unit** (MEP-022) -- Inventory items display in their entry unit, not auto-converted
 
 ## License
 
