@@ -16,7 +16,12 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
     {
         dbContext.InventoryItems.Add(item);
         await dbContext.SaveChangesAsync(cancellationToken);
-        return item;
+
+        // Reload with navigation properties so the caller has Uom and CanonicalIngredient populated.
+        return (await dbContext.InventoryItems
+            .Include(ii => ii.CanonicalIngredient)
+            .Include(ii => ii.Uom)
+            .FirstAsync(ii => ii.Id == item.Id, cancellationToken));
     }
 
     /// <inheritdoc />
