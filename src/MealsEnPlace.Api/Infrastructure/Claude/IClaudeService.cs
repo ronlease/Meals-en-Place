@@ -58,6 +58,11 @@ public sealed class UomResolutionResult
 public interface IClaudeService
 {
     /// <summary>
+    /// Classifies a recipe's dietary tags by analyzing its ingredients and instructions.
+    /// </summary>
+    Task<IReadOnlyList<DietaryTag>> ClassifyDietaryTagsAsync(Recipe recipe);
+
+    /// <summary>
     /// Resolves a colloquial or unmappable measure string to a canonical quantity and unit.
     /// Invoked only after deterministic UOM lookup fails.
     /// </summary>
@@ -73,14 +78,6 @@ public interface IClaudeService
     /// If <see cref="UomResolutionResult.Confidence"/> is <see cref="ClaudeConfidence.Low"/>,
     /// the caller must surface a prompt to the user rather than applying the result silently.
     /// </returns>
-    /// <summary>
-    /// Classifies a recipe's dietary tags by analyzing its ingredients and instructions.
-    /// </summary>
-    Task<IReadOnlyList<DietaryTag>> ClassifyDietaryTagsAsync(Recipe recipe);
-
-    /// <summary>
-    /// Resolves a colloquial or unmappable measure string to a canonical quantity and unit.
-    /// </summary>
     Task<UomResolutionResult> ResolveUomAsync(string colloquialQuantity, string ingredientName);
 
     /// <summary>
