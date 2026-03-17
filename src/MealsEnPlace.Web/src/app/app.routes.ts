@@ -31,6 +31,13 @@ export const routes: Routes = [
   },
   {
     loadChildren: () =>
+      import('./features/seasonal-produce/seasonal-produce.routes').then(
+        (m) => m.seasonalProduceRoutes
+      ),
+    path: 'seasonal-produce',
+  },
+  {
+    loadChildren: () =>
       import('./features/shopping-list/shopping-list.routes').then(
         (m) => m.shoppingListRoutes
       ),

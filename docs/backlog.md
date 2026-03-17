@@ -219,7 +219,7 @@ Feature: Recipe Library Import
 
 ## [MEP-005] Recipe Dietary Classification
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -477,7 +477,7 @@ Feature: Waste Reduction Alerts
 
 ## [MEP-010] Seasonal Produce Guidance
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 
 ### Business Problem
@@ -1062,7 +1062,7 @@ Feature: Progressive Web App (PWA)
 
 ## [MEP-022] User-Controlled Display Unit for Inventory Items
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem
