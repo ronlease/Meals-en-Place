@@ -34,6 +34,48 @@ export interface RecipeListItemDto {
 }
 
 // ----------------------------------------------------------------
+// Recipe detail DTOs
+// ----------------------------------------------------------------
+
+export interface RecipeDetailDto {
+  cuisineType: string;
+  dietaryTags: string[];
+  id: string;
+  ingredients: RecipeIngredientDetailDto[];
+  instructions: string;
+  isFullyResolved: boolean;
+  servingCount: number;
+  sourceUrl: string | null;
+  title: string;
+}
+
+export interface RecipeIngredientDetailDto {
+  canonicalIngredientId: string;
+  id: string;
+  ingredientName: string;
+  isContainerResolved: boolean;
+  notes: string | null;
+  quantity: number;
+  uomAbbreviation: string;
+  uomId: string | null;
+}
+
+export interface CreateRecipeRequest {
+  cuisineType: string;
+  ingredients: CreateRecipeIngredientRequest[];
+  instructions: string;
+  servingCount: number;
+  title: string;
+}
+
+export interface CreateRecipeIngredientRequest {
+  canonicalIngredientId: string;
+  notes?: string | null;
+  quantity: number;
+  uomId?: string | null;
+}
+
+// ----------------------------------------------------------------
 // Recipe matching DTOs
 // ----------------------------------------------------------------
 

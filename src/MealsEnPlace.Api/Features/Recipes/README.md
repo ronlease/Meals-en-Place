@@ -1,18 +1,21 @@
 # Recipes
 
-Recipe library management: import from TheMealDB, container reference resolution, dietary classification, and inventory-based recipe matching.
+Recipe library management: import from TheMealDB, manual creation, recipe detail, container reference resolution, dietary classification, and inventory-based recipe matching.
 
 ## Backlog
 
 - MEP-004 Recipe Library Import
 - MEP-005 Recipe Dietary Classification
 - MEP-006 Recipe Matching
+- MEP-018 Recipe Detail and Manual Recipe Management
 
 ## Endpoints
 
 | Method | Route | Description |
 |--------|-------|-------------|
 | GET | `/api/v1/recipes` | List all local recipes with resolution status |
+| GET | `/api/v1/recipes/{id}` | Get full recipe detail with ingredients |
+| POST | `/api/v1/recipes` | Create a recipe manually |
 | POST | `/api/v1/recipes/import/{mealDbId}` | Import recipe from TheMealDB |
 | GET | `/api/v1/recipes/search?query=` | Search TheMealDB by name |
 | GET | `/api/v1/recipes/search/category?category=` | Search TheMealDB by category |
@@ -23,6 +26,8 @@ Recipe library management: import from TheMealDB, container reference resolution
 
 ## Key Concepts
 
+- **Recipe Detail**: Full recipe view with ingredients (quantities, UOMs, resolution status), instructions, dietary tags, and source URL for imported recipes.
+- **Manual Creation**: Users can create recipes directly with title, ingredients, instructions, cuisine, and serving count. Container references in notes are detected automatically.
 - **Import Pipeline**: Search TheMealDB, import by ID, detect container references in ingredients, classify dietary tags via Claude stub.
 - **Container Resolution**: Unresolved recipes do not participate in matching. User must declare net weight/volume for each container reference.
 - **Recipe Matching**: Scores recipes by coverage ratio (matched/total ingredients), waste bonus for expiry-imminent items, and seasonal affinity. Results are tiered: Full Match (1.0), Near Match (>=0.75), Partial Match (>=0.5).
@@ -30,10 +35,10 @@ Recipe library management: import from TheMealDB, container reference resolution
 
 ## Files
 
-- `RecipeImportController.cs` — Search/import/list endpoints
+- `RecipeImportController.cs` — Search/import/list/detail/create endpoints
 - `ContainerResolutionController.cs` — Container reference resolution endpoints
 - `RecipeMatchingController.cs` — Recipe matching endpoint
-- `IRecipeImportService.cs` / `RecipeImportService.cs` — TheMealDB import pipeline
+- `IRecipeImportService.cs` / `RecipeImportService.cs` — Recipe CRUD and TheMealDB import pipeline
 - `IContainerResolutionService.cs` / `ContainerResolutionService.cs` — Container resolution logic
 - `IRecipeMatchingService.cs` / `RecipeMatchingService.cs` — Matching and scoring pipeline
-- DTOs: `RecipeListItemDto`, `RecipeSearchResultDto`, `RecipeImportResultDto`, `RecipeMatchDto`, `RecipeMatchRequest`, `RecipeMatchResponse`, `MatchedIngredientDto`, `MissingIngredientDto`, `UnresolvedRecipeResponse`, `UnresolvedIngredientResponse`, `ResolvedIngredientResponse`, `ResolveContainerRequest`, `ContainerResolutionResult`, `MatchTier`
+- DTOs: `RecipeDetailDto`, `RecipeIngredientDetailDto`, `CreateRecipeRequest`, `CreateRecipeIngredientRequest`, `RecipeListItemDto`, `RecipeSearchResultDto`, `RecipeImportResultDto`, `RecipeMatchDto`, `RecipeMatchRequest`, `RecipeMatchResponse`, `MatchedIngredientDto`, `MissingIngredientDto`, `UnresolvedRecipeResponse`, `UnresolvedIngredientResponse`, `ResolvedIngredientResponse`, `ResolveContainerRequest`, `ContainerResolutionResult`, `MatchTier`

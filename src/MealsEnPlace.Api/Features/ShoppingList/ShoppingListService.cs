@@ -15,6 +15,87 @@ public class ShoppingListService(
     UomDisplayConverter uomDisplayConverter) : IShoppingListService
 {
     /// <inheritdoc />
+    public async Task<List<ShoppingListItemResponse>> AddFromRecipeAsync(
+        Guid recipeId, CancellationToken cancellationToken = default)
+    {
+        var recipe = await dbContext.Recipes
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
+            .FirstOrDefaultAsync(r => r.Id == recipeId, cancellationToken);
+
+        if (recipe is null) return [];
+
+        // Load current inventory in base units
+        var inventory = await dbContext.InventoryItems
+            .Include(i => i.Uom)
+            .ToListAsync(cancellationToken);
+
+        var available = new Dictionary<Guid, decimal>();
+        foreach (var item in inventory)
+        {
+            var conv = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
+            if (!conv.Success) continue;
+            available[item.CanonicalIngredientId] = available.GetValueOrDefault(item.CanonicalIngredientId) + conv.ConvertedQuantity;
+        }
+
+        // Load existing standalone items for aggregation
+        var existingStandalone = await dbContext.ShoppingListItems
+            .Where(sli => sli.MealPlanId == null)
+            .ToListAsync(cancellationToken);
+
+        var existingByIngredient = existingStandalone.ToDictionary(sli => sli.CanonicalIngredientId);
+
+        // Determine base UOM IDs
+        var baseUoms = await dbContext.UnitsOfMeasure
+            .Where(u => u.BaseUomId == null)
+            .ToDictionaryAsync(u => u.UomType, cancellationToken);
+
+        foreach (var ri in recipe.RecipeIngredients)
+        {
+            if (ri.UomId is null || ri.Uom is null) continue;
+
+            var conv = await uomConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UomId.Value, cancellationToken);
+            if (!conv.Success) continue;
+            if (!baseUoms.TryGetValue(ri.Uom.UomType, out var baseUom)) continue;
+
+            // Check if we already have enough in inventory
+            var avail = available.GetValueOrDefault(ri.CanonicalIngredientId);
+            var deficit = conv.ConvertedQuantity - avail;
+            if (deficit <= 0m)
+            {
+                // Reduce available for subsequent ingredients using the same item
+                available[ri.CanonicalIngredientId] = avail - conv.ConvertedQuantity;
+                continue;
+            }
+
+            // Aggregate with existing standalone item
+            if (existingByIngredient.TryGetValue(ri.CanonicalIngredientId, out var existing))
+            {
+                existing.Quantity += conv.ConvertedQuantity;
+            }
+            else
+            {
+                var newItem = new ShoppingListItem
+                {
+                    CanonicalIngredientId = ri.CanonicalIngredientId,
+                    Id = Guid.NewGuid(),
+                    MealPlanId = null,
+                    Quantity = deficit,
+                    UomId = baseUom.Id
+                };
+                dbContext.ShoppingListItems.Add(newItem);
+                existingByIngredient[ri.CanonicalIngredientId] = newItem;
+            }
+
+            // Reduce available so we don't double-count
+            available[ri.CanonicalIngredientId] = 0m;
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+        return await GetStandaloneShoppingListAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
     public async Task<List<ShoppingListItemResponse>> GenerateShoppingListAsync(
         Guid mealPlanId, CancellationToken cancellationToken = default)
     {
@@ -116,6 +197,27 @@ public class ShoppingListService(
             .ThenBy(sli => sli.CanonicalIngredient.Name)
             .ToListAsync(cancellationToken);
 
+        return await MapToResponsesAsync(items, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<List<ShoppingListItemResponse>> GetStandaloneShoppingListAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var items = await dbContext.ShoppingListItems
+            .Include(sli => sli.CanonicalIngredient)
+            .Include(sli => sli.Uom)
+            .Where(sli => sli.MealPlanId == null)
+            .OrderBy(sli => sli.CanonicalIngredient.Category)
+            .ThenBy(sli => sli.CanonicalIngredient.Name)
+            .ToListAsync(cancellationToken);
+
+        return await MapToResponsesAsync(items, cancellationToken);
+    }
+
+    private async Task<List<ShoppingListItemResponse>> MapToResponsesAsync(
+        List<ShoppingListItem> items, CancellationToken cancellationToken)
+    {
         var result = new List<ShoppingListItemResponse>();
         foreach (var item in items)
         {

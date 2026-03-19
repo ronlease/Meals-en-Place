@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
+import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -14,6 +15,7 @@ import {
   RecipeMatchResponse,
 } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
+import { RecipeDetailDialogComponent } from './recipe-detail-dialog.component';
 import { RecipeMatchResultsComponent } from './recipe-match-results.component';
 
 @Component({
@@ -33,10 +35,16 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
   template: `
     <div class="page-header">
       <h1 class="page-title">Recipes</h1>
-      <button mat-flat-button color="primary" routerLink="/recipes/import">
-        <mat-icon>cloud_download</mat-icon>
-        Import Recipes
-      </button>
+      <div class="header-actions">
+        <button mat-flat-button color="primary" routerLink="/recipes/create">
+          <mat-icon>add</mat-icon>
+          Create Recipe
+        </button>
+        <button mat-stroked-button routerLink="/recipes/import">
+          <mat-icon>cloud_download</mat-icon>
+          Import Recipes
+        </button>
+      </div>
     </div>
 
     <mat-tab-group animationDuration="200ms">
@@ -105,6 +113,8 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
                 <mat-row
                   *matRowDef="let row; columns: libraryColumns;"
                   [class.awaiting-row]="!row.isFullyResolved"
+                  class="clickable-row"
+                  (click)="openRecipeDetail(row)"
                 />
               </mat-table>
             }
@@ -225,6 +235,19 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
         opacity: 0.7;
       }
 
+      .clickable-row {
+        cursor: pointer;
+      }
+
+      .clickable-row:hover {
+        background: rgba(0, 0, 0, 0.04);
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 8px;
+      }
+
       .match-toolbar {
         display: flex;
         align-items: center;
@@ -264,6 +287,7 @@ export class RecipeBrowserComponent implements OnInit {
   protected readonly matchLoading = signal(false);
   protected readonly matchResults = signal<RecipeMatchResponse | null>(null);
 
+  private readonly dialog = inject(MatDialog);
   private readonly recipeService = inject(RecipeService);
   private readonly snackBar = inject(MatSnackBar);
   private selectedDietaryTags: string[] = [];
@@ -307,5 +331,13 @@ export class RecipeBrowserComponent implements OnInit {
 
   onDietaryFilterChange(event: any): void {
     this.selectedDietaryTags = event.value ?? [];
+  }
+
+  openRecipeDetail(recipe: RecipeListItemDto): void {
+    this.dialog.open(RecipeDetailDialogComponent, {
+      data: { recipeId: recipe.id },
+      maxWidth: '700px',
+      width: '90vw',
+    });
   }
 }
