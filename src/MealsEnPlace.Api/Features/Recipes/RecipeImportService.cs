@@ -67,7 +67,10 @@ public sealed class RecipeImportService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", recipe.Title);
+            var safeTitle = (recipe.Title ?? string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("\n", string.Empty);
+            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", safeTitle);
         }
 
         return (await GetRecipeDetailAsync(recipe.Id, cancellationToken))!;
