@@ -79,6 +79,14 @@
       <span class="toolbar-spacer"></span>
       <button
         mat-icon-button
+        (click)="preferencesService.toggleDisplaySystem()"
+        [matTooltip]="preferencesService.displaySystem() === 'Imperial' ? 'Switch to Metric' : 'Switch to Imperial'"
+        [attr.aria-label]="preferencesService.displaySystem() === 'Imperial' ? 'Switch to Metric' : 'Switch to Imperial'"
+      >
+        <mat-icon>{{ preferencesService.displaySystem() === 'Imperial' ? 'straighten' : 'square_foot' }}</mat-icon>
+      </button>
+      <button
+        mat-icon-button
         (click)="themeService.toggleTheme()"
         [attr.aria-label]="themeService.isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'"
       >

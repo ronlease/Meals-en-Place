@@ -12,8 +12,11 @@ public class ShoppingListItem
     /// <summary>Primary key.</summary>
     public Guid Id { get; set; }
 
-    /// <summary>The meal plan from which this item was derived.</summary>
-    public Guid MealPlanId { get; set; }
+    /// <summary>
+    /// The meal plan from which this item was derived.
+    /// Null for ad-hoc items added directly from a recipe detail view.
+    /// </summary>
+    public Guid? MealPlanId { get; set; }
 
     /// <summary>Optional display note (e.g., original measure string).</summary>
     public string? Notes { get; set; }
@@ -29,8 +32,8 @@ public class ShoppingListItem
     /// <summary>The canonical ingredient to purchase.</summary>
     public CanonicalIngredient CanonicalIngredient { get; set; } = null!;
 
-    /// <summary>The meal plan from which this item was derived.</summary>
-    public MealPlan MealPlan { get; set; } = null!;
+    /// <summary>The meal plan from which this item was derived, if any.</summary>
+    public MealPlan? MealPlan { get; set; }
 
     /// <summary>The unit of measure for this item's quantity.</summary>
     public UnitOfMeasure Uom { get; set; } = null!;

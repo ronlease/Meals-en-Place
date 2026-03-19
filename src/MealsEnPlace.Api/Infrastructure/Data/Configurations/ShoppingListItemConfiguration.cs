@@ -29,7 +29,7 @@ public class ShoppingListItemConfiguration : IEntityTypeConfiguration<ShoppingLi
         builder.HasOne(sli => sli.MealPlan)
             .WithMany()
             .HasForeignKey(sli => sli.MealPlanId)
-            .IsRequired()
+            .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasOne(sli => sli.Uom)

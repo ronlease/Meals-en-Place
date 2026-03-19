@@ -517,7 +517,7 @@ Feature: Seasonal Produce Guidance
 
 ## [MEP-011] Metric Display
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
 
 ### Business Problem
@@ -782,7 +782,7 @@ Feature: Dark Mode Toggle
 
 ## [MEP-018] Recipe Detail and Manual Recipe Management
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem

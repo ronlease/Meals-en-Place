@@ -18,6 +18,65 @@ public sealed class RecipeImportService(
     IUomNormalizationService uomNormalizationService) : IRecipeImportService
 {
     /// <inheritdoc />
+    public async Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default)
+    {
+        var recipe = new Recipe
+        {
+            CuisineType = request.CuisineType,
+            Id = Guid.NewGuid(),
+            Instructions = request.Instructions,
+            ServingCount = request.ServingCount,
+            SourceUrl = null,
+            TheMealDbId = null,
+            Title = request.Title
+        };
+
+        foreach (var ing in request.Ingredients)
+        {
+            var isResolved = ing.UomId.HasValue;
+            var detectionResult = ContainerReferenceDetector.Detect(ing.Notes);
+
+            recipe.RecipeIngredients.Add(new RecipeIngredient
+            {
+                CanonicalIngredientId = ing.CanonicalIngredientId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = isResolved && !detectionResult.IsContainerReference,
+                Notes = ing.Notes,
+                Quantity = ing.Quantity,
+                RecipeId = recipe.Id,
+                UomId = ing.UomId
+            });
+        }
+
+        dbContext.Recipes.Add(recipe);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            var dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
+            foreach (var tag in dietaryTags)
+            {
+                dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
+                {
+                    Id = Guid.NewGuid(),
+                    RecipeId = recipe.Id,
+                    Tag = tag
+                });
+            }
+            if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            var safeTitle = (recipe.Title ?? string.Empty)
+                .Replace("\r", string.Empty)
+                .Replace("\n", string.Empty);
+            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", safeTitle);
+        }
+
+        return (await GetRecipeDetailAsync(recipe.Id, cancellationToken))!;
+    }
+
+    /// <inheritdoc />
     public async Task<IReadOnlyList<RecipeListItemDto>> GetAllLocalRecipesAsync(CancellationToken cancellationToken = default)
     {
         var recipes = await dbContext.Recipes
@@ -46,6 +105,19 @@ public sealed class RecipeImportService(
                 UnresolvedCount = unresolved
             };
         }).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<RecipeDetailDto?> GetRecipeDetailAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var recipe = await dbContext.Recipes
+            .AsNoTracking()
+            .Include(r => r.DietaryTags)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
+
+        return recipe is null ? null : MapToDetailDto(recipe);
     }
 
     /// <inheritdoc />
@@ -162,6 +234,33 @@ public sealed class RecipeImportService(
         var meals = await theMealDbClient.FilterByCategoryAsync(category, cancellationToken);
         return await MapToSearchResultsAsync(meals, cancellationToken);
     }
+
+    private static RecipeDetailDto MapToDetailDto(Recipe recipe) =>
+        new()
+        {
+            CuisineType = recipe.CuisineType,
+            DietaryTags = recipe.DietaryTags.Select(dt => dt.Tag.ToString()).OrderBy(t => t).ToList(),
+            Id = recipe.Id,
+            Ingredients = recipe.RecipeIngredients
+                .OrderBy(ri => ri.CanonicalIngredient.Name)
+                .Select(ri => new RecipeIngredientDetailDto
+                {
+                    CanonicalIngredientId = ri.CanonicalIngredientId,
+                    Id = ri.Id,
+                    IngredientName = ri.CanonicalIngredient.Name,
+                    IsContainerResolved = ri.IsContainerResolved,
+                    Notes = ri.Notes,
+                    Quantity = ri.Quantity,
+                    UomAbbreviation = ri.Uom?.Abbreviation ?? string.Empty,
+                    UomId = ri.UomId
+                })
+                .ToList(),
+            Instructions = recipe.Instructions,
+            IsFullyResolved = recipe.IsFullyResolved,
+            ServingCount = recipe.ServingCount,
+            SourceUrl = recipe.SourceUrl,
+            Title = recipe.Title
+        };
 
     private async Task<CanonicalIngredient> FindOrCreateCanonicalIngredientAsync(string ingredientName, CancellationToken cancellationToken)
     {
