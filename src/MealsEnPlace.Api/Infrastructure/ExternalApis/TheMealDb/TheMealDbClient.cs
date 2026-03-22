@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using MealsEnPlace.Api.Common;
 
 namespace MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
 
@@ -11,7 +12,7 @@ public sealed class TheMealDbClient(IHttpClientFactory httpClientFactory, ILogge
     private const string ClientName = "TheMealDb";
 
     private static string SanitizeForLogging(string value) =>
-        value?.Replace("\r", string.Empty).Replace("\n", string.Empty) ?? string.Empty;
+        InputSanitizer.SanitizeForLogging(value);
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<TheMealDbMeal>> FilterByCategoryAsync(string category, CancellationToken cancellationToken = default)

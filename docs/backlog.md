@@ -1113,3 +1113,59 @@ Feature: User-Controlled Display Unit for Inventory Items
     Then "Butter" displays as "250 g"
     And the display does not automatically convert to "oz" or "lb"
 ```
+
+---
+
+## [MEP-023] Input Sanitization Audit
+
+**Status:** Done
+**Priority:** High
+
+### Business Problem
+The application accepts user-entered text in multiple places — inventory item notes, recipe titles, recipe instructions, ingredient names, meal plan names, and manual recipe entries. If any of this data is logged, stored, or rendered without sanitization, it creates risk for log injection, stored XSS (if rendered as HTML), or database issues from malformed input. I need a thorough audit of every code path that handles user-entered strings, creation of a shared sanitization utility, and updating all input-handling code to use it. The audit should cover both the API (C#) and frontend (Angular/TypeScript) layers.
+
+### Acceptance Criteria
+```gherkin
+Feature: Input Sanitization Audit
+
+  Scenario: Identify all user input entry points
+    Given the full codebase has been reviewed
+    When all API endpoints that accept string input from users are inventoried
+    Then each entry point is documented with the fields it accepts
+
+  Scenario: Create a shared sanitization utility
+    Given the audit has identified all user input entry points
+    When a sanitization utility is created
+    Then it provides methods for HTML encoding, trimming, and null-safe string cleaning
+    And it is usable from both services and controllers
+
+  Scenario: Sanitize user input before storage
+    Given a user submits a string containing HTML tags or script content
+    When the input is processed by the API
+    Then the stored value has dangerous content neutralized
+    And the original meaning of the text is preserved
+
+  Scenario: Sanitize user input before logging
+    Given a user submits a string containing newline characters or log-injection patterns
+    When the input is logged
+    Then the logged value has control characters removed or escaped
+    And the log entry cannot be used to forge additional log lines
+
+  Scenario: Sanitize user input before display
+    Given a user has stored a string containing HTML entities or script tags
+    When the value is rendered in the Angular frontend
+    Then the value is safely escaped by Angular's built-in XSS protection
+    And no raw HTML is rendered from user-supplied data
+
+  Scenario: All existing user input paths use the sanitization utility
+    Given the sanitization utility has been created
+    When all user input entry points are reviewed
+    Then every endpoint that stores or logs user-entered strings calls the sanitization utility
+    And the solution builds and all tests pass
+
+  Scenario: No unsanitized user data in log output
+    Given the full codebase has been reviewed for logging calls
+    When any log statement includes user-provided data
+    Then the data is passed through the sanitization utility before logging
+    And no raw user input appears in log output
+```

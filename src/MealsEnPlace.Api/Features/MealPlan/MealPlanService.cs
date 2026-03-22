@@ -23,7 +23,7 @@ public class MealPlanService(
     public async Task<MealPlanResponse> GenerateMealPlanAsync(GenerateMealPlanRequest request, CancellationToken cancellationToken = default)
     {
         var weekStart = request.WeekStartDate ?? GetCurrentWeekMonday();
-        var name = request.Name ?? $"Meal Plan - {weekStart:yyyy-MM-dd}";
+        var name = InputSanitizer.SanitizeForStorage(request.Name, 200) ?? $"Meal Plan - {weekStart:yyyy-MM-dd}";
         var slotPreferences = request.SlotPreferences ?? BuildDefaultSlotPreferences();
 
         // Load inventory in base units
