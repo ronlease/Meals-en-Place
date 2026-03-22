@@ -40,7 +40,7 @@ public class InventoryService(IInventoryRepository repository) : IInventoryServi
             ExpiryDate = request.ExpiryDate,
             Id = Guid.NewGuid(),
             Location = request.Location,
-            Notes = hasDeclaredSize ? request.Notes : null,
+            Notes = hasDeclaredSize ? InputSanitizer.SanitizeForStorage(request.Notes, 500) : null,
             Quantity = hasDeclaredSize ? request.DeclaredQuantity!.Value : request.Quantity,
             UomId = hasDeclaredSize ? request.DeclaredUomId!.Value : request.UomId
         };

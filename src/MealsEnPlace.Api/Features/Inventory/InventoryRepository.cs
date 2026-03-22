@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -86,7 +87,7 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
 
         item.ExpiryDate = request.ExpiryDate;
         item.Location = request.Location;
-        item.Notes = request.Notes;
+        item.Notes = InputSanitizer.SanitizeForStorage(request.Notes, 500);
         item.Quantity = request.Quantity;
         item.UomId = request.UomId;
 

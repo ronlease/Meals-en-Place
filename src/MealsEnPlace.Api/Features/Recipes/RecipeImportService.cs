@@ -22,13 +22,13 @@ public sealed class RecipeImportService(
     {
         var recipe = new Recipe
         {
-            CuisineType = request.CuisineType,
+            CuisineType = InputSanitizer.SanitizeForStorage(request.CuisineType, 100) ?? string.Empty,
             Id = Guid.NewGuid(),
-            Instructions = request.Instructions,
+            Instructions = InputSanitizer.SanitizeForStorage(request.Instructions, 5000) ?? string.Empty,
             ServingCount = request.ServingCount,
             SourceUrl = null,
             TheMealDbId = null,
-            Title = request.Title
+            Title = InputSanitizer.SanitizeForStorage(request.Title, 200) ?? string.Empty
         };
 
         foreach (var ing in request.Ingredients)
@@ -41,7 +41,7 @@ public sealed class RecipeImportService(
                 CanonicalIngredientId = ing.CanonicalIngredientId,
                 Id = Guid.NewGuid(),
                 IsContainerResolved = isResolved && !detectionResult.IsContainerReference,
-                Notes = ing.Notes,
+                Notes = InputSanitizer.SanitizeForStorage(ing.Notes, 500),
                 Quantity = ing.Quantity,
                 RecipeId = recipe.Id,
                 UomId = ing.UomId
@@ -67,10 +67,7 @@ public sealed class RecipeImportService(
         }
         catch (Exception ex)
         {
-            var safeTitle = (recipe.Title ?? string.Empty)
-                .Replace("\r", string.Empty)
-                .Replace("\n", string.Empty);
-            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", safeTitle);
+            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
         }
 
         return (await GetRecipeDetailAsync(recipe.Id, cancellationToken))!;
@@ -207,7 +204,7 @@ public sealed class RecipeImportService(
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", recipe.Title);
+            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
             dietaryTags = [];
         }
 
@@ -264,7 +261,7 @@ public sealed class RecipeImportService(
 
     private async Task<CanonicalIngredient> FindOrCreateCanonicalIngredientAsync(string ingredientName, CancellationToken cancellationToken)
     {
-        var normalized = ingredientName.Trim();
+        var normalized = InputSanitizer.SanitizeForStorage(ingredientName, 200) ?? ingredientName.Trim();
         var existing = await dbContext.CanonicalIngredients
             .FirstOrDefaultAsync(ci => ci.Name.ToLower() == normalized.ToLower(), cancellationToken);
 

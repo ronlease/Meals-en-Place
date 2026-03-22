@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -67,7 +68,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
         {
             return Conflict(new ProblemDetails
             {
-                Detail = $"A canonical ingredient named '{request.Name}' already exists.",
+                Detail = $"A canonical ingredient named '{InputSanitizer.SanitizeForStorage(request.Name)}' already exists.",
                 Status = StatusCodes.Status409Conflict,
                 Title = "Conflict"
             });
@@ -78,7 +79,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             Category = request.Category,
             DefaultUomId = request.DefaultUomId,
             Id = Guid.NewGuid(),
-            Name = request.Name.Trim()
+            Name = InputSanitizer.SanitizeForStorage(request.Name, 200) ?? string.Empty
         };
 
         db.CanonicalIngredients.Add(ingredient);
