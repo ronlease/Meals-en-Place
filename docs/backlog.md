@@ -1169,3 +1169,55 @@ Feature: Input Sanitization Audit
     Then the data is passed through the sanitization utility before logging
     And no raw user input appears in log output
 ```
+
+---
+
+## [MEP-024] PlantUML C4 Diagram PNG Generation via GitHub Actions
+
+**Status:** Backlog
+**Priority:** Low
+
+### Business Problem
+The project maintains PlantUML C4 architecture diagrams in docs/c4/ (context.puml, container.puml, component-api.puml, component-web.puml), but viewing them requires a local PlantUML installation or a compatible IDE plugin. This creates friction for anyone reviewing the repository on GitHub, where .puml files render as plain text. I need an automated GitHub Actions workflow that renders these diagrams to PNG whenever they change, so that up-to-date rendered diagrams are always available without requiring any local tooling. The README can then embed the PNG files directly for inline viewing.
+
+### Acceptance Criteria
+```gherkin
+Feature: PlantUML C4 Diagram PNG Generation
+
+  Scenario: Workflow triggers on .puml file changes
+    Given the GitHub Actions workflow for PlantUML rendering is configured
+    When a commit is pushed that modifies any file matching docs/c4/*.puml
+    Then the PlantUML rendering workflow is triggered
+    And the workflow does not trigger for changes outside docs/c4/*.puml
+
+  Scenario: PNGs are generated for all C4 diagrams
+    Given the PlantUML rendering workflow has been triggered
+    When the workflow executes the PlantUML renderer
+    Then a PNG file is produced for each .puml file in docs/c4/
+    And the PNG files are named to match their source files (e.g., context.puml produces context.png)
+
+  Scenario: Generated PNGs are committed to the repository
+    Given the workflow has produced PNG files for all diagrams
+    When the rendering step completes successfully
+    Then the PNG files are committed to docs/c4/ alongside the .puml sources
+    And the commit message clearly indicates it is an automated diagram render
+    And no workflow loop is created by the automated commit
+
+  Scenario: Generated PNGs are available as workflow artifacts
+    Given the workflow has produced PNG files for all diagrams
+    When the rendering step completes successfully
+    Then the PNG files are also uploaded as downloadable workflow artifacts
+    And the artifacts are retained for at least 7 days
+
+  Scenario: README references rendered PNG diagrams
+    Given PNG files exist in docs/c4/ for all C4 diagrams
+    When the project README is updated
+    Then the README embeds or links to the PNG files in docs/c4/
+    And the diagrams are visible inline when viewing the README on GitHub
+
+  Scenario: Diagrams render correctly using C4-PlantUML stdlib
+    Given the .puml files include C4-PlantUML macros from the plantuml-stdlib GitHub repository
+    When the PlantUML renderer processes the files
+    Then the renderer resolves the remote C4-PlantUML includes successfully
+    And the rendered PNGs accurately reflect the C4 diagram content
+```
