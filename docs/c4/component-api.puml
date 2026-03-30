@@ -1,0 +1,76 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram for API Container — Meals en Place
+
+Container_Ext(web, "Angular Web App", "Angular 21, Angular Material", "Frontend SPA")
+ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality, preferences")
+System_Ext(claude, "Claude API", "UOM normalization, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
+
+Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
+
+    ' === Feature Components ===
+
+    Component(inventory, "Inventory Component", "InventoryController, ReferenceDataController, InventoryService, InventoryRepository", "CRUD for pantry, fridge, and freezer items with container reference detection")
+    Component(recipeImport, "Recipe Import Component", "RecipeImportController, RecipeImportService", "Search TheMealDB, import recipes, create manual recipes, normalize ingredients")
+    Component(recipeMatching, "Recipe Matching Component", "RecipeMatchingController, RecipeMatchingService", "Scores recipes against inventory. Classifies Full, Near, and Partial matches")
+    Component(containerResolution, "Container Resolution Component", "ContainerResolutionController, ContainerResolutionService", "Resolve container references (can, jar, box) to declared weights and volumes")
+    Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanService", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality")
+    Component(shoppingList, "Shopping List Component", "ShoppingListController, StandaloneShoppingListController, ShoppingListService", "Derive shopping lists from meal plan gaps or standalone recipe additions")
+    Component(wasteReduction, "Waste Reduction Component", "WasteAlertController, WasteAlertService", "Scan for expiring items, match against recipes, create alerts")
+    Component(seasonalProduce, "Seasonal Produce Component", "SeasonalProduceController, SeasonalProduceService", "Query seasonality windows for current month (USDA Zone 7a)")
+    Component(userPreferences, "User Preferences Component", "UserPreferencesController", "Get and update display system preference (Imperial or Metric)")
+
+    ' === Infrastructure Components ===
+
+    Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, UOM resolution, meal plan optimization, substitution suggestions (currently stub)")
+    Component(themealdbClient, "TheMealDB Client", "TheMealDbClient", "HTTP client for external recipe API")
+    Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 13 entity configurations")
+
+    ' === Common / Shared Components ===
+
+    Component(uomServices, "UOM Services", "UomConversionService, UomNormalizationService, UomDisplayConverter", "Convert to base units, parse measure strings, convert base units to display units per user preference")
+    Component(containerDetector, "Container Reference Detector", "ContainerReferenceDetector", "Detects container keywords (can, jar, box, packet) in ingredient strings")
+    Component(inputSanitizer, "Input Sanitizer", "InputSanitizer", "Strips HTML, control characters, enforces length limits")
+}
+
+' === External → Feature Component relationships ===
+
+Rel(web, inventory, "Manages inventory items", "HTTP/JSON")
+Rel(web, recipeImport, "Searches and imports recipes", "HTTP/JSON")
+Rel(web, recipeMatching, "Requests recipe matches", "HTTP/JSON")
+Rel(web, containerResolution, "Resolves container references", "HTTP/JSON")
+Rel(web, mealPlan, "Generates and edits meal plans", "HTTP/JSON")
+Rel(web, shoppingList, "Derives shopping lists", "HTTP/JSON")
+Rel(web, wasteReduction, "Views waste alerts", "HTTP/JSON")
+Rel(web, seasonalProduce, "Queries seasonal produce", "HTTP/JSON")
+Rel(web, userPreferences, "Gets and updates preferences", "HTTP/JSON")
+
+' === Feature → Infrastructure relationships ===
+
+Rel(inventory, dataAccess, "Reads/Writes inventory", "EF Core")
+Rel(inventory, containerDetector, "Detects container references in entries")
+Rel(recipeImport, themealdbClient, "Fetches recipes")
+Rel(recipeImport, uomServices, "Normalizes ingredient measures")
+Rel(recipeImport, containerDetector, "Detects container references in imported ingredients")
+Rel(recipeImport, claudeClient, "Requests dietary classification")
+Rel(recipeMatching, uomServices, "Converts quantities for comparison")
+Rel(recipeMatching, claudeClient, "Evaluates substitutions for NearMatch candidates")
+Rel(containerResolution, dataAccess, "Reads/Writes resolved references", "EF Core")
+Rel(mealPlan, uomServices, "Converts quantities for scoring")
+Rel(mealPlan, claudeClient, "Optimizes meal plan for variety and waste reduction")
+Rel(shoppingList, uomServices, "Converts and formats display quantities")
+Rel(wasteReduction, dataAccess, "Reads expiry data and recipes", "EF Core")
+Rel(seasonalProduce, dataAccess, "Reads seasonality windows", "EF Core")
+Rel(userPreferences, dataAccess, "Reads/Writes display preferences", "EF Core")
+
+' === Infrastructure → External relationships ===
+
+Rel(claudeClient, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
+Rel(themealdbClient, themealdb, "Imports recipes", "HTTPS/JSON")
+Rel(dataAccess, db, "Reads/Writes", "EF Core / Npgsql")
+
+@enduml

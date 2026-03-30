@@ -204,6 +204,62 @@ public class ShoppingListServiceTests : IDisposable
 
     // ── Tests ─────────────────────────────────────────────────────────────────
 
+    // Scenario: AddFromRecipeAsync returns empty when recipe not found
+    //   Given no recipe exists for a given ID
+    //   When AddFromRecipeAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task AddFromRecipeAsync_RecipeNotFound_ReturnsEmptyList()
+    {
+        // Arrange — non-existent recipe ID
+        var missingId = Guid.NewGuid();
+
+        // Act
+        var result = await _sut.AddFromRecipeAsync(missingId);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // Scenario: AddFromRecipeAsync creates standalone shopping list items for missing ingredients
+    //   Given a recipe with 500g of "Chicken" and no inventory on hand
+    //   When AddFromRecipeAsync is called
+    //   Then a standalone shopping list item for "Chicken" is created with a positive quantity
+
+    [Fact]
+    public async Task AddFromRecipeAsync_RecipeWithNoInventory_CreatesStandaloneItems()
+    {
+        // Arrange
+        var chicken = SeedCanonicalIngredient("Chicken", IngredientCategory.Protein);
+        var recipe = new Recipe
+        {
+            CuisineType = "American",
+            Id = Guid.NewGuid(),
+            Instructions = "Grill it.",
+            ServingCount = 4,
+            Title = "Grilled Chicken"
+        };
+        _dbContext.Recipes.Add(recipe);
+        _dbContext.RecipeIngredients.Add(new RecipeIngredient
+        {
+            CanonicalIngredientId = chicken.Id,
+            Id = Guid.NewGuid(),
+            IsContainerResolved = true,
+            Quantity = 500m,
+            RecipeId = recipe.Id,
+            UomId = GramId
+        });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.AddFromRecipeAsync(recipe.Id);
+
+        // Assert
+        result.Should().ContainSingle(i => i.CanonicalIngredientName == "Chicken");
+        result.Single().Quantity.Should().BeGreaterThan(0);
+    }
+
     [Fact]
     public async Task GenerateShoppingListAsync_PartiallyCoveredIngredient_ShowsDeficit()
     {
@@ -355,5 +411,147 @@ public class ShoppingListServiceTests : IDisposable
     {
         var list = await _sut.GenerateShoppingListAsync(Guid.NewGuid());
         list.Should().BeEmpty();
+    }
+
+    // Scenario: GetShoppingListAsync returns empty when no items exist for plan
+    //   Given a meal plan with no shopping list items persisted
+    //   When GetShoppingListAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task GetShoppingListAsync_NoItemsForPlan_ReturnsEmptyList()
+    {
+        // Arrange
+        var plan = new Api.Models.Entities.MealPlan
+        {
+            CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(),
+            Name = "Empty Plan",
+            WeekStartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        _dbContext.MealPlans.Add(plan);
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetShoppingListAsync(plan.Id);
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // Scenario: GetShoppingListAsync returns items only for the requested plan
+    //   Given two plans each with one shopping list item
+    //   When GetShoppingListAsync is called for plan A
+    //   Then only plan A's item is returned
+
+    [Fact]
+    public async Task GetShoppingListAsync_TwoPlansWithItems_ReturnsOnlyItemsForRequestedPlan()
+    {
+        // Arrange
+        var ingredient = SeedCanonicalIngredient("Butter", IngredientCategory.Dairy);
+
+        var planA = new Api.Models.Entities.MealPlan
+        {
+            CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(),
+            Name = "Plan A",
+            WeekStartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        var planB = new Api.Models.Entities.MealPlan
+        {
+            CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(),
+            Name = "Plan B",
+            WeekStartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        _dbContext.MealPlans.AddRange(planA, planB);
+
+        _dbContext.ShoppingListItems.AddRange(
+            new ShoppingListItem
+            {
+                CanonicalIngredientId = ingredient.Id,
+                Id = Guid.NewGuid(),
+                MealPlanId = planA.Id,
+                Quantity = 100m,
+                UomId = GramId
+            },
+            new ShoppingListItem
+            {
+                CanonicalIngredientId = ingredient.Id,
+                Id = Guid.NewGuid(),
+                MealPlanId = planB.Id,
+                Quantity = 200m,
+                UomId = GramId
+            });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetShoppingListAsync(planA.Id);
+
+        // Assert
+        result.Should().ContainSingle();
+    }
+
+    // Scenario: GetStandaloneShoppingListAsync returns empty when no standalone items exist
+    //   Given no standalone shopping list items
+    //   When GetStandaloneShoppingListAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task GetStandaloneShoppingListAsync_NoItems_ReturnsEmptyList()
+    {
+        // Arrange — nothing seeded beyond reference UOMs
+
+        // Act
+        var result = await _sut.GetStandaloneShoppingListAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // Scenario: GetStandaloneShoppingListAsync does not return plan-scoped items
+    //   Given one plan-scoped item and one standalone item
+    //   When GetStandaloneShoppingListAsync is called
+    //   Then only the standalone item is returned
+
+    [Fact]
+    public async Task GetStandaloneShoppingListAsync_MixOfStandaloneAndPlanItems_ReturnsOnlyStandaloneItems()
+    {
+        // Arrange
+        var ingredient = SeedCanonicalIngredient("Milk", IngredientCategory.Dairy);
+
+        var plan = new Api.Models.Entities.MealPlan
+        {
+            CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(),
+            Name = "Some Plan",
+            WeekStartDate = DateOnly.FromDateTime(DateTime.UtcNow)
+        };
+        _dbContext.MealPlans.Add(plan);
+
+        _dbContext.ShoppingListItems.AddRange(
+            new ShoppingListItem
+            {
+                CanonicalIngredientId = ingredient.Id,
+                Id = Guid.NewGuid(),
+                MealPlanId = plan.Id,   // plan-scoped — should NOT appear
+                Quantity = 500m,
+                UomId = MlId
+            },
+            new ShoppingListItem
+            {
+                CanonicalIngredientId = ingredient.Id,
+                Id = Guid.NewGuid(),
+                MealPlanId = null,      // standalone — SHOULD appear
+                Quantity = 250m,
+                UomId = MlId
+            });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetStandaloneShoppingListAsync();
+
+        // Assert
+        result.Should().ContainSingle();
     }
 }

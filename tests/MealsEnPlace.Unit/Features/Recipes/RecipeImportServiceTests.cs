@@ -608,6 +608,522 @@ public class RecipeImportServiceTests : IDisposable
         await act.Should().NotThrowAsync();
     }
 
+    // ── SearchAsync — mapped results ──────────────────────────────────────────
+
+    // Scenario: SearchAsync returns mapped results from TheMealDB
+    //   Given SearchByNameAsync returns two meals for "chicken"
+    //   When SearchAsync is called with "chicken"
+    //   Then the result list contains both meals with correct titles
+
+    [Fact]
+    public async Task SearchAsync_TheMealDbReturnsTwoMeals_ReturnsTwoMappedResults()
+    {
+        // Arrange
+        var meals = new List<TheMealDbMeal>
+        {
+            new() { Category = "Chicken", MealId = "11111", MealName = "Chicken Curry" },
+            new() { Category = "Chicken", MealId = "22222", MealName = "Chicken Soup" }
+        };
+        _theMealDbClientMock
+            .Setup(c => c.SearchByNameAsync("chicken", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(meals);
+
+        // Act
+        var result = await _sut.SearchAsync("chicken");
+
+        // Assert
+        result.Should().HaveCount(2);
+        result.Select(r => r.Title).Should().Contain(["Chicken Curry", "Chicken Soup"]);
+    }
+
+    // ── SearchAsync — already imported ────────────────────────────────────────
+
+    // Scenario: SearchAsync marks meals as AlreadyImported when they exist in local DB
+    //   Given a recipe with TheMealDbId "11111" has already been imported
+    //   And SearchByNameAsync returns that meal plus a new one
+    //   When SearchAsync is called
+    //   Then the result for "11111" has AlreadyImported = true
+    //   And the result for the new meal has AlreadyImported = false
+
+    [Fact]
+    public async Task SearchAsync_OneMealAlreadyImported_MarksAlreadyImportedCorrectly()
+    {
+        // Arrange — seed an already-imported recipe
+        _dbContext.Recipes.Add(new Recipe
+        {
+            CuisineType = "Indian",
+            Id = Guid.NewGuid(),
+            Instructions = "Cook.",
+            ServingCount = 4,
+            TheMealDbId = "11111",
+            Title = "Chicken Curry"
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var meals = new List<TheMealDbMeal>
+        {
+            new() { Category = "Chicken", MealId = "11111", MealName = "Chicken Curry" },
+            new() { Category = "Chicken", MealId = "99999", MealName = "New Dish" }
+        };
+        _theMealDbClientMock
+            .Setup(c => c.SearchByNameAsync("chicken", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(meals);
+
+        // Act
+        var result = await _sut.SearchAsync("chicken");
+
+        // Assert
+        result.First(r => r.Id == "11111").AlreadyImported.Should().BeTrue();
+        result.First(r => r.Id == "99999").AlreadyImported.Should().BeFalse();
+    }
+
+    // ── SearchAsync — empty results ────────────────────────────────────────────
+
+    // Scenario: SearchAsync returns empty list when no meals found
+    //   Given SearchByNameAsync returns an empty list
+    //   When SearchAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task SearchAsync_TheMealDbReturnsEmpty_ReturnsEmptyList()
+    {
+        // Arrange
+        _theMealDbClientMock
+            .Setup(c => c.SearchByNameAsync("xyznothing", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // Act
+        var result = await _sut.SearchAsync("xyznothing");
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // ── SearchByCategoryAsync — mapped results ────────────────────────────────
+
+    // Scenario: SearchByCategoryAsync returns mapped results from TheMealDB
+    //   Given FilterByCategoryAsync returns one meal for category "Seafood"
+    //   When SearchByCategoryAsync is called with "Seafood"
+    //   Then the result contains that meal
+
+    [Fact]
+    public async Task SearchByCategoryAsync_TheMealDbReturnsOneMeal_ReturnsMappedResult()
+    {
+        // Arrange
+        var meals = new List<TheMealDbMeal>
+        {
+            new() { Category = "Seafood", MealId = "33333", MealName = "Grilled Salmon" }
+        };
+        _theMealDbClientMock
+            .Setup(c => c.FilterByCategoryAsync("Seafood", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(meals);
+
+        // Act
+        var result = await _sut.SearchByCategoryAsync("Seafood");
+
+        // Assert
+        result.Should().ContainSingle();
+        result[0].Title.Should().Be("Grilled Salmon");
+        result[0].Id.Should().Be("33333");
+    }
+
+    // ── SearchByCategoryAsync — empty results ─────────────────────────────────
+
+    // Scenario: SearchByCategoryAsync returns empty list when no meals found
+    //   Given FilterByCategoryAsync returns an empty list
+    //   When SearchByCategoryAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task SearchByCategoryAsync_TheMealDbReturnsEmpty_ReturnsEmptyList()
+    {
+        // Arrange
+        _theMealDbClientMock
+            .Setup(c => c.FilterByCategoryAsync("UnknownCategory", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        // Act
+        var result = await _sut.SearchByCategoryAsync("UnknownCategory");
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // ── CreateRecipeAsync — correct title ─────────────────────────────────────
+
+    // Scenario: CreateRecipeAsync creates recipe with correct title
+    //   Given a CreateRecipeRequest with Title "Homemade Tacos"
+    //   And one ingredient with a resolved UomId
+    //   When CreateRecipeAsync is called
+    //   Then the saved Recipe has Title "Homemade Tacos"
+
+    [Fact]
+    public async Task CreateRecipeAsync_ValidRequest_SavesRecipeWithCorrectTitle()
+    {
+        // Arrange
+        var canonicalIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Protein,
+            DefaultUomId = GramUomId,
+            Id = Guid.NewGuid(),
+            Name = "Beef"
+        };
+        _dbContext.CanonicalIngredients.Add(canonicalIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "Mexican",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = canonicalIngredient.Id,
+                    Quantity = 500m,
+                    UomId = GramUomId
+                }
+            ],
+            Instructions = "Cook the beef.",
+            ServingCount = 4,
+            Title = "Homemade Tacos"
+        };
+
+        // Act
+        var result = await _sut.CreateRecipeAsync(request);
+
+        // Assert
+        result.Title.Should().Be("Homemade Tacos");
+    }
+
+    // ── CreateRecipeAsync — creates ingredients ────────────────────────────────
+
+    // Scenario: CreateRecipeAsync creates recipe ingredients
+    //   Given a CreateRecipeRequest with two ingredients
+    //   When CreateRecipeAsync is called
+    //   Then the saved Recipe has exactly two RecipeIngredients
+
+    [Fact]
+    public async Task CreateRecipeAsync_ValidRequestWithTwoIngredients_CreatesTwoRecipeIngredients()
+    {
+        // Arrange
+        var ingredient1 = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Protein,
+            DefaultUomId = GramUomId,
+            Id = Guid.NewGuid(),
+            Name = "Chicken Breast"
+        };
+        var ingredient2 = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Spice,
+            DefaultUomId = GramUomId,
+            Id = Guid.NewGuid(),
+            Name = "Paprika"
+        };
+        _dbContext.CanonicalIngredients.AddRange(ingredient1, ingredient2);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "American",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = ingredient1.Id,
+                    Quantity = 400m,
+                    UomId = GramUomId
+                },
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = ingredient2.Id,
+                    Quantity = 5m,
+                    UomId = GramUomId
+                }
+            ],
+            Instructions = "Season and grill.",
+            ServingCount = 2,
+            Title = "Grilled Chicken"
+        };
+
+        // Act
+        var result = await _sut.CreateRecipeAsync(request);
+
+        // Assert
+        var count = await _dbContext.RecipeIngredients.AsNoTracking()
+            .CountAsync(ri => ri.RecipeId == result.Id);
+        count.Should().Be(2);
+    }
+
+    // ── CreateRecipeAsync — container reference in notes ──────────────────────
+
+    // Scenario: CreateRecipeAsync detects container reference in notes
+    //   Given a CreateRecipeIngredientRequest with Notes "1 can chopped tomatoes" and UomId null
+    //   When CreateRecipeAsync is called
+    //   Then the RecipeIngredient has IsContainerResolved = false
+
+    [Fact]
+    public async Task CreateRecipeAsync_IngredientNotesContainCanKeyword_SetsIsContainerResolvedFalse()
+    {
+        // Arrange
+        var canonicalIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Produce,
+            DefaultUomId = GramUomId,
+            Id = Guid.NewGuid(),
+            Name = "Diced Tomatoes"
+        };
+        _dbContext.CanonicalIngredients.Add(canonicalIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "Italian",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = canonicalIngredient.Id,
+                    Notes = "1 can chopped tomatoes",
+                    Quantity = 0m,
+                    UomId = null
+                }
+            ],
+            Instructions = "Simmer the sauce.",
+            ServingCount = 4,
+            Title = "Tomato Pasta"
+        };
+
+        // Act
+        var result = await _sut.CreateRecipeAsync(request);
+
+        // Assert
+        var ingredient = await _dbContext.RecipeIngredients.AsNoTracking()
+            .FirstAsync(ri => ri.RecipeId == result.Id);
+        ingredient.IsContainerResolved.Should().BeFalse();
+    }
+
+    // ── CreateRecipeAsync — Claude failure ────────────────────────────────────
+
+    // Scenario: CreateRecipeAsync handles Claude dietary classification failure gracefully
+    //   Given Claude.ClassifyDietaryTagsAsync throws an exception
+    //   When CreateRecipeAsync is called
+    //   Then the recipe is still saved
+    //   And no exception propagates to the caller
+
+    [Fact]
+    public async Task CreateRecipeAsync_ClaudeClassificationThrows_RecipeStillSaved()
+    {
+        // Arrange
+        _claudeServiceMock
+            .Setup(c => c.ClassifyDietaryTagsAsync(It.IsAny<Recipe>()))
+            .ThrowsAsync(new HttpRequestException("Claude unavailable"));
+
+        var canonicalIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Grain,
+            DefaultUomId = GramUomId,
+            Id = Guid.NewGuid(),
+            Name = "Pasta"
+        };
+        _dbContext.CanonicalIngredients.Add(canonicalIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "Italian",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = canonicalIngredient.Id,
+                    Quantity = 200m,
+                    UomId = GramUomId
+                }
+            ],
+            Instructions = "Boil pasta.",
+            ServingCount = 4,
+            Title = "Simple Pasta"
+        };
+
+        // Act
+        var act = async () => await _sut.CreateRecipeAsync(request);
+
+        // Assert
+        await act.Should().NotThrowAsync();
+        var saved = await _dbContext.Recipes.AsNoTracking()
+            .FirstOrDefaultAsync(r => r.Title == "Simple Pasta");
+        saved.Should().NotBeNull();
+    }
+
+    // ── GetAllLocalRecipesAsync — empty database ───────────────────────────────
+
+    // Scenario: GetAllLocalRecipesAsync returns empty list when no recipes exist
+    //   Given no recipes in the database
+    //   When GetAllLocalRecipesAsync is called
+    //   Then an empty list is returned
+
+    [Fact]
+    public async Task GetAllLocalRecipesAsync_NoRecipes_ReturnsEmptyList()
+    {
+        // Arrange — nothing seeded beyond reference UOMs
+
+        // Act
+        var result = await _sut.GetAllLocalRecipesAsync();
+
+        // Assert
+        result.Should().BeEmpty();
+    }
+
+    // ── GetAllLocalRecipesAsync — ordering ────────────────────────────────────
+
+    // Scenario: GetAllLocalRecipesAsync returns recipes ordered by title
+    //   Given recipes "Zucchini Soup" and "Apple Cake" exist
+    //   When GetAllLocalRecipesAsync is called
+    //   Then results are ordered alphabetically: "Apple Cake" first
+
+    [Fact]
+    public async Task GetAllLocalRecipesAsync_MultipleRecipes_OrderedByTitleAscending()
+    {
+        // Arrange
+        _dbContext.Recipes.AddRange(
+            new Recipe
+            {
+                CuisineType = "American",
+                Id = Guid.NewGuid(),
+                Instructions = "Cook.",
+                ServingCount = 4,
+                Title = "Zucchini Soup"
+            },
+            new Recipe
+            {
+                CuisineType = "French",
+                Id = Guid.NewGuid(),
+                Instructions = "Bake.",
+                ServingCount = 8,
+                Title = "Apple Cake"
+            });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetAllLocalRecipesAsync();
+
+        // Assert
+        result.Should().HaveCount(2);
+        result[0].Title.Should().Be("Apple Cake");
+        result[1].Title.Should().Be("Zucchini Soup");
+    }
+
+    // ── GetAllLocalRecipesAsync — unresolved count ────────────────────────────
+
+    // Scenario: GetAllLocalRecipesAsync returns correct unresolved count
+    //   Given a recipe with one resolved and one unresolved ingredient
+    //   When GetAllLocalRecipesAsync is called
+    //   Then UnresolvedCount equals 1
+
+    [Fact]
+    public async Task GetAllLocalRecipesAsync_RecipeWithUnresolvedIngredients_ReturnsCorrectUnresolvedCount()
+    {
+        // Arrange
+        var canonical = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Other,
+            DefaultUomId = EachUomId,
+            Id = Guid.NewGuid(),
+            Name = "Canned Beans"
+        };
+        _dbContext.CanonicalIngredients.Add(canonical);
+
+        var recipe = new Recipe
+        {
+            CuisineType = "Mexican",
+            Id = Guid.NewGuid(),
+            Instructions = "Mix.",
+            ServingCount = 4,
+            Title = "Bean Soup"
+        };
+        _dbContext.Recipes.Add(recipe);
+        _dbContext.RecipeIngredients.AddRange(
+            new RecipeIngredient
+            {
+                CanonicalIngredientId = canonical.Id,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Quantity = 200m,
+                RecipeId = recipe.Id,
+                UomId = GramUomId
+            },
+            new RecipeIngredient
+            {
+                CanonicalIngredientId = canonical.Id,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = false,
+                Notes = "1 can",
+                Quantity = 0m,
+                RecipeId = recipe.Id,
+                UomId = null
+            });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetAllLocalRecipesAsync();
+
+        // Assert
+        var dto = result.Should().ContainSingle().Subject;
+        dto.UnresolvedCount.Should().Be(1);
+    }
+
+    // ── GetRecipeDetailAsync — not found ──────────────────────────────────────
+
+    // Scenario: GetRecipeDetailAsync returns null when recipe not found
+    //   Given no recipe with a particular ID
+    //   When GetRecipeDetailAsync is called
+    //   Then null is returned
+
+    [Fact]
+    public async Task GetRecipeDetailAsync_RecipeNotFound_ReturnsNull()
+    {
+        // Arrange — non-existent ID
+        var missingId = Guid.NewGuid();
+
+        // Act
+        var result = await _sut.GetRecipeDetailAsync(missingId);
+
+        // Assert
+        result.Should().BeNull();
+    }
+
+    // ── GetRecipeDetailAsync — found ──────────────────────────────────────────
+
+    // Scenario: GetRecipeDetailAsync returns detail when recipe exists
+    //   Given a recipe "Beef Stew" with cuisine "French"
+    //   When GetRecipeDetailAsync is called with its ID
+    //   Then the returned detail has Title "Beef Stew" and CuisineType "French"
+
+    [Fact]
+    public async Task GetRecipeDetailAsync_ExistingRecipe_ReturnsCorrectDetail()
+    {
+        // Arrange
+        var recipeId = Guid.NewGuid();
+        _dbContext.Recipes.Add(new Recipe
+        {
+            CuisineType = "French",
+            Id = recipeId,
+            Instructions = "Brown the beef and simmer.",
+            ServingCount = 6,
+            Title = "Beef Stew"
+        });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetRecipeDetailAsync(recipeId);
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Title.Should().Be("Beef Stew");
+        result.CuisineType.Should().Be("French");
+    }
+
     // ── ImportByIdAsync — result metadata ─────────────────────────────────────
 
     [Fact]

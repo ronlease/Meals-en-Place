@@ -1,0 +1,78 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+
+LAYOUT_WITH_LEGEND()
+
+title Component Diagram for Angular Web App
+
+Person_Ext(user, "User", "Single local user")
+Container_Ext(api, "API", "ASP.NET Core 10, EF Core 10", "REST API under /api/v1/")
+
+Container_Boundary(web, "Angular Web App — Angular 21, Angular Material") {
+
+    ' ── App Shell ──────────────────────────────────────────────
+    Component(appShell, "App Component", "Angular Standalone Component", "Main layout with Material sidenav, toolbar, theme toggle, and display-system preferences")
+
+    ' ── Feature Page Components ────────────────────────────────
+    Component(inventoryPage, "Inventory Page", "Angular Standalone Components", "Tab-based Pantry/Fridge/Freezer view with add/edit dialogs and container reference detection")
+    Component(recipeBrowser, "Recipe Browser", "Angular Standalone Components", "My Recipes library table and What Can I Make matching tab with dietary filters")
+    Component(recipeCreate, "Recipe Create", "Angular Standalone Component", "Manual recipe creation form with dynamic ingredient rows")
+    Component(recipeImport, "Recipe Import", "Angular Standalone Component", "TheMealDB search and import with card grid and per-recipe import status")
+    Component(mealPlanBoard, "Meal Plan Board", "Angular Standalone Components", "7-day x 4-slot grid with plan generation and recipe swap dialogs")
+    Component(shoppingListPage, "Shopping List Page", "Angular Standalone Component", "Table of items needed from meal plan gaps with regenerate capability")
+    Component(seasonalProducePage, "Seasonal Produce Page", "Angular Standalone Component", "In Season Now and Full Calendar toggle views for USDA Zone 7a")
+    Component(expirationPage, "Expiration Tracking Page", "Angular Standalone Component", "Cross-location expiry tracking with color-coded urgency and day filters")
+    Component(wasteAlertsPage, "Waste Alerts Page", "Angular Standalone Component", "Card grid of expiring items with recipe suggestions and dismiss action")
+
+    ' ── Core Services ──────────────────────────────────────────
+    Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
+    Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping")
+    Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
+    Component(recipeService, "RecipeService", "Angular Service, providedIn: root", "Recipe library, import, matching, detail, add-to-shopping-list")
+    Component(referenceDataService, "ReferenceDataService", "Angular Service, providedIn: root", "Canonical ingredients and units of measure for forms")
+    Component(seasonalProduceService, "SeasonalProduceService", "Angular Service, providedIn: root", "In-season and full calendar queries")
+    Component(shoppingListService, "ShoppingListService", "Angular Service, providedIn: root", "Generate and fetch shopping lists")
+    Component(themeService, "ThemeService", "Angular Service, providedIn: root", "Dark/light mode toggle, localStorage persistence")
+    Component(wasteAlertService, "WasteAlertService", "Angular Service, providedIn: root", "Fetch and dismiss waste alerts")
+}
+
+' ── External relationships ─────────────────────────────────
+Rel(user, appShell, "Uses", "HTTP localhost")
+
+' ── App Shell relationships ────────────────────────────────
+Rel(appShell, inventoryPage, "Routes to")
+Rel(appShell, recipeBrowser, "Routes to")
+Rel(appShell, recipeCreate, "Routes to")
+Rel(appShell, recipeImport, "Routes to")
+Rel(appShell, mealPlanBoard, "Routes to")
+Rel(appShell, shoppingListPage, "Routes to")
+Rel(appShell, seasonalProducePage, "Routes to")
+Rel(appShell, expirationPage, "Routes to")
+Rel(appShell, wasteAlertsPage, "Routes to")
+Rel(appShell, preferencesService, "Reads display system preference")
+Rel(appShell, themeService, "Toggles dark/light mode")
+
+' ── Feature → Service relationships ────────────────────────
+Rel(inventoryPage, inventoryService, "Uses")
+Rel(recipeBrowser, recipeService, "Uses")
+Rel(recipeCreate, recipeService, "Uses")
+Rel(recipeCreate, referenceDataService, "Uses")
+Rel(recipeImport, recipeService, "Uses")
+Rel(mealPlanBoard, mealPlanService, "Uses")
+Rel(mealPlanBoard, recipeService, "Uses")
+Rel(shoppingListPage, shoppingListService, "Uses")
+Rel(shoppingListPage, mealPlanService, "Uses")
+Rel(seasonalProducePage, seasonalProduceService, "Uses")
+Rel(expirationPage, inventoryService, "Uses")
+Rel(wasteAlertsPage, wasteAlertService, "Uses")
+
+' ── Service → API relationships ────────────────────────────
+Rel(inventoryService, api, "Calls", "HTTP/JSON")
+Rel(mealPlanService, api, "Calls", "HTTP/JSON")
+Rel(recipeService, api, "Calls", "HTTP/JSON")
+Rel(referenceDataService, api, "Calls", "HTTP/JSON")
+Rel(seasonalProduceService, api, "Calls", "HTTP/JSON")
+Rel(shoppingListService, api, "Calls", "HTTP/JSON")
+Rel(wasteAlertService, api, "Calls", "HTTP/JSON")
+
+@enduml

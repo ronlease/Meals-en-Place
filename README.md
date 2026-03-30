@@ -5,7 +5,7 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 ## Tech Stack
 
 - **API:** ASP.NET Core 10, Entity Framework Core 10, PostgreSQL
-- **Frontend:** Angular 21, Angular Material
+- **Frontend:** Angular 21, Angular Material, PWA (service worker, offline support)
 - **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
 - **External APIs:** TheMealDB (recipe data), Open Food Facts (ingredient metadata)
 - **Testing:** xUnit, FluentAssertions, Moq
@@ -74,12 +74,13 @@ src/
       shopping-list/          # Shopping list from meal plan gaps
       waste-alerts/           # Expiry alerts with recipe suggestions
     src/app/core/             # Shared services and models
+    src/app/shared/           # Reusable UI components (offline banner)
 tests/
-  MealsEnPlace.Unit/          # Unit tests (208 tests)
+  MealsEnPlace.Unit/          # Unit tests (219 tests)
   MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-022)
-  c4/                         # PlantUML C4 architecture diagrams
+  backlog.md                  # Product backlog (MEP-001 through MEP-023)
+  c4/                         # PlantUML C4 architecture diagrams (L1–L3)
 ```
 
 ## Implemented Features
@@ -98,6 +99,8 @@ docs/
 - **Material Icons** (MEP-016) -- Edit and delete icons in inventory table
 - **Dark Mode** (MEP-017) -- Theme toggle with OS preference detection and localStorage persistence
 - **User-Controlled Display Unit** (MEP-022) -- Inventory items display in their entry unit, not auto-converted
+- **Input Sanitization** (MEP-023) -- HTML stripping, control char removal, length enforcement across all inputs
+- **Progressive Web App** (MEP-021) -- Installable on mobile, offline caching, responsive sidenav, push notification stubs
 
 ## License
 
