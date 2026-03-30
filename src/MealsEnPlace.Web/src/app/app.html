@@ -1,5 +1,10 @@
 <mat-sidenav-container class="app-container">
-  <mat-sidenav mode="side" opened class="app-sidenav">
+  <mat-sidenav
+    #sidenav
+    [mode]="isMobile() ? 'over' : 'side'"
+    [opened]="!isMobile()"
+    class="app-sidenav"
+  >
     <div class="sidenav-header">
       <span class="app-brand">Meals en Place</span>
     </div>
@@ -9,6 +14,7 @@
         mat-list-item
         routerLink="/inventory"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>kitchen</mat-icon>
         <span matListItemTitle>Inventory</span>
@@ -17,6 +23,7 @@
         mat-list-item
         routerLink="/expiration"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>schedule</mat-icon>
         <span matListItemTitle>Expiring Soon</span>
@@ -25,6 +32,7 @@
         mat-list-item
         routerLink="/meal-plan"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>calendar_month</mat-icon>
         <span matListItemTitle>Meal Plan</span>
@@ -34,6 +42,7 @@
         routerLink="/recipes"
         routerLinkActive="active-link"
         [routerLinkActiveOptions]="{ exact: false }"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>restaurant</mat-icon>
         <span matListItemTitle>Recipes</span>
@@ -42,6 +51,7 @@
         mat-list-item
         routerLink="/recipes/import"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>cloud_download</mat-icon>
         <span matListItemTitle>Import Recipes</span>
@@ -50,6 +60,7 @@
         mat-list-item
         routerLink="/seasonal-produce"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>eco</mat-icon>
         <span matListItemTitle>Seasonal Produce</span>
@@ -58,6 +69,7 @@
         mat-list-item
         routerLink="/shopping-list"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>shopping_cart</mat-icon>
         <span matListItemTitle>Shopping List</span>
@@ -66,6 +78,7 @@
         mat-list-item
         routerLink="/waste-alerts"
         routerLinkActive="active-link"
+        (click)="onNavClick()"
       >
         <mat-icon matListItemIcon>compost</mat-icon>
         <span matListItemTitle>Waste Alerts</span>
@@ -74,9 +87,26 @@
   </mat-sidenav>
 
   <mat-sidenav-content class="app-content">
+    <app-offline-banner />
+
     <mat-toolbar color="primary" class="app-toolbar">
-      <span>Meals en Place</span>
+      @if (isMobile()) {
+        <button mat-icon-button (click)="sidenav.toggle()" aria-label="Toggle navigation">
+          <mat-icon>menu</mat-icon>
+        </button>
+      }
+      <span class="toolbar-brand">Meals en Place</span>
       <span class="toolbar-spacer"></span>
+      @if (installPromptService.canInstall()) {
+        <button
+          mat-icon-button
+          (click)="installPromptService.promptInstall()"
+          matTooltip="Install app"
+          aria-label="Install app"
+        >
+          <mat-icon>install_mobile</mat-icon>
+        </button>
+      }
       <button
         mat-icon-button
         (click)="preferencesService.toggleDisplaySystem()"

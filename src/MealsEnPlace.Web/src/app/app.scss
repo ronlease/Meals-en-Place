@@ -31,6 +31,10 @@
   z-index: 100;
 }
 
+.toolbar-brand {
+  white-space: nowrap;
+}
+
 .toolbar-spacer {
   flex: 1 1 auto;
 }
@@ -43,4 +47,16 @@
 .active-link {
   background: var(--mat-sys-secondary-container, rgba(0, 0, 0, 0.06));
   font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .app-sidenav {
+    width: 260px;
+  }
+}
+
+@media (max-width: 375px) {
+  .toolbar-brand {
+    font-size: 14px;
+  }
 }
