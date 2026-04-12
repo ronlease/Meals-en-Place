@@ -11,16 +11,16 @@
   "private": true,
   "packageManager": "npm@10.9.2",
   "dependencies": {
-    "@angular/animations": "^21.2.7",
+    "@angular/animations": "^21.2.8",
     "@angular/cdk": "^21.2.6",
-    "@angular/common": "^21.2.7",
-    "@angular/compiler": "^21.2.7",
-    "@angular/core": "^21.2.7",
-    "@angular/forms": "^21.2.7",
+    "@angular/common": "^21.2.8",
+    "@angular/compiler": "^21.2.8",
+    "@angular/core": "^21.2.8",
+    "@angular/forms": "^21.2.8",
     "@angular/material": "^21.2.6",
-    "@angular/platform-browser": "^21.2.7",
-    "@angular/router": "^21.2.7",
-    "@angular/service-worker": "^21.2.7",
+    "@angular/platform-browser": "^21.2.8",
+    "@angular/router": "^21.2.8",
+    "@angular/service-worker": "^21.2.8",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0",
     "undici": "^7.24.3"
@@ -29,9 +29,9 @@
     "undici": "^7.24.3"
   },
   "devDependencies": {
-    "@angular/build": "^21.2.6",
-    "@angular/cli": "^21.2.6",
-    "@angular/compiler-cli": "^21.2.7",
+    "@angular/build": "^21.2.7",
+    "@angular/cli": "^21.2.7",
+    "@angular/compiler-cli": "^21.2.8",
     "prettier": "^3.8.2",
     "typescript": "~5.9.2"
   }
