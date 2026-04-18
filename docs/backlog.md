@@ -1230,7 +1230,12 @@ Feature: PlantUML C4 Diagram PNG Generation
 ### Business Problem
 TheMealDB, the current recipe source, carries approximately 600 meals. This catalog is functional but limiting -- it restricts recipe matching variety, meal plan diversity, and the overall usefulness of the "What can I make?" feature as my ingredient inventory grows. Before committing to a specific integration, I need a time-boxed spike to evaluate alternative recipe data sources across two categories: static datasets suitable for one-time bulk import (preferred for a single-user local deployment that should not burn API quota per query) and live APIs (as a fallback if no static dataset meets quality requirements). The spike should produce a recommendation with concrete data on import viability, ingredient matching quality, licensing constraints, and storage impact.
 
-**Leading candidate:** Recipe1M+ (MIT CSAIL). Its layer2+ extension provides pre-parsed {quantity, unit, weight} per ingredient plus an 18k-word standardized ingredient vocabulary, which maps cleanly to the existing CanonicalIngredient and UOM model. Licensing is CC BY-NC-SA-style with an indemnification clause and a prohibition on redistributing download URLs -- compatible with local single-user use provided the dataset itself is not bundled with the application. The other four candidates remain in the comparison to backstop the decision if Recipe1M+ data quality or prose-contamination rate proves worse than expected.
+**Leading candidate:** Food.com on Kaggle. ~230,000 recipes, CC BY-NC-SA licensed by the uploader, accessible to any Kaggle account (no institutional affiliation required). Smaller and less pre-structured than Recipe1M+ would have been, but the existing UOM parser and container-reference detector already handle raw ingredient strings, so the capability gap is manageable. The other live-API candidates (Spoonacular, Edamam) remain in the comparison as fallbacks.
+
+**Rejected candidates:**
+
+- **Recipe1M+ (MIT CSAIL)** -- initial leading candidate based on its layer2+ structured ingredient data. Rejected after a dataset access request to MIT was returned with revised terms restricting access to universities and public institutions only. This project is a single-user personal tool without institutional affiliation, so Recipe1M+ is unavailable regardless of the underlying data fit. The citation references and discovery path are preserved in [docs/spikes/mep-025-recipe1m-references.md](spikes/mep-025-recipe1m-references.md) in case a future reader at an eligible institution wants to follow the same trail.
+- **RecipeNLG** -- derived from Recipe1M+ with additional scraping. Likely subject to similar research-institution-only access, and inherits the same upstream licensing dependency. Keep in the comparison only if Food.com Kaggle and the live APIs fall through; otherwise deprioritize.
 
 ### Acceptance Criteria
 ```gherkin
@@ -1286,19 +1291,19 @@ Feature: Evaluate Expanded Recipe Data Sources
     And the recommendation clearly states which sources are safe to use
 
   Scenario: Sanitize narrative prose from imported instructions
-    Given a Recipe1M+ sample batch has been parsed
+    Given a sample batch from the chosen dataset has been parsed
     When each recipe's instruction steps are run through a prose-stripping filter
     Then sentences containing first-person pronouns, long parentheticals, or non-imperative structure are removed
     And recipes retaining fewer than 80% of their original steps are flagged for review or exclusion
     And the pass rate across the sample is recorded
 
   Scenario: Dataset is obtained per-user, not redistributed
-    Given Recipe1M+ terms prohibit redistribution of the download URLs and dataset
+    Given the chosen dataset's license restricts redistribution (CC BY-NC-SA, research-only, or similar non-commercial terms)
     When setup documentation is written
-    Then the docs link to https://github.com/torralba-lab/im2recipe as the canonical entry point, from which users can locate the MIT dataset request form and terms of use themselves
-    And the docs do NOT link directly to the gated download URLs behind the MIT signup form
-    And no Recipe1M+ source data (layer*.json, SQL dumps, seed fixtures containing real recipe text) is committed to the repository
-    And any seed data derived from Recipe1M+ is limited to non-copyrightable elements only (canonical ingredient names, UOM mappings)
+    Then the docs link to the upstream source (Kaggle dataset page, MIT project page, or equivalent) as the canonical entry point, from which users can locate the license and download instructions themselves
+    And the docs do NOT bypass any upstream signup or agreement step
+    And no source data (recipe JSON, SQL dumps, seed fixtures containing real recipe text) is committed to the repository
+    And any seed data derived from the dataset is limited to non-copyrightable elements only (canonical ingredient names, UOM mappings)
 
   Scenario: Produce a recommendation
     Given all evaluation criteria have been assessed for every candidate
