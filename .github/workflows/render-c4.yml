@@ -1,0 +1,73 @@
+name: Render C4 Diagrams
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/c4/**.puml"
+  pull_request:
+    paths:
+      - "docs/c4/**.puml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  render:
+    name: Render PlantUML C4 diagrams to PNG
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache PlantUML JAR
+        uses: actions/cache@v5
+        with:
+          path: plantuml.jar
+          key: plantuml-1.2024.8
+
+      - name: Download PlantUML JAR
+        run: |
+          if [ ! -f plantuml.jar ]; then
+            curl -fsSL \
+              https://github.com/plantuml/plantuml/releases/download/v1.2024.8/plantuml-1.2024.8.jar \
+              -o plantuml.jar
+          fi
+
+      - name: Render diagrams to PNG
+        env:
+          PLANTUML_SECURITY_PROFILE: INTERNET
+        run: |
+          java -DPLANTUML_SECURITY_PROFILE=INTERNET -jar plantuml.jar \
+            -tpng -failfast2 docs/c4/*.puml
+          ls -la docs/c4/*.png
+
+      - name: Upload PNGs as artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: c4-diagrams
+          path: docs/c4/*.png
+          retention-days: 7
+
+      - name: Commit rendered PNGs
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/c4/*.png
+          if git diff --cached --quiet; then
+            echo "No PNG changes to commit."
+            exit 0
+          fi
+          git commit -m "docs(c4): auto-render C4 diagrams to PNG [skip ci]"
+          git push

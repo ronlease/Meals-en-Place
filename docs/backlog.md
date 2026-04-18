@@ -1174,7 +1174,7 @@ Feature: Input Sanitization Audit
 
 ## [MEP-024] PlantUML C4 Diagram PNG Generation via GitHub Actions
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
 
 ### Business Problem

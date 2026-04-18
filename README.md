@@ -79,9 +79,25 @@ tests/
   MealsEnPlace.Unit/          # Unit tests (219 tests)
   MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-023)
+  backlog.md                  # Product backlog (MEP-001 through MEP-024)
   c4/                         # PlantUML C4 architecture diagrams (L1–L3)
 ```
+
+## Architecture
+
+C4 diagrams below are rendered from [docs/c4/](docs/c4/) on every push to `main` that touches a `.puml` file (see [.github/workflows/render-c4.yml](.github/workflows/render-c4.yml)). The `.puml` sources remain the source of truth; the `.png` files are generated artifacts.
+
+### Level 1 — System Context
+![System Context](docs/c4/context.png)
+
+### Level 2 — Containers
+![Container Diagram](docs/c4/container.png)
+
+### Level 3 — API Components
+![API Component Diagram](docs/c4/component-api.png)
+
+### Level 3 — Web Components
+![Web Component Diagram](docs/c4/component-web.png)
 
 ## Implemented Features
 
@@ -101,6 +117,7 @@ docs/
 - **User-Controlled Display Unit** (MEP-022) -- Inventory items display in their entry unit, not auto-converted
 - **Input Sanitization** (MEP-023) -- HTML stripping, control char removal, length enforcement across all inputs
 - **Progressive Web App** (MEP-021) -- Installable on mobile, offline caching, responsive sidenav, push notification stubs
+- **Automated C4 Diagram Rendering** (MEP-024) -- GitHub Actions workflow renders `docs/c4/*.puml` to PNG on every push, commits the artifacts, and uploads them for 7-day download
 
 ## License
 
