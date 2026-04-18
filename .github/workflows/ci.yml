@@ -44,15 +44,43 @@ jobs:
           --logger "trx;LogFileName=test-results.trx"
           --results-directory ./test-results
           --collect:"XPlat Code Coverage"
+          --settings coverlet.runsettings
+
+      - name: Install ReportGenerator
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+
+      - name: Generate coverage report and enforce 90% threshold
+        run: |
+          reportgenerator \
+            -reports:"**/coverage.cobertura.xml" \
+            -targetdir:./coverage-report \
+            -reporttypes:"TextSummary;Html"
+          cat ./coverage-report/Summary.txt
+
+          line_coverage=$(grep "Line coverage:" ./coverage-report/Summary.txt | grep -oP '\d+\.?\d*(?=%)')
+          echo "Line coverage: ${line_coverage}%"
+
+          if (( $(echo "$line_coverage < 90" | bc -l) )); then
+            echo "ERROR: Code coverage (${line_coverage}%) is below the required threshold of 90%"
+            exit 1
+          fi
+
+          echo "SUCCESS: Code coverage (${line_coverage}%) meets the required threshold of 90%"
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: dotnet-test-results
-          path: |
-            ./test-results/*.trx
-            ./test-results/**/coverage.cobertura.xml
+          path: ./test-results/*.trx
+          retention-days: 7
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: dotnet-coverage-report
+          path: ./coverage-report/
           retention-days: 7
 
   # -- .NET: format check ----------------------------------------------------
