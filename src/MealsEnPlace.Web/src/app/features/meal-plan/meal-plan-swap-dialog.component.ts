@@ -6,7 +6,7 @@ import {
   MatDialogModule,
   MatDialogRef,
 } from '@angular/material/dialog';
-import { MatListModule } from '@angular/material/list';
+import { MatListModule, MatSelectionListChange } from '@angular/material/list';
 import { RecipeListItemDto } from '../../core/models/recipe.models';
 
 export interface SwapDialogData {
@@ -80,7 +80,7 @@ export class MealPlanSwapDialogComponent {
       .sort((a, b) => a.title.localeCompare(b.title));
   }
 
-  onSelect(event: any): void {
+  onSelect(event: MatSelectionListChange): void {
     const selected = event.options?.[0]?.value;
     if (selected) {
       this.dialogRef.close(selected);
