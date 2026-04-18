@@ -1,12 +1,31 @@
 {
   "permissions": {
     "allow": [
+      "Bash(cd:*)",
+      "Bash(dotnet add:*)",
+      "Bash(dotnet build:*)",
+      "Bash(dotnet ef:*)",
+      "Bash(dotnet format:*)",
       "Bash(dotnet new:*)",
       "Bash(dotnet sln:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet tool:*)",
+      "Bash(dotnet-ef migrations:*)",
+      "Bash(gh api:*)",
+      "Bash(gh pr:*)",
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git commit:*)",
+      "Bash(git pull:*)",
+      "Bash(git push:*)",
+      "Bash(git stash:*)",
+      "Bash(git status:*)",
       "Bash(ls:*)",
-      "Bash(dotnet add:*)",
-      "Bash(cd:*)",
-      "Bash(ng version:*)"
+      "Bash(ng version:*)",
+      "Bash(npx ng:*)",
+      "Skill(commit-commands:commit-push-pr:*)",
+      "WebFetch(domain:github.com)",
+      "WebSearch"
     ]
   }
 }
