@@ -1221,3 +1221,72 @@ Feature: PlantUML C4 Diagram PNG Generation
     Then the renderer resolves the remote C4-PlantUML includes successfully
     And the rendered PNGs accurately reflect the C4 diagram content
 ```
+
+## [MEP-025] Spike: Evaluate Expanded Recipe Data Sources
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+TheMealDB, the current recipe source, carries approximately 600 meals. This catalog is functional but limiting -- it restricts recipe matching variety, meal plan diversity, and the overall usefulness of the "What can I make?" feature as my ingredient inventory grows. Before committing to a specific integration, I need a time-boxed spike to evaluate alternative recipe data sources across two categories: static datasets suitable for one-time bulk import (preferred for a single-user local deployment that should not burn API quota per query) and live APIs (as a fallback if no static dataset meets quality requirements). The spike should produce a recommendation with concrete data on import viability, ingredient matching quality, licensing constraints, and storage impact.
+
+### Acceptance Criteria
+```gherkin
+Feature: Evaluate Expanded Recipe Data Sources
+
+  Scenario: Evaluate static dataset candidates
+    Given the following static datasets are under consideration:
+      | Dataset       | Approximate Size | License      |
+      | Recipe1M+     | ~1,000,000       | MIT          |
+      | RecipeNLG     | ~2,000,000       | Research     |
+      | Food.com (Kaggle) | ~230,000     | CC BY-NC-SA  |
+    When each dataset is reviewed
+    Then the evaluation documents format compatibility with the existing recipe import pipeline
+    And the evaluation documents licensing terms and whether redistribution or local use is permitted
+
+  Scenario: Evaluate live API candidates
+    Given the following live APIs are under consideration:
+      | API           | Approximate Catalog | Free Tier Limits     |
+      | Spoonacular   | ~400,000            | 150 requests/day     |
+      | Edamam        | ~2,000,000          | 5-10 requests/minute |
+    When each API is reviewed
+    Then the evaluation documents rate limits and whether a one-time bulk fetch is feasible within the free tier
+    And the evaluation documents data format compatibility with the existing recipe import pipeline
+
+  Scenario: Measure import success rate against the existing pipeline
+    Given a sample of at least 500 recipes from each candidate source has been obtained
+    When each sample is run through the existing recipe import and parsing pipeline
+    Then the percentage of recipes that parse cleanly without manual intervention is recorded
+    And any systematic parsing failures are categorized
+
+  Scenario: Measure match quality against the CanonicalIngredient table
+    Given the sample recipes have been parsed
+    When each recipe's ingredients are matched against the existing CanonicalIngredient table
+    Then the percentage of ingredients that match an existing canonical entry is recorded
+    And the number of new canonical entries that would need to be created is documented
+
+  Scenario: Measure container-reference flag rate
+    Given the sample recipes have been parsed
+    When each recipe's ingredients are checked for container references
+    Then the percentage of recipes that land in "Awaiting Resolution" status is recorded
+    And the total number of unresolved container references across the sample is documented
+
+  Scenario: Assess storage impact on PostgreSQL
+    Given the full dataset size for each candidate is known
+    When the estimated row count and storage footprint are calculated for recipes, recipe ingredients, and canonical ingredients
+    Then the projected database size increase is documented for each candidate
+    And any concerns about query performance at the projected scale are noted
+
+  Scenario: Verify licensing permits local single-user use
+    Given each candidate's license terms have been reviewed
+    When the license is evaluated against the project's use case (local, single-user, non-commercial)
+    Then sources with licenses that prohibit local use or require attribution not feasible in-app are flagged
+    And the recommendation clearly states which sources are safe to use
+
+  Scenario: Produce a recommendation
+    Given all evaluation criteria have been assessed for every candidate
+    When the spike is complete
+    Then a written recommendation identifies the preferred data source (or combination)
+    And the recommendation justifies the choice based on import success rate, match quality, container-reference rate, licensing, and storage impact
+    And the recommendation includes a proposed approach for integration (bulk import vs. incremental sync)
+```
