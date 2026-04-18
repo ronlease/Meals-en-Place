@@ -1295,7 +1295,8 @@ Feature: Evaluate Expanded Recipe Data Sources
   Scenario: Dataset is obtained per-user, not redistributed
     Given Recipe1M+ terms prohibit redistribution of the download URLs and dataset
     When setup documentation is written
-    Then the docs link to the MIT dataset request page rather than hosting, bundling, or mirroring the data
+    Then the docs link to https://github.com/torralba-lab/im2recipe as the canonical entry point, from which users can locate the MIT dataset request form and terms of use themselves
+    And the docs do NOT link directly to the gated download URLs behind the MIT signup form
     And no Recipe1M+ source data (layer*.json, SQL dumps, seed fixtures containing real recipe text) is committed to the repository
     And any seed data derived from Recipe1M+ is limited to non-copyrightable elements only (canonical ingredient names, UOM mappings)
 
