@@ -1230,6 +1230,8 @@ Feature: PlantUML C4 Diagram PNG Generation
 ### Business Problem
 TheMealDB, the current recipe source, carries approximately 600 meals. This catalog is functional but limiting -- it restricts recipe matching variety, meal plan diversity, and the overall usefulness of the "What can I make?" feature as my ingredient inventory grows. Before committing to a specific integration, I need a time-boxed spike to evaluate alternative recipe data sources across two categories: static datasets suitable for one-time bulk import (preferred for a single-user local deployment that should not burn API quota per query) and live APIs (as a fallback if no static dataset meets quality requirements). The spike should produce a recommendation with concrete data on import viability, ingredient matching quality, licensing constraints, and storage impact.
 
+**Leading candidate:** Recipe1M+ (MIT CSAIL). Its layer2+ extension provides pre-parsed {quantity, unit, weight} per ingredient plus an 18k-word standardized ingredient vocabulary, which maps cleanly to the existing CanonicalIngredient and UOM model. Licensing is CC BY-NC-SA-style with an indemnification clause and a prohibition on redistributing download URLs -- compatible with local single-user use provided the dataset itself is not bundled with the application. The other four candidates remain in the comparison to backstop the decision if Recipe1M+ data quality or prose-contamination rate proves worse than expected.
+
 ### Acceptance Criteria
 ```gherkin
 Feature: Evaluate Expanded Recipe Data Sources
@@ -1282,6 +1284,20 @@ Feature: Evaluate Expanded Recipe Data Sources
     When the license is evaluated against the project's use case (local, single-user, non-commercial)
     Then sources with licenses that prohibit local use or require attribution not feasible in-app are flagged
     And the recommendation clearly states which sources are safe to use
+
+  Scenario: Sanitize narrative prose from imported instructions
+    Given a Recipe1M+ sample batch has been parsed
+    When each recipe's instruction steps are run through a prose-stripping filter
+    Then sentences containing first-person pronouns, long parentheticals, or non-imperative structure are removed
+    And recipes retaining fewer than 80% of their original steps are flagged for review or exclusion
+    And the pass rate across the sample is recorded
+
+  Scenario: Dataset is obtained per-user, not redistributed
+    Given Recipe1M+ terms prohibit redistribution of the download URLs and dataset
+    When setup documentation is written
+    Then the docs link to the MIT dataset request page rather than hosting, bundling, or mirroring the data
+    And no Recipe1M+ source data (layer*.json, SQL dumps, seed fixtures containing real recipe text) is committed to the repository
+    And any seed data derived from Recipe1M+ is limited to non-copyrightable elements only (canonical ingredient names, UOM mappings)
 
   Scenario: Produce a recommendation
     Given all evaluation criteria have been assessed for every candidate
