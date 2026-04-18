@@ -227,7 +227,7 @@ export class WasteAlertsPageComponent implements OnInit {
 
   dismiss(alertId: string): void {
     this.wasteAlertService.dismissAlert(alertId).subscribe({
-      error: () => {},
+      error: (err) => console.warn('Failed to dismiss waste alert', err),
       next: () => {
         this.alerts.update((current) =>
           current.filter((a) => a.alertId !== alertId)

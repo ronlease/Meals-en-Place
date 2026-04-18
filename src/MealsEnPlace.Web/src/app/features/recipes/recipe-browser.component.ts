@@ -1,6 +1,6 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import { MatChipsModule } from '@angular/material/chips';
+import { MatChipListboxChange, MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -329,7 +329,7 @@ export class RecipeBrowserComponent implements OnInit {
     this.loadLibrary();
   }
 
-  onDietaryFilterChange(event: any): void {
+  onDietaryFilterChange(event: MatChipListboxChange): void {
     this.selectedDietaryTags = event.value ?? [];
   }
 

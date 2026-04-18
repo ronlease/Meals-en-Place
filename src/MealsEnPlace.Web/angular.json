@@ -3,7 +3,8 @@
   "version": 1,
   "cli": {
     "packageManager": "npm",
-    "analytics": false
+    "analytics": false,
+    "schematicCollections": ["angular-eslint"]
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -53,9 +54,7 @@
               }
             ],
             "serviceWorker": "ngsw-config.json",
-            "styles": [
-              "src/styles.scss"
-            ]
+            "styles": ["src/styles.scss"]
           },
           "configurations": {
             "production": {
@@ -97,6 +96,12 @@
             }
           },
           "defaultConfiguration": "development"
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
+          }
         }
       }
     }

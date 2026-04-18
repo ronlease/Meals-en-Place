@@ -1,5 +1,5 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -13,6 +13,13 @@ import { CanonicalIngredientDto, UnitOfMeasureDto } from '../../core/models/inve
 import { CreateRecipeRequest } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
+
+interface RecipeIngredientFormValue {
+  canonicalIngredientId: string;
+  notes: string | null;
+  quantity: number;
+  uomId: string | null;
+}
 
 @Component({
   selector: 'app-recipe-create',
@@ -230,7 +237,7 @@ export class RecipeCreateComponent implements OnInit {
     );
   }
 
-  asFormGroup(control: any): FormGroup {
+  asFormGroup(control: AbstractControl): FormGroup {
     return control as FormGroup;
   }
 
@@ -255,7 +262,7 @@ export class RecipeCreateComponent implements OnInit {
     const val = this.form.value;
     const request: CreateRecipeRequest = {
       cuisineType: val.cuisineType || '',
-      ingredients: (val.ingredients || []).map((i: any) => ({
+      ingredients: ((val.ingredients ?? []) as RecipeIngredientFormValue[]).map((i) => ({
         canonicalIngredientId: i.canonicalIngredientId,
         notes: i.notes || null,
         quantity: i.quantity,
