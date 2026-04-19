@@ -31,8 +31,9 @@ internal static class IngestConstants
     public const int CanonicalIngredientDedupCacheInitialCapacity = 20_000;
 
     /// <summary>
-    /// Initial capacity for the <c>UnresolvedUomToken</c> dedup dictionary.
-    /// Unique token counts in ingest runs are typically in the low thousands.
+    /// Initial capacity for the <c>UnresolvedUnitOfMeasureToken</c> dedup
+    /// dictionary. Unique token counts in ingest runs are typically in the
+    /// low thousands.
     /// </summary>
     public const int UnresolvedTokenDedupCacheInitialCapacity = 5_000;
 
@@ -57,7 +58,7 @@ internal static class IngestConstants
     /// rows created from NER tokens. "ea" (Each) is a safe neutral default;
     /// the user can adjust per ingredient after ingest if needed.
     /// </summary>
-    public const string DefaultCanonicalIngredientUomAbbreviation = "ea";
+    public const string DefaultCanonicalIngredientUnitOfMeasureAbbreviation = "ea";
 
     /// <summary>
     /// Default category assigned to CanonicalIngredient rows created from

@@ -734,7 +734,7 @@ public class UomNormalizationServiceTests
     //   When NormalizeOrDeferAsync is called
     //   Then the result resolves to Cup with quantity 2
     //   And WasDeferredToQueue is false
-    //   And no UnresolvedUomToken row is written
+    //   And no UnresolvedUnitOfMeasureToken row is written
     //   And Claude is never called
 
     [Fact]
@@ -754,14 +754,14 @@ public class UomNormalizationServiceTests
         result.WasDeferredToQueue.Should().BeFalse();
         result.WasClaudeResolved.Should().BeFalse();
 
-        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        var queueCount = await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueCount.Should().Be(0);
     }
 
     // Scenario: Unresolved token writes a new queue row instead of invoking Claude
     //   Given "1 smidge" where "smidge" has no abbreviation, name, or alias match
     //   When NormalizeOrDeferAsync is called
-    //   Then a new UnresolvedUomToken row is written with Count=1 and the sample context
+    //   Then a new UnresolvedUnitOfMeasureToken row is written with Count=1 and the sample context
     //   And WasDeferredToQueue is true
     //   And Claude is never called
 
@@ -785,7 +785,7 @@ public class UomNormalizationServiceTests
         result.WasClaudeResolved.Should().BeFalse();
         result.UomId.Should().Be(Guid.Empty);
 
-        var queueRows = await dbContext.UnresolvedUomTokens.ToListAsync();
+        var queueRows = await dbContext.UnresolvedUnitOfMeasureTokens.ToListAsync();
         queueRows.Should().HaveCount(1);
         queueRows[0].UnitToken.Should().Be("a smidge");
         queueRows[0].Count.Should().Be(1);
@@ -813,7 +813,7 @@ public class UomNormalizationServiceTests
         await service.NormalizeOrDeferAsync("a smidge", "pepper flakes");
 
         // Assert
-        var queueRows = await dbContext.UnresolvedUomTokens.ToListAsync();
+        var queueRows = await dbContext.UnresolvedUnitOfMeasureTokens.ToListAsync();
         queueRows.Should().HaveCount(1);
         queueRows[0].Count.Should().Be(2);
         queueRows[0].UnitToken.Should().Be("a smidge");
@@ -841,7 +841,7 @@ public class UomNormalizationServiceTests
         result.UomId.Should().Be(UnitOfMeasureConfiguration.EachId);
         result.WasDeferredToQueue.Should().BeFalse();
 
-        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        var queueCount = await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueCount.Should().Be(0);
     }
 
@@ -862,7 +862,7 @@ public class UomNormalizationServiceTests
         var result = await service.NormalizeOrDeferAsync("5", "eggs");
 
         // Assert — no token to queue
-        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        var queueCount = await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueCount.Should().Be(0);
     }
 }

@@ -73,7 +73,7 @@ var dbContext = scope.ServiceProvider.GetRequiredService<MealsEnPlaceDbContext>(
 // so let the context skip per-change detection overhead.
 dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
 
-var uomResolver = await InMemoryUomResolver.LoadAsync(dbContext);
+var unitOfMeasureResolver = await InMemoryUnitOfMeasureResolver.LoadAsync(dbContext);
 var canonicalRegistry = await CanonicalIngredientRegistry.LoadAsync(dbContext);
 
 var lastProgressAt = 0;
@@ -155,7 +155,7 @@ foreach (var row in streamResult.Rows)
             continue;
         }
 
-        var resolution = uomResolver.NormalizeOrDefer(rawIngredient, bestNer);
+        var resolution = unitOfMeasureResolver.NormalizeOrDefer(rawIngredient, bestNer);
         if (resolution.WasDeferred)
         {
             summary.UomDeferredToQueue++;
@@ -181,7 +181,7 @@ foreach (var row in streamResult.Rows)
                 Notes = null,
                 Quantity = resolution.Quantity,
                 RecipeId = recipe.Id,
-                UomId = resolution.UomId
+                UomId = resolution.UnitOfMeasureId
             });
         }
     }
@@ -197,7 +197,7 @@ foreach (var row in streamResult.Rows)
     // ── Batch flush ───────────────────────────────────────────────────────
     if (batchRecipeCount >= IngestConstants.RecipeBatchSize)
     {
-        await FlushBatchAsync(dbContext, uomResolver, summary, options.DryRun);
+        await FlushBatchAsync(dbContext, unitOfMeasureResolver, summary, options.DryRun);
         batchRecipeCount = 0;
     }
 
@@ -211,7 +211,7 @@ foreach (var row in streamResult.Rows)
 // Flush any trailing partial batch.
 if (batchRecipeCount > 0)
 {
-    await FlushBatchAsync(dbContext, uomResolver, summary, options.DryRun);
+    await FlushBatchAsync(dbContext, unitOfMeasureResolver, summary, options.DryRun);
 }
 
 summary.CanonicalIngredientsCreated = canonicalRegistry.NewRowsCreated;
@@ -222,7 +222,7 @@ Console.WriteLine(summary.Format(options, streamResult.Counters));
 
 if (options.DryRun)
 {
-    Console.WriteLine("NOTE: dry-run output. No Recipe, RecipeIngredient, or UnresolvedUomToken rows were persisted.");
+    Console.WriteLine("NOTE: dry-run output. No Recipe, RecipeIngredient, or UnresolvedUnitOfMeasureToken rows were persisted.");
 }
 
 return IngestConstants.ExitCodeSuccess;
@@ -231,7 +231,7 @@ return IngestConstants.ExitCodeSuccess;
 
 static async Task FlushBatchAsync(
     MealsEnPlaceDbContext dbContext,
-    InMemoryUomResolver resolver,
+    InMemoryUnitOfMeasureResolver resolver,
     IngestSummary summary,
     bool dryRun)
 {

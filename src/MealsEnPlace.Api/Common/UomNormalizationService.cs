@@ -46,7 +46,7 @@ public sealed class NormalizationResult
 
     /// <summary>
     /// True when the ingredient was deferred to the
-    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUomToken"/> review
+    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUnitOfMeasureToken"/> review
     /// queue because ingest mode was set and deterministic resolution failed.
     /// The caller should persist the ingredient in an unresolved state until
     /// the user decides how to map the token.
@@ -100,7 +100,7 @@ public interface IUomNormalizationService
     /// Ingest-mode normalization. Attempts the same deterministic resolution order
     /// as <see cref="NormalizeAsync"/> (abbreviation / name / alias / count-noun
     /// fallback), but when no deterministic match is found it writes an
-    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUomToken"/> row to
+    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUnitOfMeasureToken"/> row to
     /// the review queue instead of invoking Claude. This preserves Claude quota
     /// during bulk ingest and lets the user decide how to map recurring tokens
     /// in one place.
@@ -307,7 +307,7 @@ public class UomNormalizationService(
     }
 
     /// <summary>
-    /// Upserts an <see cref="UnresolvedUomToken"/> row for the given unit token.
+    /// Upserts an <see cref="UnresolvedUnitOfMeasureToken"/> row for the given unit token.
     /// First occurrence inserts; subsequent occurrences increment the count and
     /// refresh the sample context so the review UI shows the most recent usage.
     /// </summary>
@@ -327,7 +327,7 @@ public class UomNormalizationService(
 
         var now = DateTime.UtcNow;
 
-        var existing = await dbContext.UnresolvedUomTokens
+        var existing = await dbContext.UnresolvedUnitOfMeasureTokens
             .FirstOrDefaultAsync(t => t.UnitToken == unitToken, cancellationToken);
 
         if (existing is not null)
@@ -339,7 +339,7 @@ public class UomNormalizationService(
         }
         else
         {
-            dbContext.UnresolvedUomTokens.Add(new UnresolvedUomToken
+            dbContext.UnresolvedUnitOfMeasureTokens.Add(new UnresolvedUnitOfMeasureToken
             {
                 Count = 1,
                 FirstSeenAt = now,

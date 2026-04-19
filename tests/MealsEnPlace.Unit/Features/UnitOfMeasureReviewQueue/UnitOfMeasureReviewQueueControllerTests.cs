@@ -1,13 +1,13 @@
 // Feature: UOM Review Queue Controller
 //
 // Scenario: List returns 200 with queue rows ordered by Count then LastSeenAt descending
-//   Given three UnresolvedUomToken rows with varying counts and timestamps
+//   Given three UnresolvedUnitOfMeasureToken rows with varying counts and timestamps
 //   When GET /api/v1/uom-review-queue is called
 //   Then the response is 200 OK
 //   And the rows are ordered by Count desc, LastSeenAt desc
 //
 // Scenario: Map returns 404 when the queue row does not exist
-//   Given no UnresolvedUomToken row with the given id
+//   Given no UnresolvedUnitOfMeasureToken row with the given id
 //   When POST /api/v1/uom-review-queue/{id}/map is called
 //   Then the response is 404 Not Found
 //
@@ -49,30 +49,30 @@
 //   And no UnitOfMeasureAlias is created
 
 using FluentAssertions;
-using MealsEnPlace.Api.Features.UomReviewQueue;
+using MealsEnPlace.Api.Features.UnitOfMeasureReviewQueue;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.Data.Configurations;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace MealsEnPlace.Unit.Features.UomReviewQueue;
+namespace MealsEnPlace.Unit.Features.UnitOfMeasureReviewQueue;
 
-public class UomReviewQueueControllerTests : IDisposable
+public class UnitOfMeasureReviewQueueControllerTests : IDisposable
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
     private readonly MealsEnPlaceDbContext _dbContext;
-    private readonly UomReviewQueueController _sut;
+    private readonly UnitOfMeasureReviewQueueController _sut;
 
-    public UomReviewQueueControllerTests()
+    public UnitOfMeasureReviewQueueControllerTests()
     {
         var options = new DbContextOptionsBuilder<MealsEnPlaceDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _dbContext = new MealsEnPlaceDbContext(options);
         SeedUoms();
-        _sut = new UomReviewQueueController(_dbContext);
+        _sut = new UnitOfMeasureReviewQueueController(_dbContext);
     }
 
     public void Dispose() => _dbContext.Dispose();
@@ -99,9 +99,9 @@ public class UomReviewQueueControllerTests : IDisposable
         _dbContext.SaveChanges();
     }
 
-    private UnresolvedUomToken AddQueueRow(string unitToken, string sampleContext = "pepper", int count = 1)
+    private UnresolvedUnitOfMeasureToken AddQueueRow(string unitToken, string sampleContext = "pepper", int count = 1)
     {
-        var row = new UnresolvedUomToken
+        var row = new UnresolvedUnitOfMeasureToken
         {
             Count = count,
             FirstSeenAt = DateTime.UtcNow.AddDays(-1),
@@ -111,7 +111,7 @@ public class UomReviewQueueControllerTests : IDisposable
             SampleMeasureString = $"1 {unitToken}",
             UnitToken = unitToken
         };
-        _dbContext.UnresolvedUomTokens.Add(row);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Add(row);
         _dbContext.SaveChanges();
         return row;
     }
@@ -131,7 +131,7 @@ public class UomReviewQueueControllerTests : IDisposable
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var body = ok.Value.Should().BeAssignableTo<IEnumerable<UnresolvedUomTokenResponse>>().Subject.ToList();
+        var body = ok.Value.Should().BeAssignableTo<IEnumerable<UnresolvedUnitOfMeasureTokenResponse>>().Subject.ToList();
 
         body.Should().HaveCount(3);
         body[0].UnitToken.Should().Be("smidge");
@@ -147,7 +147,7 @@ public class UomReviewQueueControllerTests : IDisposable
         // Act
         var result = await _sut.Map(
             Guid.NewGuid(),
-            new MapTokenToUomRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TspId });
+            new MapTokenToUnitOfMeasureRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TspId });
 
         // Assert
         result.Result.Should().BeOfType<NotFoundObjectResult>();
@@ -162,7 +162,7 @@ public class UomReviewQueueControllerTests : IDisposable
         // Act
         var result = await _sut.Map(
             row.Id,
-            new MapTokenToUomRequest { UnitOfMeasureId = Guid.NewGuid() });
+            new MapTokenToUnitOfMeasureRequest { UnitOfMeasureId = Guid.NewGuid() });
 
         // Assert
         result.Result.Should().BeOfType<NotFoundObjectResult>();
@@ -179,11 +179,11 @@ public class UomReviewQueueControllerTests : IDisposable
         // Act
         var result = await _sut.Map(
             row.Id,
-            new MapTokenToUomRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TspId });
+            new MapTokenToUnitOfMeasureRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TspId });
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var body = ok.Value.Should().BeOfType<MapTokenToUomResponse>().Subject;
+        var body = ok.Value.Should().BeOfType<MapTokenToUnitOfMeasureResponse>().Subject;
 
         body.AliasText.Should().Be("smidge");
         body.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.TspId);
@@ -192,7 +192,7 @@ public class UomReviewQueueControllerTests : IDisposable
         var aliasCount = await _dbContext.UnitOfMeasureAliases.CountAsync();
         aliasCount.Should().Be(1);
 
-        var queueRemaining = await _dbContext.UnresolvedUomTokens.CountAsync();
+        var queueRemaining = await _dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueRemaining.Should().Be(0);
     }
 
@@ -216,7 +216,7 @@ public class UomReviewQueueControllerTests : IDisposable
         // Act — attempt to map to Tablespoon with same alias text, no override
         var result = await _sut.Map(
             row.Id,
-            new MapTokenToUomRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TbspId });
+            new MapTokenToUnitOfMeasureRequest { UnitOfMeasureId = UnitOfMeasureConfiguration.TbspId });
 
         // Assert
         result.Result.Should().BeOfType<ConflictObjectResult>();
@@ -224,7 +224,7 @@ public class UomReviewQueueControllerTests : IDisposable
         var aliasCount = await _dbContext.UnitOfMeasureAliases.CountAsync();
         aliasCount.Should().Be(1); // no new alias
 
-        var queueRemaining = await _dbContext.UnresolvedUomTokens.CountAsync();
+        var queueRemaining = await _dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueRemaining.Should().Be(1); // row NOT deleted
     }
 
@@ -247,7 +247,7 @@ public class UomReviewQueueControllerTests : IDisposable
         // Act — override enabled
         var result = await _sut.Map(
             row.Id,
-            new MapTokenToUomRequest
+            new MapTokenToUnitOfMeasureRequest
             {
                 AllowDuplicateAlias = true,
                 UnitOfMeasureId = UnitOfMeasureConfiguration.TbspId
@@ -255,14 +255,14 @@ public class UomReviewQueueControllerTests : IDisposable
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
-        var body = ok.Value.Should().BeOfType<MapTokenToUomResponse>().Subject;
+        var body = ok.Value.Should().BeOfType<MapTokenToUnitOfMeasureResponse>().Subject;
 
         body.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.TbspId);
 
         var aliasCount = await _dbContext.UnitOfMeasureAliases.CountAsync();
         aliasCount.Should().Be(2);
 
-        var queueRemaining = await _dbContext.UnresolvedUomTokens.CountAsync();
+        var queueRemaining = await _dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueRemaining.Should().Be(0);
     }
 
@@ -290,7 +290,7 @@ public class UomReviewQueueControllerTests : IDisposable
         // Assert
         result.Should().BeOfType<NoContentResult>();
 
-        var queueRemaining = await _dbContext.UnresolvedUomTokens.CountAsync();
+        var queueRemaining = await _dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueRemaining.Should().Be(0);
 
         var aliasCount = await _dbContext.UnitOfMeasureAliases.CountAsync();

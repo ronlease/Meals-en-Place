@@ -1,5 +1,4 @@
 using MealsEnPlace.Api.Common;
-using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
@@ -7,70 +6,71 @@ using Microsoft.EntityFrameworkCore;
 namespace MealsEnPlace.Tools.Ingest;
 
 /// <summary>
-/// Ingest-mode UOM resolver that loads the UnitOfMeasure and
-/// UnitOfMeasureAlias tables into in-memory dictionaries at construction
-/// time so per-ingredient resolution is O(1) and avoids ~30M database
-/// round-trips across a full 1.64M-row ingest run.
+/// Ingest-mode unit-of-measure resolver that loads the <see cref="UnitOfMeasure"/>
+/// and <see cref="UnitOfMeasureAlias"/> tables into in-memory dictionaries at
+/// construction time so per-ingredient resolution is O(1) and avoids ~30M
+/// database round-trips across a full 1.64M-row ingest run.
 /// <para>
 /// Applies the same deterministic resolution order as the runtime
-/// <see cref="UomNormalizationService"/>: abbreviation / name match,
-/// then alias match, then count-with-ingredient-noun fallback. When no
-/// step matches, writes (or upserts) an <see cref="UnresolvedUomToken"/>
+/// <see cref="UomNormalizationService"/>: abbreviation / name match, then
+/// alias match, then count-with-ingredient-noun fallback. When no step
+/// matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
 /// row via the supplied DbContext instead of invoking Claude.
 /// </para>
 /// <para>
 /// Instance is NOT thread-safe; ingest is single-threaded by design.
 /// </para>
 /// </summary>
-internal sealed class InMemoryUomResolver
+internal sealed class InMemoryUnitOfMeasureResolver
 {
     private readonly Dictionary<string, (Guid Id, string Abbreviation)> _aliasByText;
-    private readonly (Guid Id, string Abbreviation) _eachUom;
+    private readonly (Guid Id, string Abbreviation) _eachUnitOfMeasure;
     private readonly MealsEnPlaceDbContext _dbContext;
 
     // Tracks queue-row entities we've already added within this DbContext
     // scope so repeat tokens increment in-memory instead of re-inserting.
     // Cleared by the caller (via ChangeTracker.Clear) on batch flush.
-    private readonly Dictionary<string, UnresolvedUomToken> _pendingQueueRowByToken;
-    private readonly Dictionary<string, (Guid Id, string Abbreviation)> _uomByAbbreviationOrName;
+    private readonly Dictionary<string, UnresolvedUnitOfMeasureToken> _pendingQueueRowByToken;
+    private readonly Dictionary<string, (Guid Id, string Abbreviation)> _unitOfMeasureByAbbreviationOrName;
 
-    private InMemoryUomResolver(
+    private InMemoryUnitOfMeasureResolver(
         MealsEnPlaceDbContext dbContext,
-        Dictionary<string, (Guid Id, string Abbreviation)> uomByAbbreviationOrName,
+        Dictionary<string, (Guid Id, string Abbreviation)> unitOfMeasureByAbbreviationOrName,
         Dictionary<string, (Guid Id, string Abbreviation)> aliasByText,
-        (Guid Id, string Abbreviation) eachUom)
+        (Guid Id, string Abbreviation) eachUnitOfMeasure)
     {
         _aliasByText = aliasByText;
         _dbContext = dbContext;
-        _eachUom = eachUom;
-        _pendingQueueRowByToken = new Dictionary<string, UnresolvedUomToken>(
+        _eachUnitOfMeasure = eachUnitOfMeasure;
+        _pendingQueueRowByToken = new Dictionary<string, UnresolvedUnitOfMeasureToken>(
             IngestConstants.UnresolvedTokenDedupCacheInitialCapacity,
             StringComparer.Ordinal);
-        _uomByAbbreviationOrName = uomByAbbreviationOrName;
+        _unitOfMeasureByAbbreviationOrName = unitOfMeasureByAbbreviationOrName;
     }
 
     /// <summary>
-    /// Loads the UOM and alias tables into memory and constructs a resolver.
-    /// Call once at the start of an ingest run.
+    /// Loads the <see cref="UnitOfMeasure"/> and <see cref="UnitOfMeasureAlias"/>
+    /// tables into memory and constructs a resolver. Call once at the start of
+    /// an ingest run.
     /// </summary>
-    public static async Task<InMemoryUomResolver> LoadAsync(
+    public static async Task<InMemoryUnitOfMeasureResolver> LoadAsync(
         MealsEnPlaceDbContext dbContext,
         CancellationToken cancellationToken = default)
     {
-        var uoms = await dbContext.UnitsOfMeasure.AsNoTracking().ToListAsync(cancellationToken);
+        var unitsOfMeasure = await dbContext.UnitsOfMeasure.AsNoTracking().ToListAsync(cancellationToken);
 
         // Build case-insensitive lookup that accepts either Abbreviation or Name
         // (and their plural-trimmed forms), mirroring the runtime service.
-        var uomByToken = new Dictionary<string, (Guid Id, string Abbreviation)>(
-            uoms.Count * 4, StringComparer.OrdinalIgnoreCase);
+        var unitOfMeasureByToken = new Dictionary<string, (Guid Id, string Abbreviation)>(
+            unitsOfMeasure.Count * 4, StringComparer.OrdinalIgnoreCase);
 
-        foreach (var uom in uoms)
+        foreach (var unitOfMeasure in unitsOfMeasure)
         {
-            var entry = (uom.Id, uom.Abbreviation);
-            TryAdd(uomByToken, uom.Abbreviation, entry);
-            TryAdd(uomByToken, uom.Abbreviation.TrimEnd('s'), entry);
-            TryAdd(uomByToken, uom.Name, entry);
-            TryAdd(uomByToken, uom.Name.TrimEnd('s'), entry);
+            var entry = (unitOfMeasure.Id, unitOfMeasure.Abbreviation);
+            TryAdd(unitOfMeasureByToken, unitOfMeasure.Abbreviation, entry);
+            TryAdd(unitOfMeasureByToken, unitOfMeasure.Abbreviation.TrimEnd('s'), entry);
+            TryAdd(unitOfMeasureByToken, unitOfMeasure.Name, entry);
+            TryAdd(unitOfMeasureByToken, unitOfMeasure.Name.TrimEnd('s'), entry);
         }
 
         var aliases = await dbContext.UnitOfMeasureAliases
@@ -87,14 +87,15 @@ internal sealed class InMemoryUomResolver
 
         foreach (var alias in aliases)
         {
-            var uom = alias.UnitOfMeasure!;
-            aliasByText.TryAdd(alias.Alias, (uom.Id, uom.Abbreviation));
+            var unitOfMeasure = alias.UnitOfMeasure!;
+            aliasByText.TryAdd(alias.Alias, (unitOfMeasure.Id, unitOfMeasure.Abbreviation));
         }
 
-        var eachUom = uoms.First(u => u.Abbreviation == IngestConstants.DefaultCanonicalIngredientUomAbbreviation);
-        var eachEntry = (eachUom.Id, eachUom.Abbreviation);
+        var eachUnitOfMeasure = unitsOfMeasure.First(
+            u => u.Abbreviation == IngestConstants.DefaultCanonicalIngredientUnitOfMeasureAbbreviation);
+        var eachEntry = (eachUnitOfMeasure.Id, eachUnitOfMeasure.Abbreviation);
 
-        return new InMemoryUomResolver(dbContext, uomByToken, aliasByText, eachEntry);
+        return new InMemoryUnitOfMeasureResolver(dbContext, unitOfMeasureByToken, aliasByText, eachEntry);
     }
 
     /// <summary>
@@ -107,12 +108,12 @@ internal sealed class InMemoryUomResolver
 
     /// <summary>
     /// Attempts deterministic resolution. On miss, writes (or increments) an
-    /// <see cref="UnresolvedUomToken"/> row and returns a deferred result.
-    /// The <see cref="MealsEnPlaceDbContext"/> is mutated but
+    /// <see cref="UnresolvedUnitOfMeasureToken"/> row and returns a deferred
+    /// result. The <see cref="MealsEnPlaceDbContext"/> is mutated but
     /// <c>SaveChangesAsync</c> is NOT called here; the batched writer owns
     /// flushing.
     /// </summary>
-    public IngestUomResolution NormalizeOrDefer(string measureString, string ingredientName)
+    public IngestUnitOfMeasureResolution NormalizeOrDefer(string measureString, string ingredientName)
     {
         var (quantity, unitToken) = UomTokenParser.Parse(measureString);
 
@@ -120,10 +121,10 @@ internal sealed class InMemoryUomResolver
         // trying the raw token and a plural-stripped variant so "cups" matches
         // a seeded "cup" row without requiring a dedicated alias.
         if (!string.IsNullOrWhiteSpace(unitToken)
-            && (_uomByAbbreviationOrName.TryGetValue(unitToken, out var uomHit)
-                || _uomByAbbreviationOrName.TryGetValue(unitToken.TrimEnd('s'), out uomHit)))
+            && (_unitOfMeasureByAbbreviationOrName.TryGetValue(unitToken, out var unitOfMeasureHit)
+                || _unitOfMeasureByAbbreviationOrName.TryGetValue(unitToken.TrimEnd('s'), out unitOfMeasureHit)))
         {
-            return IngestUomResolution.Resolved(quantity, uomHit.Id, uomHit.Abbreviation);
+            return IngestUnitOfMeasureResolution.Resolved(quantity, unitOfMeasureHit.Id, unitOfMeasureHit.Abbreviation);
         }
 
         // Step 2: alias lookup. Aliases are stored verbatim so "cups" would
@@ -131,13 +132,14 @@ internal sealed class InMemoryUomResolver
         if (!string.IsNullOrWhiteSpace(unitToken)
             && _aliasByText.TryGetValue(unitToken, out var aliasHit))
         {
-            return IngestUomResolution.Resolved(quantity, aliasHit.Id, aliasHit.Abbreviation);
+            return IngestUnitOfMeasureResolution.Resolved(quantity, aliasHit.Id, aliasHit.Abbreviation);
         }
 
         // Step 3: count-with-ingredient-noun fallback.
         if (quantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
         {
-            return IngestUomResolution.Resolved(quantity, _eachUom.Id, _eachUom.Abbreviation);
+            return IngestUnitOfMeasureResolution.Resolved(
+                quantity, _eachUnitOfMeasure.Id, _eachUnitOfMeasure.Abbreviation);
         }
 
         // Step 4: defer. Upsert the queue row.
@@ -146,7 +148,7 @@ internal sealed class InMemoryUomResolver
             UpsertDeferredToken(unitToken, measureString, ingredientName);
         }
 
-        return IngestUomResolution.Deferred(quantity);
+        return IngestUnitOfMeasureResolution.Deferred(quantity);
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────
@@ -165,9 +167,9 @@ internal sealed class InMemoryUomResolver
         }
 
         // Not in our per-batch cache. Check the DB for an existing row.
-        var existing = _dbContext.UnresolvedUomTokens
+        var existing = _dbContext.UnresolvedUnitOfMeasureTokens
             .Local.FirstOrDefault(t => t.UnitToken == unitToken)
-            ?? _dbContext.UnresolvedUomTokens.FirstOrDefault(t => t.UnitToken == unitToken);
+            ?? _dbContext.UnresolvedUnitOfMeasureTokens.FirstOrDefault(t => t.UnitToken == unitToken);
 
         if (existing is not null)
         {
@@ -179,7 +181,7 @@ internal sealed class InMemoryUomResolver
             return;
         }
 
-        var row = new UnresolvedUomToken
+        var row = new UnresolvedUnitOfMeasureToken
         {
             Count = 1,
             FirstSeenAt = now,
@@ -190,7 +192,7 @@ internal sealed class InMemoryUomResolver
             UnitToken = unitToken
         };
 
-        _dbContext.UnresolvedUomTokens.Add(row);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Add(row);
         _pendingQueueRowByToken[unitToken] = row;
     }
 
@@ -204,32 +206,4 @@ internal sealed class InMemoryUomResolver
             dict.TryAdd(key, value);
         }
     }
-}
-
-/// <summary>
-/// Result of an <see cref="InMemoryUomResolver.NormalizeOrDefer"/> call.
-/// Either resolved to a canonical <c>UnitOfMeasure</c>, or deferred to the
-/// review queue.
-/// </summary>
-internal sealed class IngestUomResolution
-{
-    public string? UomAbbreviation { get; init; }
-
-    public Guid? UomId { get; init; }
-
-    public decimal Quantity { get; init; }
-
-    public bool WasDeferred { get; init; }
-
-    public static IngestUomResolution Deferred(decimal quantity) =>
-        new() { Quantity = quantity, WasDeferred = true };
-
-    public static IngestUomResolution Resolved(decimal quantity, Guid uomId, string uomAbbreviation) =>
-        new()
-        {
-            Quantity = quantity,
-            UomAbbreviation = uomAbbreviation,
-            UomId = uomId,
-            WasDeferred = false
-        };
 }

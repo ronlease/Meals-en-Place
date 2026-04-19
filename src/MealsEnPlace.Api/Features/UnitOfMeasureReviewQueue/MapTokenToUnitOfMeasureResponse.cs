@@ -1,9 +1,9 @@
-namespace MealsEnPlace.Api.Features.UomReviewQueue;
+namespace MealsEnPlace.Api.Features.UnitOfMeasureReviewQueue;
 
 /// <summary>
-/// Response body for a successful <see cref="UomReviewQueueController.Map"/> call.
+/// Response body for a successful <see cref="UnitOfMeasureReviewQueueController.Map"/> call.
 /// </summary>
-public sealed class MapTokenToUomResponse
+public sealed class MapTokenToUnitOfMeasureResponse
 {
     /// <summary>The id of the newly-created <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/>.</summary>
     public Guid AliasId { get; init; }

@@ -2,15 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(cd:*)",
-      "Bash(dotnet add:*)",
-      "Bash(dotnet build:*)",
-      "Bash(dotnet ef:*)",
-      "Bash(dotnet format:*)",
-      "Bash(dotnet new:*)",
-      "Bash(dotnet sln:*)",
-      "Bash(dotnet test:*)",
-      "Bash(dotnet tool:*)",
-      "Bash(dotnet-ef migrations:*)",
+      "Bash(dotnet:*)",
       "Bash(gh api:*)",
       "Bash(gh pr:*)",
       "Bash(git add:*)",

@@ -1,11 +1,11 @@
-// Feature: InMemoryUomResolver
+// Feature: InMemoryUnitOfMeasureResolver
 //
 // Scenario: Abbreviation match resolves without queueing
 //   Given seeded UOMs including "cup"
 //   When NormalizeOrDefer("2 cups", ...) is called
 //   Then the result resolves to Cup with quantity 2
 //   And WasDeferred is false
-//   And no UnresolvedUomToken row is written to the DbContext
+//   And no UnresolvedUnitOfMeasureToken row is written to the DbContext
 //
 // Scenario: Alias match resolves without queueing
 //   Given a "c." alias pointing to Cup
@@ -21,7 +21,7 @@
 //   Given measure "a smidge" (quantity 0, token "a smidge")
 //   When NormalizeOrDefer is called
 //   Then WasDeferred is true
-//   And a new UnresolvedUomToken row is added to the DbContext with Count = 1
+//   And a new UnresolvedUnitOfMeasureToken row is added to the DbContext with Count = 1
 //
 // Scenario: Repeat occurrence of the same unresolved token increments an existing row
 //   Given the same "a smidge" called twice
@@ -48,11 +48,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MealsEnPlace.Unit.Tools.Ingest;
 
-public class InMemoryUomResolverTests : IDisposable
+public class InMemoryUnitOfMeasureResolverTests : IDisposable
 {
     private readonly MealsEnPlaceDbContext _dbContext;
 
-    public InMemoryUomResolverTests()
+    public InMemoryUnitOfMeasureResolverTests()
     {
         var options = new DbContextOptionsBuilder<MealsEnPlaceDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
@@ -105,38 +105,38 @@ public class InMemoryUomResolverTests : IDisposable
     [Fact]
     public async Task NormalizeOrDefer_AbbreviationMatch_ResolvesWithoutQueueing()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("2 cups", "flour");
 
         result.WasDeferred.Should().BeFalse();
         result.Quantity.Should().Be(2m);
-        result.UomId.Should().Be(UnitOfMeasureConfiguration.CupId);
-        result.UomAbbreviation.Should().Be("cup");
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.UnitOfMeasureAbbreviation.Should().Be("cup");
 
-        _dbContext.UnresolvedUomTokens.Local.Should().BeEmpty();
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
     }
 
     [Fact]
     public async Task NormalizeOrDefer_AliasMatch_ResolvesWithoutQueueing()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("1 c.", "flour");
 
         result.WasDeferred.Should().BeFalse();
-        result.UomId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
     }
 
     [Fact]
     public async Task NormalizeOrDefer_CountNounFallback_ResolvesToEach()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("4 chicken breasts", "chicken");
 
         result.WasDeferred.Should().BeFalse();
-        result.UomId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
         result.Quantity.Should().Be(4m);
     }
 
@@ -145,14 +145,14 @@ public class InMemoryUomResolverTests : IDisposable
     [Fact]
     public async Task NormalizeOrDefer_UnresolvedToken_WritesNewQueueRow()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("a smidge", "cayenne");
 
         result.WasDeferred.Should().BeTrue();
-        _dbContext.UnresolvedUomTokens.Local.Should().HaveCount(1);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().HaveCount(1);
 
-        var queueRow = _dbContext.UnresolvedUomTokens.Local.First();
+        var queueRow = _dbContext.UnresolvedUnitOfMeasureTokens.Local.First();
         queueRow.UnitToken.Should().Be("a smidge");
         queueRow.Count.Should().Be(1);
         queueRow.SampleIngredientContext.Should().Be("cayenne");
@@ -162,14 +162,14 @@ public class InMemoryUomResolverTests : IDisposable
     [Fact]
     public async Task NormalizeOrDefer_RepeatOccurrenceInSameBatch_IncrementsExistingRow()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         resolver.NormalizeOrDefer("a smidge", "cayenne");
         resolver.NormalizeOrDefer("a smidge", "pepper");
 
-        _dbContext.UnresolvedUomTokens.Local.Should().HaveCount(1);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().HaveCount(1);
 
-        var queueRow = _dbContext.UnresolvedUomTokens.Local.First();
+        var queueRow = _dbContext.UnresolvedUnitOfMeasureTokens.Local.First();
         queueRow.Count.Should().Be(2);
         queueRow.SampleIngredientContext.Should().Be("pepper");
     }
@@ -177,12 +177,12 @@ public class InMemoryUomResolverTests : IDisposable
     [Fact]
     public async Task NormalizeOrDefer_EmptyUnitToken_DoesNotWriteQueueRow()
     {
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("5", "eggs");
 
         result.WasDeferred.Should().BeTrue();
-        _dbContext.UnresolvedUomTokens.Local.Should().BeEmpty();
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
     }
 
     // ── Per-batch state reset ─────────────────────────────────────────────────
@@ -191,7 +191,7 @@ public class InMemoryUomResolverTests : IDisposable
     public async Task ResetPerBatchState_AfterChangeTrackerClear_ReQueriesDbForExistingRow()
     {
         // Pre-seed the DB with an existing queue row (as if a prior batch wrote it).
-        _dbContext.UnresolvedUomTokens.Add(new UnresolvedUomToken
+        _dbContext.UnresolvedUnitOfMeasureTokens.Add(new UnresolvedUnitOfMeasureToken
         {
             Count = 1,
             FirstSeenAt = DateTime.UtcNow.AddHours(-1),
@@ -204,13 +204,13 @@ public class InMemoryUomResolverTests : IDisposable
         await _dbContext.SaveChangesAsync();
         _dbContext.ChangeTracker.Clear();
 
-        var resolver = await InMemoryUomResolver.LoadAsync(_dbContext);
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
         resolver.ResetPerBatchState();
 
         // New batch: same token arrives
         resolver.NormalizeOrDefer("a smidge", "fresh cayenne");
 
-        var rows = await _dbContext.UnresolvedUomTokens.ToListAsync();
+        var rows = await _dbContext.UnresolvedUnitOfMeasureTokens.ToListAsync();
         rows.Should().HaveCount(1);
         rows[0].Count.Should().Be(2);
         rows[0].SampleIngredientContext.Should().Be("fresh cayenne");

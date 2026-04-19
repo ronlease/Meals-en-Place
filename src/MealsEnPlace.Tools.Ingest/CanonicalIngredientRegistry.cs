@@ -24,16 +24,16 @@ internal sealed class CanonicalIngredientRegistry
 {
     private readonly Dictionary<string, Guid> _byLowerName;
     private readonly MealsEnPlaceDbContext _dbContext;
-    private readonly Guid _defaultUomId;
+    private readonly Guid _defaultUnitOfMeasureId;
 
     private CanonicalIngredientRegistry(
         MealsEnPlaceDbContext dbContext,
-        Guid defaultUomId,
+        Guid defaultUnitOfMeasureId,
         Dictionary<string, Guid> byLowerName)
     {
         _byLowerName = byLowerName;
         _dbContext = dbContext;
-        _defaultUomId = defaultUomId;
+        _defaultUnitOfMeasureId = defaultUnitOfMeasureId;
     }
 
     /// <summary>
@@ -51,9 +51,9 @@ internal sealed class CanonicalIngredientRegistry
         MealsEnPlaceDbContext dbContext,
         CancellationToken cancellationToken = default)
     {
-        var defaultUom = await dbContext.UnitsOfMeasure
+        var defaultUnitOfMeasure = await dbContext.UnitsOfMeasure
             .AsNoTracking()
-            .FirstAsync(u => u.Abbreviation == IngestConstants.DefaultCanonicalIngredientUomAbbreviation,
+            .FirstAsync(u => u.Abbreviation == IngestConstants.DefaultCanonicalIngredientUnitOfMeasureAbbreviation,
                 cancellationToken);
 
         var existing = await dbContext.CanonicalIngredients
@@ -70,7 +70,7 @@ internal sealed class CanonicalIngredientRegistry
             byLowerName.TryAdd(row.Name, row.Id);
         }
 
-        return new CanonicalIngredientRegistry(dbContext, defaultUom.Id, byLowerName);
+        return new CanonicalIngredientRegistry(dbContext, defaultUnitOfMeasure.Id, byLowerName);
     }
 
     /// <summary>
@@ -97,7 +97,7 @@ internal sealed class CanonicalIngredientRegistry
         var newRow = new CanonicalIngredient
         {
             Category = IngestConstants.DefaultCanonicalIngredientCategory,
-            DefaultUomId = _defaultUomId,
+            DefaultUomId = _defaultUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = trimmed
         };

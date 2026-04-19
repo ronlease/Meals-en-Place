@@ -3,36 +3,36 @@ using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-namespace MealsEnPlace.Api.Features.UomReviewQueue;
+namespace MealsEnPlace.Api.Features.UnitOfMeasureReviewQueue;
 
 /// <summary>
-/// Endpoints for the UOM review queue introduced by MEP-026. Lets the user
-/// inspect unresolved unit tokens captured during bulk ingest and decide how
-/// each should be handled: map to an existing canonical <see cref="UnitOfMeasure"/>
-/// (creates a new <see cref="UnitOfMeasureAlias"/>), or ignore the token
-/// permanently so it is not re-surfaced.
+/// Endpoints for the unit-of-measure review queue introduced by MEP-026. Lets
+/// the user inspect unresolved unit tokens captured during bulk ingest and
+/// decide how each should be handled: map to an existing canonical
+/// <see cref="UnitOfMeasure"/> (creates a new <see cref="UnitOfMeasureAlias"/>),
+/// or ignore the token permanently so it is not re-surfaced.
 /// </summary>
 [ApiController]
 [Produces("application/json")]
-[Route("api/v1/uom-review-queue")]
-public class UomReviewQueueController(MealsEnPlaceDbContext dbContext) : ControllerBase
+[Route("api/v1/unit-of-measure-review-queue")]
+public class UnitOfMeasureReviewQueueController(MealsEnPlaceDbContext dbContext) : ControllerBase
 {
-    /// <summary>Lists every unresolved UOM token awaiting review.</summary>
+    /// <summary>Lists every unresolved unit-of-measure token awaiting review.</summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 200 with the queue ordered by Count descending, then LastSeenAt descending,
     /// so the most-frequently-seen tokens surface first.
     /// </returns>
     [HttpGet]
-    [ProducesResponseType(typeof(IEnumerable<UnresolvedUomTokenResponse>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IEnumerable<UnresolvedUomTokenResponse>>> List(
+    [ProducesResponseType(typeof(IEnumerable<UnresolvedUnitOfMeasureTokenResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IEnumerable<UnresolvedUnitOfMeasureTokenResponse>>> List(
         CancellationToken cancellationToken = default)
     {
-        var queue = await dbContext.UnresolvedUomTokens
+        var queue = await dbContext.UnresolvedUnitOfMeasureTokens
             .AsNoTracking()
             .OrderByDescending(t => t.Count)
             .ThenByDescending(t => t.LastSeenAt)
-            .Select(t => new UnresolvedUomTokenResponse
+            .Select(t => new UnresolvedUnitOfMeasureTokenResponse
             {
                 Count = t.Count,
                 FirstSeenAt = t.FirstSeenAt,
@@ -53,39 +53,39 @@ public class UomReviewQueueController(MealsEnPlaceDbContext dbContext) : Control
     /// and removes the queue row.
     /// </summary>
     /// <param name="id">The queue row id.</param>
-    /// <param name="request">Target UOM id and optional override flag.</param>
+    /// <param name="request">Target unit-of-measure id and optional override flag.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 200 with the created alias id;
-    /// 404 if the queue row or UOM does not exist;
-    /// 409 if an alias with the same text already exists and <see cref="MapTokenToUomRequest.AllowDuplicateAlias"/> is false.
+    /// 404 if the queue row or <see cref="UnitOfMeasure"/> does not exist;
+    /// 409 if an alias with the same text already exists and <see cref="MapTokenToUnitOfMeasureRequest.AllowDuplicateAlias"/> is false.
     /// </returns>
     [HttpPost("{id:guid}/map")]
-    [ProducesResponseType(typeof(MapTokenToUomResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(MapTokenToUnitOfMeasureResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<MapTokenToUomResponse>> Map(
+    public async Task<ActionResult<MapTokenToUnitOfMeasureResponse>> Map(
         [FromRoute] Guid id,
-        [FromBody] MapTokenToUomRequest request,
+        [FromBody] MapTokenToUnitOfMeasureRequest request,
         CancellationToken cancellationToken = default)
     {
-        var queueRow = await dbContext.UnresolvedUomTokens
+        var queueRow = await dbContext.UnresolvedUnitOfMeasureTokens
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (queueRow is null)
         {
             return NotFound(new ProblemDetails
             {
-                Detail = $"No UOM review queue row with id '{id}'.",
+                Detail = $"No unit-of-measure review queue row with id '{id}'.",
                 Status = StatusCodes.Status404NotFound,
                 Title = "Queue row not found"
             });
         }
 
-        var targetUom = await dbContext.UnitsOfMeasure
+        var targetUnitOfMeasure = await dbContext.UnitsOfMeasure
             .FirstOrDefaultAsync(u => u.Id == request.UnitOfMeasureId, cancellationToken);
 
-        if (targetUom is null)
+        if (targetUnitOfMeasure is null)
         {
             return NotFound(new ProblemDetails
             {
@@ -117,18 +117,18 @@ public class UomReviewQueueController(MealsEnPlaceDbContext dbContext) : Control
             Alias = queueRow.UnitToken,
             CreatedAt = DateTime.UtcNow,
             Id = Guid.NewGuid(),
-            UnitOfMeasureId = targetUom.Id
+            UnitOfMeasureId = targetUnitOfMeasure.Id
         };
 
         dbContext.UnitOfMeasureAliases.Add(newAlias);
-        dbContext.UnresolvedUomTokens.Remove(queueRow);
+        dbContext.UnresolvedUnitOfMeasureTokens.Remove(queueRow);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return Ok(new MapTokenToUomResponse
+        return Ok(new MapTokenToUnitOfMeasureResponse
         {
             AliasId = newAlias.Id,
             AliasText = newAlias.Alias,
-            UnitOfMeasureId = targetUom.Id
+            UnitOfMeasureId = targetUnitOfMeasure.Id
         });
     }
 
@@ -150,20 +150,20 @@ public class UomReviewQueueController(MealsEnPlaceDbContext dbContext) : Control
         [FromRoute] Guid id,
         CancellationToken cancellationToken = default)
     {
-        var queueRow = await dbContext.UnresolvedUomTokens
+        var queueRow = await dbContext.UnresolvedUnitOfMeasureTokens
             .FirstOrDefaultAsync(t => t.Id == id, cancellationToken);
 
         if (queueRow is null)
         {
             return NotFound(new ProblemDetails
             {
-                Detail = $"No UOM review queue row with id '{id}'.",
+                Detail = $"No unit-of-measure review queue row with id '{id}'.",
                 Status = StatusCodes.Status404NotFound,
                 Title = "Queue row not found"
             });
         }
 
-        dbContext.UnresolvedUomTokens.Remove(queueRow);
+        dbContext.UnresolvedUnitOfMeasureTokens.Remove(queueRow);
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return NoContent();
