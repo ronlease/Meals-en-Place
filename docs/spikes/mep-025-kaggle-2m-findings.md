@@ -105,7 +105,8 @@ The remaining 1.64M is still ~2,700× the TheMealDB catalog (600 recipes).
 - No per-ingredient quantity/unit/weight
 - No nutrition data
 - No image data
-- No freshness (2023 snapshot, no incremental updates)
+
+**Staleness is a non-issue for this project's scope.** The snapshot is dated 2023-06-27, but core ingredients and cooking techniques don't go stale -- spaghetti is still spaghetti, chicken is still chicken. Novelty and trending recipes are covered by the existing manual-recipe-add path (MEP-018), not by refreshing the catalog.
 
 ## Open questions
 
