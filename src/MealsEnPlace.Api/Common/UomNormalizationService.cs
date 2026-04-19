@@ -1,5 +1,6 @@
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
+using MealsEnPlace.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MealsEnPlace.Api.Common;
@@ -31,15 +32,26 @@ public sealed class NormalizationResult
 
     /// <summary>
     /// The <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Id"/> of the resolved unit.
-    /// <see cref="Guid.Empty"/> when Claude could not resolve to a known unit.
+    /// <see cref="Guid.Empty"/> when Claude could not resolve to a known unit
+    /// or when the ingredient was deferred to the review queue.
     /// </summary>
     public Guid UomId { get; init; }
 
     /// <summary>
     /// True when Claude was invoked to resolve the measure string.
-    /// False when the resolution was performed deterministically via the conversion table.
+    /// False when the resolution was performed deterministically or the
+    /// ingredient was deferred to the review queue.
     /// </summary>
     public bool WasClaudeResolved { get; init; }
+
+    /// <summary>
+    /// True when the ingredient was deferred to the
+    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUomToken"/> review
+    /// queue because ingest mode was set and deterministic resolution failed.
+    /// The caller should persist the ingredient in an unresolved state until
+    /// the user decides how to map the token.
+    /// </summary>
+    public bool WasDeferredToQueue { get; init; }
 }
 
 /// <summary>
@@ -83,6 +95,28 @@ public interface IUomNormalizationService
         string measureString,
         string ingredientName,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Ingest-mode normalization. Attempts the same deterministic resolution order
+    /// as <see cref="NormalizeAsync"/> (abbreviation / name / alias / count-noun
+    /// fallback), but when no deterministic match is found it writes an
+    /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUomToken"/> row to
+    /// the review queue instead of invoking Claude. This preserves Claude quota
+    /// during bulk ingest and lets the user decide how to map recurring tokens
+    /// in one place.
+    /// </summary>
+    /// <param name="measureString">The raw measure string to normalize.</param>
+    /// <param name="ingredientName">The ingredient name, captured as sample context in the queue row.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// A <see cref="NormalizationResult"/>. <see cref="NormalizationResult.WasDeferredToQueue"/>
+    /// is true when the token was queued; in that case the caller must persist the
+    /// ingredient in an unresolved state until the user resolves the token.
+    /// </returns>
+    Task<NormalizationResult> NormalizeOrDeferAsync(
+        string measureString,
+        string ingredientName,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -100,6 +134,82 @@ public class UomNormalizationService(
     {
         var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
 
+        var deterministic = await TryResolveDeterministicallyAsync(
+            parsedQuantity, unitToken, cancellationToken);
+
+        if (deterministic is not null)
+        {
+            return deterministic;
+        }
+
+        // Claude fallback for colloquial or unmapped units.
+        var claudeResult = await claudeService.ResolveUomAsync(measureString, ingredientName);
+
+        // Attempt to map the Claude-resolved abbreviation back to a known UOM.
+        var resolvedUom = string.IsNullOrWhiteSpace(claudeResult.ResolvedUom)
+            ? null
+            : await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    u => u.Abbreviation.ToLower() == claudeResult.ResolvedUom.ToLower(),
+                    cancellationToken);
+
+        return new NormalizationResult
+        {
+            Confidence = claudeResult.Confidence,
+            Notes = claudeResult.Notes,
+            Quantity = claudeResult.ResolvedQuantity,
+            UomAbbreviation = resolvedUom?.Abbreviation ?? claudeResult.ResolvedUom,
+            UomId = resolvedUom?.Id ?? Guid.Empty,
+            WasClaudeResolved = true
+        };
+    }
+
+    /// <inheritdoc />
+    public async Task<NormalizationResult> NormalizeOrDeferAsync(
+        string measureString,
+        string ingredientName,
+        CancellationToken cancellationToken = default)
+    {
+        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
+
+        var deterministic = await TryResolveDeterministicallyAsync(
+            parsedQuantity, unitToken, cancellationToken);
+
+        if (deterministic is not null)
+        {
+            return deterministic;
+        }
+
+        // No deterministic match -- queue for review instead of invoking Claude.
+        await UpsertUnresolvedTokenAsync(
+            unitToken, measureString, ingredientName, cancellationToken);
+
+        return new NormalizationResult
+        {
+            Confidence = ClaudeConfidence.Low,
+            Notes = "Deferred to review queue.",
+            Quantity = parsedQuantity,
+            UomAbbreviation = string.Empty,
+            UomId = Guid.Empty,
+            WasClaudeResolved = false,
+            WasDeferredToQueue = true
+        };
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Runs the deterministic resolution steps (abbreviation / name, alias,
+    /// count-with-ingredient-noun) and returns a <see cref="NormalizationResult"/>
+    /// on success or null if no step matched. Shared by <see cref="NormalizeAsync"/>
+    /// and <see cref="NormalizeOrDeferAsync"/> so both expose identical determinism.
+    /// </summary>
+    private async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
+        decimal parsedQuantity,
+        string unitToken,
+        CancellationToken cancellationToken)
+    {
         // Step 1: deterministic lookup by abbreviation / name (with plural stripping).
         if (!string.IsNullOrWhiteSpace(unitToken))
         {
@@ -145,11 +255,7 @@ public class UomNormalizationService(
             }
         }
 
-        // Step 3: count-with-ingredient-noun fallback. When a positive quantity
-        // parsed but no unit token resolved (neither direct lookup nor alias),
-        // the string almost always names a countable item (e.g. "4 chicken breasts",
-        // "2 eggs"). Default to "each" so these resolve deterministically instead
-        // of sending every such ingredient to Claude.
+        // Step 3: count-with-ingredient-noun fallback.
         if (parsedQuantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
         {
             var eachUom = await dbContext.UnitsOfMeasure
@@ -169,30 +275,56 @@ public class UomNormalizationService(
             }
         }
 
-        // Step 4: Claude fallback for colloquial or unmapped units.
-        var claudeResult = await claudeService.ResolveUomAsync(measureString, ingredientName);
-
-        // Attempt to map the Claude-resolved abbreviation back to a known UOM.
-        var resolvedUom = string.IsNullOrWhiteSpace(claudeResult.ResolvedUom)
-            ? null
-            : await dbContext.UnitsOfMeasure
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    u => u.Abbreviation.ToLower() == claudeResult.ResolvedUom.ToLower(),
-                    cancellationToken);
-
-        return new NormalizationResult
-        {
-            Confidence = claudeResult.Confidence,
-            Notes = claudeResult.Notes,
-            Quantity = claudeResult.ResolvedQuantity,
-            UomAbbreviation = resolvedUom?.Abbreviation ?? claudeResult.ResolvedUom,
-            UomId = resolvedUom?.Id ?? Guid.Empty,
-            WasClaudeResolved = true
-        };
+        return null;
     }
 
-    // ── Private helpers ───────────────────────────────────────────────────────
+    /// <summary>
+    /// Upserts an <see cref="UnresolvedUomToken"/> row for the given unit token.
+    /// First occurrence inserts; subsequent occurrences increment the count and
+    /// refresh the sample context so the review UI shows the most recent usage.
+    /// </summary>
+    private async Task UpsertUnresolvedTokenAsync(
+        string unitToken,
+        string measureString,
+        string ingredientName,
+        CancellationToken cancellationToken)
+    {
+        // If there is no unit token to queue (empty measure string or pure-numeric
+        // string with no remainder), there is nothing actionable for the user to
+        // review -- skip the queue write and let the caller handle the empty case.
+        if (string.IsNullOrWhiteSpace(unitToken))
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+
+        var existing = await dbContext.UnresolvedUomTokens
+            .FirstOrDefaultAsync(t => t.UnitToken == unitToken, cancellationToken);
+
+        if (existing is not null)
+        {
+            existing.Count += 1;
+            existing.LastSeenAt = now;
+            existing.SampleMeasureString = measureString;
+            existing.SampleIngredientContext = ingredientName;
+        }
+        else
+        {
+            dbContext.UnresolvedUomTokens.Add(new UnresolvedUomToken
+            {
+                Count = 1,
+                FirstSeenAt = now,
+                Id = Guid.NewGuid(),
+                LastSeenAt = now,
+                SampleIngredientContext = ingredientName,
+                SampleMeasureString = measureString,
+                UnitToken = unitToken
+            });
+        }
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+    }
 
     /// <summary>
     /// Splits a raw measure string into a numeric quantity and a unit token.

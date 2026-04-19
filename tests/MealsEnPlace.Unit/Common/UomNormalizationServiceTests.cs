@@ -726,4 +726,143 @@ public class UomNormalizationServiceTests
         result.WasClaudeResolved.Should().BeTrue();
         claudeMock.Verify(c => c.ResolveUomAsync("a pinch", "salt"), Times.Once);
     }
+
+    // ── MEP-026 Phase 2: NormalizeOrDeferAsync ───────────────────────────────
+    //
+    // Scenario: Deterministic match in ingest mode returns without touching the queue
+    //   Given "2 cups" which resolves via direct abbreviation lookup
+    //   When NormalizeOrDeferAsync is called
+    //   Then the result resolves to Cup with quantity 2
+    //   And WasDeferredToQueue is false
+    //   And no UnresolvedUomToken row is written
+    //   And Claude is never called
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_DeterministicMatch_DoesNotWriteQueueRow()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_DeterministicMatch_DoesNotWriteQueueRow));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 cups", "flour");
+
+        // Assert
+        result.Quantity.Should().Be(2m);
+        result.UomAbbreviation.Should().Be("cup");
+        result.WasDeferredToQueue.Should().BeFalse();
+        result.WasClaudeResolved.Should().BeFalse();
+
+        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        queueCount.Should().Be(0);
+    }
+
+    // Scenario: Unresolved token writes a new queue row instead of invoking Claude
+    //   Given "1 smidge" where "smidge" has no abbreviation, name, or alias match
+    //   When NormalizeOrDeferAsync is called
+    //   Then a new UnresolvedUomToken row is written with Count=1 and the sample context
+    //   And WasDeferredToQueue is true
+    //   And Claude is never called
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_UnresolvedToken_WritesQueueRowAndDoesNotCallClaude()
+    {
+        // Arrange — "smidge" is not a UOM, not an alias, and count-fallback won't trigger
+        // because the quantity-with-noun fallback does return "ea" for "1 smidge".
+        // To reach the defer path, we need a measure string whose token doesn't match
+        // anything AND whose quantity is zero. Use a no-quantity measure.
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_UnresolvedToken_WritesQueueRowAndDoesNotCallClaude));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act — "a smidge" has no leading digit, so ParseMeasureString returns
+        // (0, "a smidge"). No deterministic step matches.
+        var result = await service.NormalizeOrDeferAsync("a smidge", "cayenne");
+
+        // Assert
+        result.WasDeferredToQueue.Should().BeTrue();
+        result.WasClaudeResolved.Should().BeFalse();
+        result.UomId.Should().Be(Guid.Empty);
+
+        var queueRows = await dbContext.UnresolvedUomTokens.ToListAsync();
+        queueRows.Should().HaveCount(1);
+        queueRows[0].UnitToken.Should().Be("a smidge");
+        queueRows[0].Count.Should().Be(1);
+        queueRows[0].SampleMeasureString.Should().Be("a smidge");
+        queueRows[0].SampleIngredientContext.Should().Be("cayenne");
+    }
+
+    // Scenario: Repeat occurrence of the same token increments Count rather than inserting a new row
+    //   Given a queue row already exists for "smidge" with Count=1
+    //   When NormalizeOrDeferAsync is called again with the same token
+    //   Then the existing row's Count becomes 2
+    //   And no new row is inserted
+    //   And the LastSeenAt timestamp is refreshed
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_RepeatOccurrence_IncrementsCount()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_RepeatOccurrence_IncrementsCount));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act — two calls with the same unresolved token
+        await service.NormalizeOrDeferAsync("a smidge", "cayenne");
+        await service.NormalizeOrDeferAsync("a smidge", "pepper flakes");
+
+        // Assert
+        var queueRows = await dbContext.UnresolvedUomTokens.ToListAsync();
+        queueRows.Should().HaveCount(1);
+        queueRows[0].Count.Should().Be(2);
+        queueRows[0].UnitToken.Should().Be("a smidge");
+        // Most-recent sample context was refreshed
+        queueRows[0].SampleIngredientContext.Should().Be("pepper flakes");
+    }
+
+    // Scenario: Count-with-ingredient-noun still wins in ingest mode
+    //   Given "4 chicken breasts" which resolves via the count-fallback
+    //   When NormalizeOrDeferAsync is called
+    //   Then the result resolves to Each without writing a queue row
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_CountNounFallback_ResolvesAsEachNotDeferred()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_CountNounFallback_ResolvesAsEachNotDeferred));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("4 chicken breasts", "chicken");
+
+        // Assert
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.WasDeferredToQueue.Should().BeFalse();
+
+        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        queueCount.Should().Be(0);
+    }
+
+    // Scenario: Empty unit token (pure-numeric measure string) does not write a queue row
+    //   Given "5" (a number with no unit token at all)
+    //   When NormalizeOrDeferAsync is called
+    //   Then no queue row is written
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_EmptyUnitToken_DoesNotWriteQueueRow()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_EmptyUnitToken_DoesNotWriteQueueRow));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("5", "eggs");
+
+        // Assert — no token to queue
+        var queueCount = await dbContext.UnresolvedUomTokens.CountAsync();
+        queueCount.Should().Be(0);
+    }
 }
