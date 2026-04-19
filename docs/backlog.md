@@ -1316,3 +1316,100 @@ Feature: Evaluate Expanded Recipe Data Sources
     And the recommendation justifies the choice based on import success rate, match quality, container-reference rate, licensing, and storage impact
     And the recommendation includes a proposed approach for integration (bulk import vs. incremental sync)
 ```
+
+## [MEP-026] Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+MEP-025 selected the Kaggle "Recipe Dataset (over 2M)" as the recipe catalog source, with the `source != 'Recipes1M'` subset providing ~1.64M usable recipes -- roughly 2,700x the current TheMealDB catalog. The spike also surfaced three concrete pipeline gaps that must be closed before the data is usable: the existing UOM parser misses the dotted-abbreviation style common in the dataset (`c.`, `tsp.`, `oz.`, `Tbsp.`), count-with-ingredient-noun patterns (`"4 chicken breasts"`) fall through to Claude unnecessarily, and the prototype prose filter over-drops legitimate imperatives that start with a preposition. This story implements the dataset ingest as an offline admin tool, adds a UOM alias table with a human-in-the-loop review queue (mirroring the MEP-003 container-resolution pattern) to reduce Claude invocations and keep the user in control, and closes the identified parser gaps. Full design rationale and measurement results in [docs/spikes/mep-025-recommendation.md](spikes/mep-025-recommendation.md).
+
+### Acceptance Criteria
+```gherkin
+Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
+
+  Scenario: UnitOfMeasureAlias entity is added to the schema
+    Given the UOM model currently supports abbreviation and name lookups
+    When a new UnitOfMeasureAlias entity is introduced
+    Then the entity has columns for alias text (case-insensitive), target UnitOfMeasure foreign key, and creation timestamp
+    And the alias text column is indexed for efficient lookup
+    And an EF Core migration creates the table without modifying existing UnitOfMeasure rows
+
+  Scenario: UOM alias table is seeded with common variants
+    Given the UnitOfMeasureAlias entity exists
+    When the migration seeds common alias variants
+    Then the following mappings are present: c/c. -> cup, t/t. -> teaspoon, T/T./Tbs/Tbsp./Tbl -> tablespoon, tsp. -> teaspoon, oz./ozs/ozs. -> ounce, lb./lbs/lbs. -> pound, fl. oz/fluid oz/fl. ozs -> fluid ounce, ml./mls -> milliliter, g./gm/gms -> gram, kg./kgs -> kilogram, pt./pts -> pint, qt./qts -> quart
+    And each alias row maps to an existing UnitOfMeasure via foreign key
+
+  Scenario: UomNormalizationService consults the alias table before falling back to Claude
+    Given a measure string with a recognized alias (e.g. "1 c. flour")
+    When UomNormalizationService.NormalizeAsync is called
+    Then the service resolves the unit deterministically via the alias table
+    And the returned NormalizationResult has Confidence = High and WasClaudeResolved = false
+    And Claude is not invoked for any alias-matched token
+
+  Scenario: Unresolved UOM tokens are queued for user review
+    Given a measure string with a unit token that matches no abbreviation, name, or alias
+    When UomNormalizationService.NormalizeAsync is called in ingest mode
+    Then an UnresolvedUomToken row is written capturing the original measure string, the extracted unit token, and the ingredient context
+    And the ingestion of that ingredient is deferred until the token is resolved
+    And Claude is NOT automatically invoked for unresolved tokens during bulk ingest
+
+  Scenario: User resolves an unresolved token via the review queue
+    Given one or more UnresolvedUomToken rows exist
+    When the user reviews a token via a UI or CLI
+    Then the user may choose: (a) map to an existing UnitOfMeasure (creates a new UnitOfMeasureAlias row), (b) defer to Claude for this one occurrence, or (c) ignore this token permanently
+    And choosing (a) retroactively resolves every deferred ingredient that matched the same unresolved token
+    And the UnresolvedUomToken row is deleted after the decision is persisted
+
+  Scenario: Count-with-ingredient-noun defaults to "ea"
+    Given a measure string with a positive numeric quantity and no matching unit, alias, or container keyword (e.g. "4 chicken breasts")
+    When UomNormalizationService.NormalizeAsync is called
+    Then the service resolves to the "ea" UnitOfMeasure with the parsed quantity
+    And the returned NormalizationResult has WasClaudeResolved = false
+    And Confidence = High
+
+  Scenario: Prose filter retains legitimate imperatives
+    Given a recipe instruction step that starts with a preposition or subordinator (e.g. "In a bowl, combine..." or "When the mixture bubbles, stir...")
+    When the prose filter runs during ingest
+    Then the step is retained if it contains no first-person pronouns and is <= 40 words
+    And the step is NOT dropped solely because its first word is not an imperative verb
+
+  Scenario: NER column seeds CanonicalIngredient rows in bulk
+    Given a parsed recipe from the Kaggle 2M dataset with a populated NER array
+    When the ingest tool processes the recipe
+    Then each unique NER token creates a CanonicalIngredient row if one does not already exist (case-insensitive match)
+    And duplicates across recipes are deduplicated
+    And the resulting CanonicalIngredient count after a full ingest run is recorded and bounded (projection: 5,000 to 15,000 rows)
+
+  Scenario: Ingest runs as an offline admin tool
+    Given the user has downloaded the Kaggle dataset CSV to their local machine
+    When the user runs the ingest tool (e.g. MealsEnPlace.Tools.Ingest <csv-path>)
+    Then the tool filters rows where source = 'Recipes1M' and ignores them
+    And the tool streams the CSV without loading the full 2.31 GB into memory
+    And the tool reports a final summary including: total recipes ingested, container-flagged ingredient count, UOM tokens sent to the review queue, canonical ingredients created, and elapsed time
+    And no recipe data from the dataset is exposed via any runtime API endpoint or committed to the repository
+
+  Scenario: Setup documentation points users at Kaggle
+    Given a fresh clone of the repository
+    When a user reads the setup documentation
+    Then the docs link to the Kaggle dataset page as the canonical source
+    And the docs describe the required user action (Kaggle account, dataset download, placing the CSV at a local path)
+    And the docs do NOT bundle, mirror, or commit any dataset content
+    And a CITATION.cff at the repository root credits the dataset source per CC BY-NC-SA 4.0 attribution
+
+  Scenario: Container-resolution flow handles high-volume dataset input
+    Given an ingest run has produced a significant number of container-flagged RecipeIngredient rows (projection: ~45% of recipes, ~750k recipes flagged for the full dataset)
+    When the user opens the container-resolution UI
+    Then the UI surfaces flagged ingredients grouped by canonical ingredient so the user can resolve "1 can diced tomatoes" once and apply the decision to every occurrence
+    And progress is persisted so the user can resolve in sessions rather than all at once
+
+  Scenario: License constraints are honored in the implementation
+    Given CC BY-NC-SA 4.0 terms apply to the dataset
+    When the implementation is reviewed
+    Then no recipe JSON, SQL dump, or fixture containing real recipe text is present in the repository
+    And no test uses real dataset text as input (tests use synthetic fixtures)
+    And the application is not deployed beyond the user's local machine
+    And any future commercialization triggers a re-evaluation of the data source
+```
