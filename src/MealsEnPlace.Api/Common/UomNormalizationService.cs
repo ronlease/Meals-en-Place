@@ -49,8 +49,10 @@ public sealed class NormalizationResult
 /// Resolution order:
 /// <list type="number">
 ///   <item><description>Parse a numeric quantity and unit token from the measure string.</description></item>
-///   <item><description>Look up the unit token in the database by <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> (case-insensitive).</description></item>
-///   <item><description>If not found, fall back to Claude via <see cref="IClaudeService.ResolveUomAsync"/>.</description></item>
+///   <item><description>Look up the unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
+///   <item><description>If not found, look up against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> to catch dataset variants (e.g., "c.", "Tbsp.", "lbs").</description></item>
+///   <item><description>If still not found and a positive quantity parsed, default to "each" (count-with-ingredient-noun pattern, e.g. "4 chicken breasts").</description></item>
+///   <item><description>If still not found, fall back to Claude via <see cref="IClaudeService.ResolveUomAsync"/>.</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -98,7 +100,7 @@ public class UomNormalizationService(
     {
         var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
 
-        // Step 1: deterministic lookup by abbreviation (with plural stripping).
+        // Step 1: deterministic lookup by abbreviation / name (with plural stripping).
         if (!string.IsNullOrWhiteSpace(unitToken))
         {
             var normalizedToken = unitToken.ToLower().TrimEnd('s');
@@ -122,9 +124,52 @@ public class UomNormalizationService(
                     WasClaudeResolved = false
                 };
             }
+
+            // Step 2: alias-table lookup for dataset variants (e.g. "c.", "Tbsp.", "lbs").
+            var aliasedUom = await dbContext.UnitOfMeasureAliases
+                .AsNoTracking()
+                .Where(a => a.Alias.ToLower() == unitToken.ToLower())
+                .Select(a => a.UnitOfMeasure!)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (aliasedUom is not null)
+            {
+                return new NormalizationResult
+                {
+                    Confidence = ClaudeConfidence.High,
+                    Quantity = parsedQuantity,
+                    UomAbbreviation = aliasedUom.Abbreviation,
+                    UomId = aliasedUom.Id,
+                    WasClaudeResolved = false
+                };
+            }
         }
 
-        // Step 2: Claude fallback for colloquial or unmapped units.
+        // Step 3: count-with-ingredient-noun fallback. When a positive quantity
+        // parsed but no unit token resolved (neither direct lookup nor alias),
+        // the string almost always names a countable item (e.g. "4 chicken breasts",
+        // "2 eggs"). Default to "each" so these resolve deterministically instead
+        // of sending every such ingredient to Claude.
+        if (parsedQuantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
+        {
+            var eachUom = await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Abbreviation == "ea", cancellationToken);
+
+            if (eachUom is not null)
+            {
+                return new NormalizationResult
+                {
+                    Confidence = ClaudeConfidence.High,
+                    Quantity = parsedQuantity,
+                    UomAbbreviation = eachUom.Abbreviation,
+                    UomId = eachUom.Id,
+                    WasClaudeResolved = false
+                };
+            }
+        }
+
+        // Step 4: Claude fallback for colloquial or unmapped units.
         var claudeResult = await claudeService.ResolveUomAsync(measureString, ingredientName);
 
         // Attempt to map the Claude-resolved abbreviation back to a known UOM.

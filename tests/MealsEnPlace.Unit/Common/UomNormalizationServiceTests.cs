@@ -189,6 +189,41 @@ public class UomNormalizationServiceTests
                 Id = UnitOfMeasureConfiguration.TspId,
                 Name = "Teaspoon",
                 UomType = UomType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "lb",
+                BaseUomId = UnitOfMeasureConfiguration.GramId,
+                ConversionFactor = 453.592m,
+                Id = UnitOfMeasureConfiguration.LbId,
+                Name = "Pound",
+                UomType = UomType.Weight
+            }
+        );
+
+        // Seed a representative subset of aliases for the alias-lookup tests.
+        var seededAt = new DateTime(2026, 4, 19, 0, 0, 0, DateTimeKind.Utc);
+        dbContext.UnitOfMeasureAliases.AddRange(
+            new UnitOfMeasureAlias
+            {
+                Alias = "c.",
+                CreatedAt = seededAt,
+                Id = new Guid("a2000000-0000-0000-0000-000000000002"),
+                UnitOfMeasureId = UnitOfMeasureConfiguration.CupId
+            },
+            new UnitOfMeasureAlias
+            {
+                Alias = "Tbsp.",
+                CreatedAt = seededAt,
+                Id = new Guid("a2000000-0000-0000-0000-000000000015"),
+                UnitOfMeasureId = UnitOfMeasureConfiguration.TbspId
+            },
+            new UnitOfMeasureAlias
+            {
+                Alias = "lbs",
+                CreatedAt = seededAt,
+                Id = new Guid("a2000000-0000-0000-0000-000000000051"),
+                UnitOfMeasureId = UnitOfMeasureConfiguration.LbId
             }
         );
 
@@ -392,7 +427,9 @@ public class UomNormalizationServiceTests
     [Fact]
     public async Task NormalizeAsync_ClaudeResolvesToKnownAbbreviation_UomIdIsPopulated()
     {
-        // Arrange — Claude returns "g", which is seeded in the database
+        // Arrange — Claude returns "g", which is seeded in the database.
+        // Use a no-quantity measure string so the MEP-026 count-with-ingredient-noun
+        // fallback does not short-circuit this Claude path.
         await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_ClaudeResolvesToKnownAbbreviation_UomIdIsPopulated));
         var claudeMock = new Mock<IClaudeService>();
         claudeMock
@@ -408,7 +445,7 @@ public class UomNormalizationServiceTests
         var service = BuildService(dbContext, claudeMock.Object);
 
         // Act
-        var result = await service.NormalizeAsync("1 head", "garlic");
+        var result = await service.NormalizeAsync("a head", "garlic");
 
         // Assert
         result.UomId.Should().Be(UnitOfMeasureConfiguration.GramId);
@@ -448,7 +485,9 @@ public class UomNormalizationServiceTests
     [Fact]
     public async Task NormalizeAsync_UnknownUnitWithLowConfidenceClaudeResult_ReturnsLowConfidence()
     {
-        // Arrange — Claude cannot resolve; returns Low confidence and empty ResolvedUom
+        // Arrange — Claude cannot resolve; returns Low confidence and empty ResolvedUom.
+        // Use a no-quantity measure string so the MEP-026 count-with-ingredient-noun
+        // fallback does not short-circuit this Claude path.
         await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_UnknownUnitWithLowConfidenceClaudeResult_ReturnsLowConfidence));
         var claudeMock = new Mock<IClaudeService>();
         claudeMock
@@ -464,7 +503,7 @@ public class UomNormalizationServiceTests
         var service = BuildService(dbContext, claudeMock.Object);
 
         // Act
-        var result = await service.NormalizeAsync("1 schmear", "cream cheese");
+        var result = await service.NormalizeAsync("a schmear", "cream cheese");
 
         // Assert
         result.Confidence.Should().Be(ClaudeConfidence.Low);
@@ -527,5 +566,164 @@ public class UomNormalizationServiceTests
         claudeMock.Verify(
             c => c.ResolveUomAsync(It.IsAny<string>(), It.IsAny<string>()),
             Times.Once);
+    }
+
+    // ── MEP-026: Alias-table lookup ───────────────────────────────────────────
+    //
+    // Scenario: Dotted-abbreviation alias resolves deterministically
+    //   Given the measure string "1 c. flour"
+    //   And an alias row "c." maps to the Cup UnitOfMeasure
+    //   When NormalizeAsync is called
+    //   Then the result resolves to the Cup UOM with quantity 1
+    //   And WasClaudeResolved is false
+    //   And Claude is never called
+
+    [Fact]
+    public async Task NormalizeAsync_DottedCupAlias_ResolvesToCupWithoutClaude()
+    {
+        // Arrange — dotted abbreviation "c." is seeded as an alias for Cup
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_DottedCupAlias_ResolvesToCupWithoutClaude));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act — "1 c." splits into quantity 1 and unit token "c."
+        var result = await service.NormalizeAsync("1 c.", "flour");
+
+        // Assert
+        result.Quantity.Should().Be(1m);
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.UomAbbreviation.Should().Be("cup");
+        result.WasClaudeResolved.Should().BeFalse();
+        result.Confidence.Should().Be(ClaudeConfidence.High);
+    }
+
+    // Scenario: Plural-form alias resolves deterministically
+    //   Given the measure string "2 lbs chicken"
+    //   And an alias row "lbs" maps to the Pound UnitOfMeasure
+    //   When NormalizeAsync is called
+    //   Then the result resolves to the Pound UOM with quantity 2
+    //   And WasClaudeResolved is false
+
+    [Fact]
+    public async Task NormalizeAsync_PluralLbsAlias_ResolvesToPoundWithoutClaude()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_PluralLbsAlias_ResolvesToPoundWithoutClaude));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("2 lbs", "ground beef");
+
+        // Assert
+        result.Quantity.Should().Be(2m);
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.LbId);
+        result.UomAbbreviation.Should().Be("lb");
+        result.WasClaudeResolved.Should().BeFalse();
+    }
+
+    // Scenario: Alias lookup is case-insensitive
+    //   Given the measure string "3 TBSP." with the "Tbsp." alias seeded
+    //   When NormalizeAsync is called
+    //   Then the alias matches regardless of case
+
+    [Fact]
+    public async Task NormalizeAsync_AliasLookupIsCaseInsensitive()
+    {
+        // Arrange — seeded alias is "Tbsp.", input uses "TBSP."
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_AliasLookupIsCaseInsensitive));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("3 TBSP.", "olive oil");
+
+        // Assert
+        result.Quantity.Should().Be(3m);
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.TbspId);
+        result.WasClaudeResolved.Should().BeFalse();
+    }
+
+    // Scenario: Abbreviation match takes precedence over alias match
+    //   Given both "tbsp" (abbreviation) and "Tbsp." (alias) exist
+    //   When the measure string is "1 tbsp"
+    //   Then the result is resolved via the abbreviation lookup, not the alias
+    //   And WasClaudeResolved is false
+
+    [Fact]
+    public async Task NormalizeAsync_AbbreviationMatchTakesPrecedenceOverAlias()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_AbbreviationMatchTakesPrecedenceOverAlias));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("1 tbsp", "butter");
+
+        // Assert — resolved via Step 1 (abbreviation), alias step never touched
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.TbspId);
+        result.WasClaudeResolved.Should().BeFalse();
+    }
+
+    // ── MEP-026: Count-with-ingredient-noun fallback ──────────────────────────
+    //
+    // Scenario: Count-with-ingredient-noun defaults to "each"
+    //   Given the measure string "4 chicken breasts"
+    //   And the quantity parses as 4 but "chicken breasts" is not a UOM or alias
+    //   When NormalizeAsync is called
+    //   Then the result resolves to the Each UOM with quantity 4
+    //   And WasClaudeResolved is false
+    //   And Claude is never called
+
+    [Fact]
+    public async Task NormalizeAsync_CountWithIngredientNoun_DefaultsToEachWithoutClaude()
+    {
+        // Arrange — "chicken breasts" is not a UOM, name, or alias
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_CountWithIngredientNoun_DefaultsToEachWithoutClaude));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("4 chicken breasts", "chicken");
+
+        // Assert
+        result.Quantity.Should().Be(4m);
+        result.UomId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UomAbbreviation.Should().Be("ea");
+        result.WasClaudeResolved.Should().BeFalse();
+        result.Confidence.Should().Be(ClaudeConfidence.High);
+    }
+
+    // Scenario: Measure string with no numeric quantity does NOT fall back to "each"
+    //   Given the measure string "a pinch of salt" (no leading number)
+    //   When NormalizeAsync is called
+    //   Then the count-fallback is NOT used
+    //   And Claude is invoked as before
+
+    [Fact]
+    public async Task NormalizeAsync_NoNumericQuantity_FallsThroughToClaudeNotEach()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_NoNumericQuantity_FallsThroughToClaudeNotEach));
+        var claudeMock = new Mock<IClaudeService>();
+        claudeMock
+            .Setup(c => c.ResolveUomAsync(It.IsAny<string>(), It.IsAny<string>()))
+            .ReturnsAsync(new UomResolutionResult
+            {
+                Confidence = ClaudeConfidence.Medium,
+                Notes = "Assumed pinch size",
+                ResolvedQuantity = 1m,
+                ResolvedUom = "g"
+            });
+
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act — no leading digit, so quantity is 0 after parsing
+        var result = await service.NormalizeAsync("a pinch", "salt");
+
+        // Assert — Claude path, not the count-fallback
+        result.WasClaudeResolved.Should().BeTrue();
+        claudeMock.Verify(c => c.ResolveUomAsync("a pinch", "salt"), Times.Once);
     }
 }
