@@ -10,6 +10,32 @@ namespace MealsEnPlace.Api.Features.Recipes;
 public interface IContainerResolutionService
 {
     /// <summary>
+    /// Resolves every unresolved <see cref="RecipeIngredient"/> that shares the
+    /// given canonical ingredient and notes phrase in a single transaction.
+    /// Intended for high-volume review after a bulk ingest (MEP-026) when the
+    /// same phrase (e.g. "1 can diced tomatoes") appears across hundreds of
+    /// recipes and the user wants to declare its net weight once.
+    /// </summary>
+    /// <param name="canonicalIngredientId">Canonical ingredient shared by the group.</param>
+    /// <param name="notes">
+    /// The original import string that identifies the group (e.g. "1 can diced
+    /// tomatoes"). Matched case-insensitively against <see cref="RecipeIngredient.Notes"/>.
+    /// </param>
+    /// <param name="quantity">The declared net weight or volume (positive decimal).</param>
+    /// <param name="uomId">The <see cref="UnitOfMeasure"/> for the declared quantity.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// A <see cref="BulkResolveResult"/> with the number of rows updated, or a
+    /// validation error when the quantity is non-positive or the UOM does not exist.
+    /// </returns>
+    Task<BulkResolveResult> BulkResolveAsync(
+        Guid canonicalIngredientId,
+        string notes,
+        decimal quantity,
+        Guid uomId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Returns all ingredients for <paramref name="recipeId"/> where
     /// <see cref="RecipeIngredient.IsContainerResolved"/> is false, or null if
     /// the recipe does not exist.
@@ -22,6 +48,16 @@ public interface IContainerResolutionService
     /// </returns>
     Task<IReadOnlyList<RecipeIngredient>?> GetUnresolvedIngredientsAsync(
         Guid recipeId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Returns unresolved container references grouped by canonical ingredient
+    /// and normalized notes, ordered by occurrence count descending. Lets the
+    /// user resolve "1 can diced tomatoes" once across every recipe that uses
+    /// that phrase rather than opening each recipe individually.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    Task<IReadOnlyList<UnresolvedGroup>> GetUnresolvedGroupsAsync(
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -53,3 +89,4 @@ public interface IContainerResolutionService
         ResolveContainerRequest request,
         CancellationToken cancellationToken = default);
 }
+
