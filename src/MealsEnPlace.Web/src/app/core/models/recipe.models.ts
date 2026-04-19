@@ -134,3 +134,25 @@ export type DietaryTag =
   | 'LowCarb'
   | 'GlutenFree'
   | 'DairyFree';
+
+// ----------------------------------------------------------------
+// Container resolution (MEP-003 single + MEP-026 grouped)
+// ----------------------------------------------------------------
+
+export interface UnresolvedGroupResponse {
+  canonicalIngredientId: string;
+  canonicalIngredientName: string;
+  notes: string;
+  occurrenceCount: number;
+}
+
+export interface BulkResolveGroupRequest {
+  canonicalIngredientId: string;
+  notes: string;
+  quantity: number;
+  uomId: string;
+}
+
+export interface BulkResolveGroupResponse {
+  affectedCount: number;
+}
