@@ -30,6 +30,9 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Install Graphviz
+        run: sudo apt-get update && sudo apt-get install -y graphviz
+
       - name: Cache PlantUML JAR
         uses: actions/cache@v5
         with:
@@ -43,6 +46,9 @@ jobs:
               https://github.com/plantuml/plantuml/releases/download/v1.2024.8/plantuml-1.2024.8.jar \
               -o plantuml.jar
           fi
+
+      - name: Verify Graphviz is discoverable by PlantUML
+        run: java -jar plantuml.jar -testdot
 
       - name: Render diagrams to PNG
         env:
