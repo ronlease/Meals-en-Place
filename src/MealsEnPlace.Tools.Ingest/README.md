@@ -42,7 +42,7 @@ Phase 4a is a **read-only dry-run skeleton**:
 
 - CSV streaming with filter ✓
 - Container detection count ✓
-- unit of measure deterministic-resolution preview (no writes) ✓
+- Unit of measure deterministic-resolution preview (no writes) ✓
 - Prose-filter retention count ✓
 - Summary output with timing ✓
 

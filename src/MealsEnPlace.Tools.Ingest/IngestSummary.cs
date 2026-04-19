@@ -94,8 +94,8 @@ internal sealed class IngestSummary
             Ingredients
               Total processed:             {TotalIngredientsProcessed:N0}
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
-              unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
-              unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
+              Unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
+              Unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
               No NER match (unlinked):     {IngredientsWithoutNerMatch:N0}
 
             Instructions

@@ -49,7 +49,7 @@ to `docs/backlog.md`.
 ## Domain Awareness
 - **InventoryItem:** A food item on hand with location, quantity, unit of measure, and optional expiry. Container items store user-declared net weight/volume, never an assumed size.
 - **CanonicalIngredient:** Normalized ingredient entity multiple items and recipes map to.
-- **unit of measure:** Unit of measure with conversion factors; Claude resolves colloquial units. Container references ("1 can", "1 jar") are never a unit of measure.
+- **UnitOfMeasure:** Canonical unit with conversion factors; Claude resolves colloquial units. Container references ("1 can", "1 jar") are never a unit of measure.
 - **ContainerReference:** A container string detected on import that requires user declaration before matching math can run.
 - **DisplaySystem:** Imperial (default) or Metric. Storage is always metric internally; display conversion runs at the response layer.
 - **Recipe:** Dish with ingredients, instructions, cuisine, dietary tags, season affinity. Fully resolved only when all ContainerReferences are declared.

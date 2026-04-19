@@ -58,7 +58,7 @@ import {
         </ng-container>
 
         <ng-container matColumnDef="unitOfMeasureAbbreviation">
-          <mat-header-cell *matHeaderCellDef>unit of measure</mat-header-cell>
+          <mat-header-cell *matHeaderCellDef>Unit of Measure</mat-header-cell>
           <mat-cell *matCellDef="let item">{{ item.unitOfMeasureAbbreviation }}</mat-cell>
         </ng-container>
 

@@ -1,7 +1,7 @@
 // Feature: InMemoryUnitOfMeasureResolver
 //
 // Scenario: Abbreviation match resolves without queueing
-//   Given seeded UOMs including "cup"
+//   Given seeded units of measure including "cup"
 //   When NormalizeOrDefer("2 cups", ...) is called
 //   Then the result resolves to Cup with quantity 2
 //   And WasDeferred is false
@@ -59,7 +59,7 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
             .Options;
         _dbContext = new MealsEnPlaceDbContext(options);
 
-        // Seed a subset of UOMs sufficient for the test scenarios.
+        // Seed a subset of units of measure sufficient for the test scenarios.
         _dbContext.UnitsOfMeasure.AddRange(
             new UnitOfMeasure
             {

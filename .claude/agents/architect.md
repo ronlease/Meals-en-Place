@@ -33,7 +33,7 @@ System_Boundary(app, "Meals en Place") {
     Container(api, "API", "ASP.NET Core 10", "REST API, recipe matching, meal plan generation, unit of measure normalization, display conversion, Claude integration")
     ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality data, user display preferences")
 }
-System_Ext(claude, "Claude API", "unit of measure normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(claude, "Claude API", "Unit of measure normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
 System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 System_Ext(openfoodfacts, "Open Food Facts API", "Ingredient metadata and nutritional data")
 
@@ -62,7 +62,7 @@ component diagrams:
   not as a recipe source.
 - **Claude API** — five distinct use cases; call each out as a distinct interaction in
   sequence diagrams when relevant:
-  1. unit of measure normalization (colloquial unit resolution)
+  1. Unit of measure normalization (colloquial unit resolution)
   2. Container reference flagging (detecting "1 can", "1 jar", etc. in imported recipe text)
   3. Dietary classification
   4. Recipe match feasibility and substitution suggestions (NearMatch candidates only)

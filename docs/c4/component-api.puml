@@ -7,7 +7,7 @@ title Component Diagram for API Container — Meals en Place
 
 Container_Ext(web, "Angular Web App", "Angular 21, Angular Material", "Frontend SPA")
 ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality, preferences")
-System_Ext(claude, "Claude API", "unit of measure normalization, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(claude, "Claude API", "Unit of measure normalization, dietary classification, meal plan optimization, substitution suggestions")
 System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 
 Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
@@ -32,7 +32,7 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
     ' === Common / Shared Components ===
 
-    Component(unitOfMeasureServices, "unit of measure Services", "UnitOfMeasureConversionService, UnitOfMeasureNormalizationService, UnitOfMeasureDisplayConverter", "Convert to base units, parse measure strings, convert base units to display units per user preference")
+    Component(unitOfMeasureServices, "Unit of Measure Services", "UnitOfMeasureConversionService, UnitOfMeasureNormalizationService, UnitOfMeasureDisplayConverter", "Convert to base units, parse measure strings, convert base units to display units per user preference")
     Component(containerDetector, "Container Reference Detector", "ContainerReferenceDetector", "Detects container keywords (can, jar, box, packet) in ingredient strings")
     Component(inputSanitizer, "Input Sanitizer", "InputSanitizer", "Strips HTML, control characters, enforces length limits")
 }

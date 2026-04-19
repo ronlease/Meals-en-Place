@@ -132,14 +132,14 @@ interface InventoryForm {
             </mat-form-field>
 
             <mat-form-field appearance="outline" class="unit-of-measure-field">
-              <mat-label>unit of measure</mat-label>
+              <mat-label>Unit of Measure</mat-label>
               <mat-select formControlName="unitOfMeasureId">
                 @for (unit of units(); track unit.id) {
                   <mat-option [value]="unit.id">{{ unit.abbreviation }}</mat-option>
                 }
               </mat-select>
               @if (inventoryForm.controls.unitOfMeasureId.hasError('required')) {
-                <mat-error>unit of measure is required</mat-error>
+                <mat-error>Unit of measure is required</mat-error>
               }
             </mat-form-field>
           </div>
@@ -192,14 +192,14 @@ interface InventoryForm {
                 </mat-form-field>
 
                 <mat-form-field appearance="outline" class="unit-of-measure-field">
-                  <mat-label>unit of measure</mat-label>
+                  <mat-label>Unit of Measure</mat-label>
                   <mat-select formControlName="declaredUnitOfMeasureId">
                     @for (unit of units(); track unit.id) {
                       <mat-option [value]="unit.id">{{ unit.abbreviation }}</mat-option>
                     }
                   </mat-select>
                   @if (containerForm.controls.declaredUnitOfMeasureId.hasError('required')) {
-                    <mat-error>unit of measure is required</mat-error>
+                    <mat-error>Unit of measure is required</mat-error>
                   }
                 </mat-form-field>
               </div>

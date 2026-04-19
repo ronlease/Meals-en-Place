@@ -49,7 +49,7 @@ definitions. No cross-feature service dependencies — shared logic lives in `co
 The inventory feature is the foundational data entry surface. Implement as three tabs:
 Pantry, Fridge, Freezer.
 - Each tab renders a `mat-table` of InventoryItems with columns:
-  Ingredient | Quantity | unit of measure | Expiry Date | Actions
+  Ingredient | Quantity | Unit of Measure | Expiry Date | Actions
 - Expiry date column renders a colored badge: >7 days (default), 3–7 days (amber), <3 days (red)
 - Add item opens a `mat-dialog` with: Ingredient (autocomplete from CanonicalIngredients),
   Quantity, unit of measure (dropdown), Location (pre-set to active tab), Expiry Date (optional datepicker)
@@ -59,7 +59,7 @@ Pantry, Fridge, Freezer.
   container?" The user enters a quantity and selects a unit of measure (oz, g, ml, etc.) from a
   dropdown. The dialog resubmits with the declared values. Do not close the dialog until
   the API confirms the item was saved successfully.
-- unit of measure resolution warnings (Low confidence or Arbitrary from Claude) surface inline below
+- Unit of measure resolution warnings (Low confidence or Arbitrary from Claude) surface inline below
   the Quantity field with an amber icon and the Claude-provided note
 - Edit and delete available per row via icon buttons
 

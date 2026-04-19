@@ -85,7 +85,7 @@ in `Common/`.
   at MVP — the DisplaySystem field has no UI toggle yet but must exist in the schema to
   avoid a future breaking migration.
 
-## unit of measure Normalization
+## Unit of Measure Normalization
 
 ### Canonical Base Units
 One base unit per UnitOfMeasureType for all internal computation:
@@ -114,7 +114,7 @@ Cross-type conversions (e.g., cups to grams) are never attempted without ingredi
 density data. If the system encounters a cross-type conversion requirement, return a
 `ConversionNotPossibleResult` — never silently produce a wrong value.
 
-### Claude unit of measure Resolution
+### Claude Unit of Measure Resolution
 Invoke Claude only when a unit is colloquial or unmappable against the conversion table.
 Examples:
 - "a knob of butter" → approximately 14g
@@ -293,7 +293,7 @@ On import, for each ingredient/measure string pair:
 1. Run `ContainerReferenceDetector` — if container keyword found, create RecipeIngredient
    with IsContainerResolved = false, Notes = original string, skip unit of measure parsing
 2. If no container reference, attempt deterministic unit of measure lookup against the conversion table
-3. If unit of measure is colloquial or unmapped, invoke Claude `ResolveUnitOfMeasureAsync`
+3. If the unit of measure is colloquial or unmapped, invoke Claude `ResolveUnitOfMeasureAsync`
 4. Persist RecipeIngredient with resolved values
 
 ## Coding Standards

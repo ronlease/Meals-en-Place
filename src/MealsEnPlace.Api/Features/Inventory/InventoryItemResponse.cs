@@ -32,7 +32,7 @@ public sealed class InventoryItemResponse
     /// <summary>Quantity as entered by the user.</summary>
     public decimal Quantity { get; init; }
 
-    /// <summary>unit of measure abbreviation as stored (e.g., "oz", "lb", "ml", "g").</summary>
+    /// <summary>Unit of measure abbreviation as stored (e.g., "oz", "lb", "ml", "g").</summary>
     public string UnitOfMeasureAbbreviation { get; init; } = string.Empty;
 
     /// <summary>Id of the unit of measure as stored in the database.</summary>

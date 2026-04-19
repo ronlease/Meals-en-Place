@@ -68,7 +68,7 @@ public async Task Match_AllIngredientsPresent_ReturnsFullMatch()
 ## Domain-Specific Test Priorities
 These areas carry the highest defect risk and require the most thorough coverage:
 
-- **unit of measure normalization:** Conversion math correctness for all seeded factors (tsp→ml, tbsp→ml,
+- **Unit of measure normalization:** Conversion math correctness for all seeded factors (tsp→ml, tbsp→ml,
   oz→g, lb→g, etc.); colloquial unit handling; Arbitrary unit flagging; cross-type conversion
   rejection (cups to grams must return ConversionNotPossibleResult, never a wrong value).
 
@@ -126,7 +126,7 @@ These areas carry the highest defect risk and require the most thorough coverage
 ## Critical Edge Cases — Mandatory Individual Tests
 Each of the following must have a dedicated test method. These are high-probability bugs:
 
-1. **unit of measure cross-type conversion:** Cups (Volume) to grams (Weight) for a generic ingredient
+1. **Unit of measure cross-type conversion:** Cups (Volume) to grams (Weight) for a generic ingredient
    must return `ConversionNotPossibleResult`, never a numeric value.
 
 2. **Zero-quantity inventory item:** Quantity = 0 must not satisfy any RecipeIngredient

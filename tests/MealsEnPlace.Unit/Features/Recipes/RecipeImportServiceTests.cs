@@ -966,7 +966,7 @@ public class RecipeImportServiceTests : IDisposable
     [Fact]
     public async Task GetAllLocalRecipesAsync_NoRecipes_ReturnsEmptyList()
     {
-        // Arrange — nothing seeded beyond reference UOMs
+        // Arrange — nothing seeded beyond reference units of measure
 
         // Act
         var result = await _sut.GetAllLocalRecipesAsync();

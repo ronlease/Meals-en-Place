@@ -500,7 +500,7 @@ public class ShoppingListServiceTests : IDisposable
     [Fact]
     public async Task GetStandaloneShoppingListAsync_NoItems_ReturnsEmptyList()
     {
-        // Arrange — nothing seeded beyond reference UOMs
+        // Arrange — nothing seeded beyond reference units of measure
 
         // Act
         var result = await _sut.GetStandaloneShoppingListAsync();

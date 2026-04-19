@@ -26,7 +26,7 @@ Recipe library management: import from TheMealDB, manual creation, recipe detail
 
 ## Key Concepts
 
-- **Recipe Detail**: Full recipe view with ingredients (quantities, UOMs, resolution status), instructions, dietary tags, and source URL for imported recipes.
+- **Recipe Detail**: Full recipe view with ingredients (quantities, units of measure, resolution status), instructions, dietary tags, and source URL for imported recipes.
 - **Manual Creation**: Users can create recipes directly with title, ingredients, instructions, cuisine, and serving count. Container references in notes are detected automatically.
 - **Import Pipeline**: Search TheMealDB, import by ID, detect container references in ingredients, classify dietary tags via Claude stub.
 - **Container Resolution**: Unresolved recipes do not participate in matching. User must declare net weight/volume for each container reference.

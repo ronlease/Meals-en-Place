@@ -12,7 +12,7 @@ System(mep, "Meals en Place", "Personal recipe and meal planning tool. Tracks pa
 System_Ext(claude, "Claude API", "AI service providing unit of measure normalization, container reference flagging, dietary classification, recipe match feasibility and substitution suggestions, and meal plan optimization.")
 System_Ext(themealdb, "TheMealDB API", "Free, open recipe data source. No auth required. Used to import recipes by search term or category.")
 Rel(user, mep, "Manages inventory, browses recipes, builds meal plans", "HTTP localhost")
-Rel(mep, claude, "Normalizes UOMs, flags container references, classifies diets, evaluates substitutions, optimizes meal plans", "HTTPS/JSON")
+Rel(mep, claude, "Normalizes units of measure, flags container references, classifies diets, evaluates substitutions, optimizes meal plans", "HTTPS/JSON")
 Rel(mep, themealdb, "Imports recipes", "HTTPS/JSON")
 
 @enduml
