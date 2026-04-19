@@ -20,7 +20,7 @@ Auto-generates shopping lists by comparing meal plan ingredient requirements aga
 
 - **Generation Flow**: Aggregates recipe requirements in base units, aggregates inventory in base units, computes deficit.
 - **Standalone Shopping List**: Items added directly from recipe detail views have no meal plan association. These aggregate with existing standalone items.
-- **Display Units**: Response applies `UomDisplayConverter` for the user's preferred display system (Imperial/Metric).
+- **Display Units**: Response applies `UnitOfMeasureDisplayConverter` for the user's preferred display system (Imperial/Metric).
 - Negative deficits (surplus) are excluded from the list.
 
 ## Files

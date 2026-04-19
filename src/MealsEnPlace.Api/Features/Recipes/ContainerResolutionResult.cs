@@ -10,7 +10,7 @@ public sealed class ContainerResolutionResult
 {
     /// <summary>
     /// Human-readable validation error message when the request was rejected
-    /// (e.g., quantity not positive, UOM not found).
+    /// (e.g., quantity not positive, unit of measure not found).
     /// Populated only when <see cref="IsValidationError"/> is true.
     /// </summary>
     public string? ErrorMessage { get; init; }

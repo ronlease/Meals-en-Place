@@ -1896,8 +1896,19 @@ Feature: Remove TheMealDB Integration
 
 ## [MEP-034] Retroactive Rename: UOM / Uom → UnitOfMeasure Across Codebase
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
+
+### Implementation Notes
+Shipped as a single PR on branch `feature/mep-034-uom-to-unit-of-measure-rename`. Scope covered:
+
+- All C# identifiers (types, interfaces, methods, properties, local variables) and matching file names across `src/` and `tests/`, except frozen `Migrations/` snapshots which intentionally preserve the historical `Uom*` names.
+- Angular TypeScript models, components, services, and matching `formControlName` / column-def / CSS-class identifiers (`uom-field` → `unit-of-measure-field`).
+- Database column renames via migration `20260419202941_RenameUomColumnsToUnitOfMeasure` using `RenameColumn` + `RenameIndex` (`UomId` → `UnitOfMeasureId` on `InventoryItems`/`RecipeIngredients`/`ShoppingListItems`; `DefaultUomId` → `DefaultUnitOfMeasureId` on `CanonicalIngredients`; `BaseUomId` + `UomType` on `UnitsOfMeasure`). The Down path reverses every rename. Smoke-tested Up and Down against a local Postgres with seeded and ingested rows.
+- JSON property names: API response shapes now emit `unitOfMeasureId` / `unitOfMeasureType` / `unitOfMeasureAbbreviation` (camelCase auto-derived from the renamed C# properties). **No API version bump**: single-user local deployment, only in-repo Angular consumes the API, so properties renamed in place and Angular updated in lockstep within the same PR.
+- URL routes: AC scenario 6 became a no-op. All `/api/v1/...` routes were already spelled out (e.g. `unit-of-measure-review-queue` from MEP-026 Option B). No redirects required.
+- Docs: CLAUDE.md caveat about legacy `Uom...` naming removed (no longer applies). C4 diagrams (`component-api.puml`, `container.puml`, `context.puml`), feature READMEs, and agent definition files updated.
+
 
 ### Business Problem
 Early in the project, "unit of measure" was abbreviated as `UOM` / `Uom` in C# class names (`UomNormalizationService`, `UomDisplayConverter`, `UomConversionService`, `UomType`, `UomAbbreviation`), database columns (`UomId`, `DefaultUomId`), DTO properties, Angular models, and API response bodies. The project convention has since shifted to "avoid abbreviations in domain names; spell out terms like `UnitOfMeasure`" (see CLAUDE.md and MEP-026 Phase 5d notes). New code written under MEP-026 uses the spelled-out form; the legacy surface area still uses the abbreviated form.

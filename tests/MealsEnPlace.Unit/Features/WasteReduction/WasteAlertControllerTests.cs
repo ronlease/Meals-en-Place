@@ -53,7 +53,7 @@ public class WasteAlertControllerTests
             Location = "Fridge",
             MatchedRecipes = [],
             Quantity = 500m,
-            UomAbbreviation = "g"
+            UnitOfMeasureAbbreviation = "g"
         };
 
     // ── DismissAlert ──────────────────────────────────────────────────────────

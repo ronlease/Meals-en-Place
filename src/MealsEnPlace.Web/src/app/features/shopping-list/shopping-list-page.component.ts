@@ -64,9 +64,9 @@ import { ShoppingListService } from '../../core/services/shopping-list.service';
           <mat-cell *matCellDef="let item">{{ item.quantity }}</mat-cell>
         </ng-container>
 
-        <ng-container matColumnDef="uomAbbreviation">
+        <ng-container matColumnDef="unitOfMeasureAbbreviation">
           <mat-header-cell *matHeaderCellDef>Unit</mat-header-cell>
-          <mat-cell *matCellDef="let item">{{ item.uomAbbreviation }}</mat-cell>
+          <mat-cell *matCellDef="let item">{{ item.unitOfMeasureAbbreviation }}</mat-cell>
         </ng-container>
 
         <mat-header-row *matHeaderRowDef="displayedColumns" />
@@ -136,7 +136,7 @@ export class ShoppingListPageComponent implements OnInit {
     'category',
     'canonicalIngredientName',
     'quantity',
-    'uomAbbreviation',
+    'unitOfMeasureAbbreviation',
   ];
   protected readonly items = signal<ShoppingListItemResponse[]>([]);
   protected readonly loading = signal(false);

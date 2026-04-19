@@ -76,9 +76,9 @@ import { RecipeService } from '../../core/services/recipe.service';
             <mat-cell *matCellDef="let i">{{ i.quantity }}</mat-cell>
           </ng-container>
 
-          <ng-container matColumnDef="uomAbbreviation">
+          <ng-container matColumnDef="unitOfMeasureAbbreviation">
             <mat-header-cell *matHeaderCellDef>Unit</mat-header-cell>
-            <mat-cell *matCellDef="let i">{{ i.uomAbbreviation }}</mat-cell>
+            <mat-cell *matCellDef="let i">{{ i.unitOfMeasureAbbreviation }}</mat-cell>
           </ng-container>
 
           <ng-container matColumnDef="status">
@@ -240,7 +240,7 @@ export class RecipeDetailDialogComponent implements OnInit {
   protected readonly ingredientColumns = [
     'ingredientName',
     'quantity',
-    'uomAbbreviation',
+    'unitOfMeasureAbbreviation',
     'status',
   ];
   protected readonly loading = signal(false);

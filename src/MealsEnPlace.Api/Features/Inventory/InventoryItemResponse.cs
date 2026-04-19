@@ -4,7 +4,7 @@ namespace MealsEnPlace.Api.Features.Inventory;
 
 /// <summary>
 /// Response DTO for a single inventory item.
-/// Quantity and UOM abbreviation are returned as stored — no display conversion is applied.
+/// Quantity and unit of measure abbreviation are returned as stored — no display conversion is applied.
 /// </summary>
 public sealed class InventoryItemResponse
 {
@@ -25,16 +25,16 @@ public sealed class InventoryItemResponse
 
     /// <summary>
     /// Original entry string preserved when a container reference was resolved.
-    /// Null for items entered with an explicit UOM.
+    /// Null for items entered with an explicit unit of measure.
     /// </summary>
     public string? Notes { get; init; }
 
     /// <summary>Quantity as entered by the user.</summary>
     public decimal Quantity { get; init; }
 
-    /// <summary>UOM abbreviation as stored (e.g., "oz", "lb", "ml", "g").</summary>
-    public string UomAbbreviation { get; init; } = string.Empty;
+    /// <summary>Unit of measure abbreviation as stored (e.g., "oz", "lb", "ml", "g").</summary>
+    public string UnitOfMeasureAbbreviation { get; init; } = string.Empty;
 
     /// <summary>Id of the unit of measure as stored in the database.</summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

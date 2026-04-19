@@ -72,10 +72,10 @@ builder.Services.AddScoped<ISeasonalProduceService, SeasonalProduceService>();
 builder.Services.AddScoped<IShoppingListService, ShoppingListService>();
 builder.Services.AddScoped<ITheMealDbClient, TheMealDbClient>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
-builder.Services.AddScoped<IUomConversionService, UomConversionService>();
-builder.Services.AddScoped<IUomNormalizationService, UomNormalizationService>();
+builder.Services.AddScoped<IUnitOfMeasureConversionService, UnitOfMeasureConversionService>();
+builder.Services.AddScoped<IUnitOfMeasureNormalizationService, UnitOfMeasureNormalizationService>();
 builder.Services.AddScoped<IWasteAlertService, WasteAlertService>();
-builder.Services.AddScoped<UomDisplayConverter>();
+builder.Services.AddScoped<UnitOfMeasureDisplayConverter>();
 
 // -- Problem details ----------------------------------------------------------
 builder.Services.AddProblemDetails();

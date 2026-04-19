@@ -14,7 +14,7 @@ public sealed class ContainerReferenceDetectionResult
 
     /// <summary>
     /// True when a container keyword was found in the input string.
-    /// False when the string can proceed to UOM parsing.
+    /// False when the string can proceed to unit of measure parsing.
     /// </summary>
     public bool IsContainerReference { get; init; }
 

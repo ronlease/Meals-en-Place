@@ -21,11 +21,11 @@ public class ShoppingListItem
     /// <summary>Optional display note (e.g., original measure string).</summary>
     public string? Notes { get; set; }
 
-    /// <summary>Net quantity needed, in the unit specified by <see cref="UomId"/>.</summary>
+    /// <summary>Net quantity needed, in the unit specified by <see cref="UnitOfMeasureId"/>.</summary>
     public decimal Quantity { get; set; }
 
     /// <summary>The unit of measure for <see cref="Quantity"/>.</summary>
-    public Guid UomId { get; set; }
+    public Guid UnitOfMeasureId { get; set; }
 
     // Navigation properties
 
@@ -36,5 +36,5 @@ public class ShoppingListItem
     public MealPlan? MealPlan { get; set; }
 
     /// <summary>The unit of measure for this item's quantity.</summary>
-    public UnitOfMeasure Uom { get; set; } = null!;
+    public UnitOfMeasure UnitOfMeasure { get; set; } = null!;
 }

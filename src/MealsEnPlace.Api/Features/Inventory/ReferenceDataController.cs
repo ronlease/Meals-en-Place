@@ -23,11 +23,11 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
     /// Use this endpoint to add an ingredient that is not present in the seed data.
     /// The new ingredient is immediately available for inventory and recipe use.
     /// </remarks>
-    /// <param name="request">Name, category, and default UOM for the new ingredient.</param>
+    /// <param name="request">Name, category, and default unit of measure for the new ingredient.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 201 with the created <see cref="CanonicalIngredientDto"/>;
-    /// 400 if the name is blank or the <c>defaultUomId</c> does not reference an existing unit;
+    /// 400 if the name is blank or the <c>defaultUnitOfMeasureId</c> does not reference an existing unit;
     /// 409 if an ingredient with the same name already exists.
     /// </returns>
     [HttpPost("ingredients")]
@@ -48,14 +48,14 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             });
         }
 
-        var uomExists = await db.UnitsOfMeasure
-            .AnyAsync(u => u.Id == request.DefaultUomId, cancellationToken);
+        var unitOfMeasureExists = await db.UnitsOfMeasure
+            .AnyAsync(u => u.Id == request.DefaultUnitOfMeasureId, cancellationToken);
 
-        if (!uomExists)
+        if (!unitOfMeasureExists)
         {
             return BadRequest(new ProblemDetails
             {
-                Detail = $"Unit of measure '{request.DefaultUomId}' was not found.",
+                Detail = $"Unit of measure '{request.DefaultUnitOfMeasureId}' was not found.",
                 Status = StatusCodes.Status400BadRequest,
                 Title = "Bad Request"
             });
@@ -77,7 +77,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
         var ingredient = new CanonicalIngredient
         {
             Category = request.Category,
-            DefaultUomId = request.DefaultUomId,
+            DefaultUnitOfMeasureId = request.DefaultUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = InputSanitizer.SanitizeForStorage(request.Name, 200) ?? string.Empty
         };
@@ -105,7 +105,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             .Select(c => new CanonicalIngredientDto
             {
                 Category = c.Category,
-                DefaultUomId = c.DefaultUomId,
+                DefaultUnitOfMeasureId = c.DefaultUnitOfMeasureId,
                 Id = c.Id,
                 Name = c.Name
             })
@@ -132,7 +132,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
                 Abbreviation = u.Abbreviation,
                 Id = u.Id,
                 Name = u.Name,
-                UomType = u.UomType
+                UnitOfMeasureType = u.UnitOfMeasureType
             })
             .ToListAsync(cancellationToken);
 
@@ -145,7 +145,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
         new()
         {
             Category = ingredient.Category,
-            DefaultUomId = ingredient.DefaultUomId,
+            DefaultUnitOfMeasureId = ingredient.DefaultUnitOfMeasureId,
             Id = ingredient.Id,
             Name = ingredient.Name
         };

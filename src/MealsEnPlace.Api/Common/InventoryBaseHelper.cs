@@ -9,9 +9,9 @@ namespace MealsEnPlace.Api.Common;
 /// used by recipe matching and meal plan scoring.
 /// </summary>
 /// <param name="BaseQuantity">Quantity expressed in the base unit (ml, g, or ea).</param>
-/// <param name="UomType">The dimensional type of the unit.</param>
+/// <param name="UnitOfMeasureType">The dimensional type of the unit.</param>
 /// <param name="ExpiryDate">Optional expiry date of the source inventory item.</param>
-public sealed record InventoryBaseEntry(decimal BaseQuantity, UomType UomType, DateOnly? ExpiryDate);
+public sealed record InventoryBaseEntry(decimal BaseQuantity, UnitOfMeasureType UnitOfMeasureType, DateOnly? ExpiryDate);
 
 /// <summary>
 /// Shared helpers for loading and converting inventory items to base units.
@@ -22,12 +22,12 @@ public static class InventoryBaseHelper
     /// Converts a list of inventory items to base-unit entries grouped by canonical ingredient.
     /// </summary>
     public static async Task<Dictionary<Guid, List<InventoryBaseEntry>>> ConvertToBaseUnitsAsync(
-        List<InventoryItem> inventory, IUomConversionService uomConversionService, CancellationToken cancellationToken)
+        List<InventoryItem> inventory, IUnitOfMeasureConversionService unitOfMeasureConversionService, CancellationToken cancellationToken)
     {
         var result = new Dictionary<Guid, List<InventoryBaseEntry>>();
         foreach (var item in inventory)
         {
-            var conversion = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
+            var conversion = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UnitOfMeasureId, cancellationToken);
             if (!conversion.Success) continue;
 
             if (!result.TryGetValue(item.CanonicalIngredientId, out var entries))
@@ -35,20 +35,20 @@ public static class InventoryBaseHelper
                 entries = [];
                 result[item.CanonicalIngredientId] = entries;
             }
-            entries.Add(new InventoryBaseEntry(conversion.ConvertedQuantity, item.Uom!.UomType, item.ExpiryDate));
+            entries.Add(new InventoryBaseEntry(conversion.ConvertedQuantity, item.UnitOfMeasure!.UnitOfMeasureType, item.ExpiryDate));
         }
         return result;
     }
 
     /// <summary>
-    /// Loads all inventory items with their CanonicalIngredient and Uom navigations.
+    /// Loads all inventory items with their CanonicalIngredient and UnitOfMeasure navigations.
     /// </summary>
     public static Task<List<InventoryItem>> LoadInventoryAsync(
         MealsEnPlaceDbContext dbContext, CancellationToken cancellationToken)
     {
         return dbContext.InventoryItems.AsNoTracking()
             .Include(i => i.CanonicalIngredient)
-            .Include(i => i.Uom)
+            .Include(i => i.UnitOfMeasure)
             .ToListAsync(cancellationToken);
     }
 }

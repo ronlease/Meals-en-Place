@@ -19,11 +19,11 @@ Recipe library browser, TheMealDB import workflow, manual recipe creation, recip
 
 - **RecipeBrowserComponent** — Two-tab interface: "My Recipes" table (click row to open detail dialog) with resolution status badges, and "What Can I Make?" match finder with dietary tag chip filters.
 - **RecipeDetailDialogComponent** — Dialog showing full recipe detail: ingredients table, instructions, dietary tags, source URL link, and "Add to Shopping List" button.
-- **RecipeCreateComponent** — Form for manual recipe creation with dynamic ingredient rows, ingredient/UOM selection, and container reference notes.
+- **RecipeCreateComponent** — Form for manual recipe creation with dynamic ingredient rows, ingredient/unit of measure selection, and container reference notes.
 - **RecipeImportComponent** — Search bar + result card grid with import status tracking.
 - **RecipeMatchResultsComponent** — Presentational component showing Full/Near/Partial match tiers.
 
 ## Services Used
 
 - `RecipeService` — Library listing, detail, creation, import, search, matching, add-to-shopping-list
-- `ReferenceDataService` — Canonical ingredients and UOM lookup (for recipe creation form)
+- `ReferenceDataService` — Canonical ingredients and unit of measure lookup (for recipe creation form)

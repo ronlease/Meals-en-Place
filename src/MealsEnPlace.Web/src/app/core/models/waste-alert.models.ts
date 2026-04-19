@@ -14,5 +14,5 @@ export interface WasteAlertResponse {
   location: string;
   matchedRecipes: WasteAlertRecipeDto[];
   quantity: number;
-  uomAbbreviation: string;
+  unitOfMeasureAbbreviation: string;
 }

@@ -32,9 +32,9 @@ public class ShoppingListItemConfiguration : IEntityTypeConfiguration<ShoppingLi
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(sli => sli.Uom)
+        builder.HasOne(sli => sli.UnitOfMeasure)
             .WithMany()
-            .HasForeignKey(sli => sli.UomId)
+            .HasForeignKey(sli => sli.UnitOfMeasureId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
     }

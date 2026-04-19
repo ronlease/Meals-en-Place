@@ -10,12 +10,12 @@
 //   Given a TheMealDbMeal whose first measure string contains "can"
 //   When ImportByIdAsync is called
 //   Then the corresponding RecipeIngredient has IsContainerResolved = false
-//   And the RecipeIngredient has UomId = null
+//   And the RecipeIngredient has UnitOfMeasureId = null
 //   And the RecipeIngredient Notes preserves the original measure string
 //
-// Scenario: Import normalizes a standard UOM deterministically
+// Scenario: Import normalizes a standard unit of measure deterministically
 //   Given a TheMealDbMeal with measure string "2 cups" for one ingredient
-//   And IUomNormalizationService returns a high-confidence result for "2 cups"
+//   And IUnitOfMeasureNormalizationService returns a high-confidence result for "2 cups"
 //   When ImportByIdAsync is called
 //   Then the corresponding RecipeIngredient has IsContainerResolved = true
 //   And the RecipeIngredient Quantity equals the value from the normalization result
@@ -68,12 +68,12 @@ public class RecipeImportServiceTests : IDisposable
     private readonly Mock<IClaudeService> _claudeServiceMock = new(MockBehavior.Loose);
     private readonly MealsEnPlaceDbContext _dbContext;
     private readonly Mock<ITheMealDbClient> _theMealDbClientMock = new(MockBehavior.Strict);
-    private readonly Mock<IUomNormalizationService> _uomNormalizationServiceMock = new(MockBehavior.Loose);
+    private readonly Mock<IUnitOfMeasureNormalizationService> _unitOfMeasureNormalizationServiceMock = new(MockBehavior.Loose);
     private readonly RecipeImportService _sut;
 
-    // Stable IDs for seeded UOM reference data
-    private static readonly Guid EachUomId = new("a1000000-0000-0000-0000-000000000001");
-    private static readonly Guid GramUomId = new("a1000000-0000-0000-0000-000000000002");
+    // Stable IDs for seeded unit of measure reference data
+    private static readonly Guid EachUnitOfMeasureId = new("a1000000-0000-0000-0000-000000000001");
+    private static readonly Guid GramUnitOfMeasureId = new("a1000000-0000-0000-0000-000000000002");
 
     public RecipeImportServiceTests()
     {
@@ -89,14 +89,14 @@ public class RecipeImportServiceTests : IDisposable
             .ReturnsAsync(Array.Empty<DietaryTag>());
 
         // Default: normalization returns a high-confidence gram result for any measure string
-        _uomNormalizationServiceMock
+        _unitOfMeasureNormalizationServiceMock
             .Setup(n => n.NormalizeAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NormalizationResult
             {
                 Confidence = ClaudeConfidence.High,
                 Quantity = 250m,
-                UomAbbreviation = "g",
-                UomId = GramUomId,
+                UnitOfMeasureAbbreviation = "g",
+                UnitOfMeasureId = GramUnitOfMeasureId,
                 WasClaudeResolved = false
             });
 
@@ -107,7 +107,7 @@ public class RecipeImportServiceTests : IDisposable
             _dbContext,
             NullLogger<RecipeImportService>.Instance,
             _theMealDbClientMock.Object,
-            _uomNormalizationServiceMock.Object);
+            _unitOfMeasureNormalizationServiceMock.Object);
     }
 
     public void Dispose() => _dbContext.Dispose();
@@ -121,17 +121,17 @@ public class RecipeImportServiceTests : IDisposable
             {
                 Abbreviation = "ea",
                 ConversionFactor = 1.0m,
-                Id = EachUomId,
+                Id = EachUnitOfMeasureId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
                 ConversionFactor = 1.0m,
-                Id = GramUomId,
+                Id = GramUnitOfMeasureId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             });
 
         _dbContext.SaveChanges();
@@ -212,7 +212,7 @@ public class RecipeImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ImportByIdAsync_MeasureContainsCanKeyword_RecipeIngredientHasNullUomId()
+    public async Task ImportByIdAsync_MeasureContainsCanKeyword_RecipeIngredientHasNullUnitOfMeasureId()
     {
         // Arrange
         var meal = BuildMeal(ingredient1: "Diced Tomatoes", measure1: "1 can");
@@ -225,7 +225,7 @@ public class RecipeImportServiceTests : IDisposable
         // Assert
         var ingredient = await _dbContext.RecipeIngredients.AsNoTracking()
             .FirstAsync(ri => ri.RecipeId == result.RecipeId);
-        ingredient.UomId.Should().BeNull();
+        ingredient.UnitOfMeasureId.Should().BeNull();
     }
 
     [Fact]
@@ -287,12 +287,12 @@ public class RecipeImportServiceTests : IDisposable
         result.UnresolvedCount.Should().Be(2);
     }
 
-    // ── ImportByIdAsync — standard UOM normalization ──────────────────────────
+    // ── ImportByIdAsync — standard unit of measure normalization ──────────────────────────
 
     [Fact]
     public async Task ImportByIdAsync_StandardMeasureString_RecipeIngredientHasIsContainerResolvedTrue()
     {
-        // Arrange — "2 cups" is a standard UOM, not a container reference
+        // Arrange — "2 cups" is a standard unit of measure, not a container reference
         var meal = BuildMeal(ingredient1: "All-Purpose Flour", measure1: "2 cups");
         _theMealDbClientMock.Setup(c => c.GetByIdAsync("52772", It.IsAny<CancellationToken>()))
                             .ReturnsAsync(meal);
@@ -311,14 +311,14 @@ public class RecipeImportServiceTests : IDisposable
     {
         // Arrange
         var meal = BuildMeal(ingredient1: "All-Purpose Flour", measure1: "2 cups");
-        _uomNormalizationServiceMock
+        _unitOfMeasureNormalizationServiceMock
             .Setup(n => n.NormalizeAsync("2 cups", "All-Purpose Flour", It.IsAny<CancellationToken>()))
             .ReturnsAsync(new NormalizationResult
             {
                 Confidence = ClaudeConfidence.High,
                 Quantity = 473.18m,
-                UomAbbreviation = "ml",
-                UomId = GramUomId,
+                UnitOfMeasureAbbreviation = "ml",
+                UnitOfMeasureId = GramUnitOfMeasureId,
                 WasClaudeResolved = false
             });
 
@@ -335,7 +335,7 @@ public class RecipeImportServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ImportByIdAsync_StandardMeasureString_UomNormalizationServiceCalledWithCorrectArguments()
+    public async Task ImportByIdAsync_StandardMeasureString_UnitOfMeasureNormalizationServiceCalledWithCorrectArguments()
     {
         // Arrange
         var meal = BuildMeal(ingredient1: "Sugar", measure1: "1 cup");
@@ -346,7 +346,7 @@ public class RecipeImportServiceTests : IDisposable
         await _sut.ImportByIdAsync("52772");
 
         // Assert
-        _uomNormalizationServiceMock.Verify(
+        _unitOfMeasureNormalizationServiceMock.Verify(
             n => n.NormalizeAsync("1 cup", "Sugar", It.IsAny<CancellationToken>()),
             Times.Once);
     }
@@ -396,7 +396,7 @@ public class RecipeImportServiceTests : IDisposable
         var existingIngredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = EachUomId,
+            DefaultUnitOfMeasureId = EachUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Olive Oil"
         };
@@ -579,7 +579,7 @@ public class RecipeImportServiceTests : IDisposable
         ingredients.Should().AllSatisfy(ri =>
         {
             ri.IsContainerResolved.Should().BeFalse();
-            ri.UomId.Should().BeNull();
+            ri.UnitOfMeasureId.Should().BeNull();
         });
     }
 
@@ -753,7 +753,7 @@ public class RecipeImportServiceTests : IDisposable
 
     // Scenario: CreateRecipeAsync creates recipe with correct title
     //   Given a CreateRecipeRequest with Title "Homemade Tacos"
-    //   And one ingredient with a resolved UomId
+    //   And one ingredient with a resolved UnitOfMeasureId
     //   When CreateRecipeAsync is called
     //   Then the saved Recipe has Title "Homemade Tacos"
 
@@ -764,7 +764,7 @@ public class RecipeImportServiceTests : IDisposable
         var canonicalIngredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Protein,
-            DefaultUomId = GramUomId,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Beef"
         };
@@ -780,7 +780,7 @@ public class RecipeImportServiceTests : IDisposable
                 {
                     CanonicalIngredientId = canonicalIngredient.Id,
                     Quantity = 500m,
-                    UomId = GramUomId
+                    UnitOfMeasureId = GramUnitOfMeasureId
                 }
             ],
             Instructions = "Cook the beef.",
@@ -809,14 +809,14 @@ public class RecipeImportServiceTests : IDisposable
         var ingredient1 = new CanonicalIngredient
         {
             Category = IngredientCategory.Protein,
-            DefaultUomId = GramUomId,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Chicken Breast"
         };
         var ingredient2 = new CanonicalIngredient
         {
             Category = IngredientCategory.Spice,
-            DefaultUomId = GramUomId,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Paprika"
         };
@@ -832,13 +832,13 @@ public class RecipeImportServiceTests : IDisposable
                 {
                     CanonicalIngredientId = ingredient1.Id,
                     Quantity = 400m,
-                    UomId = GramUomId
+                    UnitOfMeasureId = GramUnitOfMeasureId
                 },
                 new CreateRecipeIngredientRequest
                 {
                     CanonicalIngredientId = ingredient2.Id,
                     Quantity = 5m,
-                    UomId = GramUomId
+                    UnitOfMeasureId = GramUnitOfMeasureId
                 }
             ],
             Instructions = "Season and grill.",
@@ -858,7 +858,7 @@ public class RecipeImportServiceTests : IDisposable
     // ── CreateRecipeAsync — container reference in notes ──────────────────────
 
     // Scenario: CreateRecipeAsync detects container reference in notes
-    //   Given a CreateRecipeIngredientRequest with Notes "1 can chopped tomatoes" and UomId null
+    //   Given a CreateRecipeIngredientRequest with Notes "1 can chopped tomatoes" and UnitOfMeasureId null
     //   When CreateRecipeAsync is called
     //   Then the RecipeIngredient has IsContainerResolved = false
 
@@ -869,7 +869,7 @@ public class RecipeImportServiceTests : IDisposable
         var canonicalIngredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = GramUomId,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Diced Tomatoes"
         };
@@ -886,7 +886,7 @@ public class RecipeImportServiceTests : IDisposable
                     CanonicalIngredientId = canonicalIngredient.Id,
                     Notes = "1 can chopped tomatoes",
                     Quantity = 0m,
-                    UomId = null
+                    UnitOfMeasureId = null
                 }
             ],
             Instructions = "Simmer the sauce.",
@@ -922,7 +922,7 @@ public class RecipeImportServiceTests : IDisposable
         var canonicalIngredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Grain,
-            DefaultUomId = GramUomId,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Pasta"
         };
@@ -938,7 +938,7 @@ public class RecipeImportServiceTests : IDisposable
                 {
                     CanonicalIngredientId = canonicalIngredient.Id,
                     Quantity = 200m,
-                    UomId = GramUomId
+                    UnitOfMeasureId = GramUnitOfMeasureId
                 }
             ],
             Instructions = "Boil pasta.",
@@ -966,7 +966,7 @@ public class RecipeImportServiceTests : IDisposable
     [Fact]
     public async Task GetAllLocalRecipesAsync_NoRecipes_ReturnsEmptyList()
     {
-        // Arrange — nothing seeded beyond reference UOMs
+        // Arrange — nothing seeded beyond reference units of measure
 
         // Act
         var result = await _sut.GetAllLocalRecipesAsync();
@@ -1028,7 +1028,7 @@ public class RecipeImportServiceTests : IDisposable
         var canonical = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = EachUomId,
+            DefaultUnitOfMeasureId = EachUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = "Canned Beans"
         };
@@ -1051,7 +1051,7 @@ public class RecipeImportServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = 200m,
                 RecipeId = recipe.Id,
-                UomId = GramUomId
+                UnitOfMeasureId = GramUnitOfMeasureId
             },
             new RecipeIngredient
             {
@@ -1061,7 +1061,7 @@ public class RecipeImportServiceTests : IDisposable
                 Notes = "1 can",
                 Quantity = 0m,
                 RecipeId = recipe.Id,
-                UomId = null
+                UnitOfMeasureId = null
             });
         await _dbContext.SaveChangesAsync();
 

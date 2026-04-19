@@ -17,7 +17,7 @@ public class ContainerResolutionService(MealsEnPlaceDbContext dbContext)
         Guid canonicalIngredientId,
         string notes,
         decimal quantity,
-        Guid uomId,
+        Guid unitOfMeasureId,
         CancellationToken cancellationToken = default)
     {
         if (quantity <= 0m)
@@ -30,13 +30,13 @@ public class ContainerResolutionService(MealsEnPlaceDbContext dbContext)
             return BulkResolveResult.ValidationError("Notes must be a non-empty string.");
         }
 
-        var uomExists = await dbContext.UnitsOfMeasure
+        var unitOfMeasureExists = await dbContext.UnitsOfMeasure
             .AsNoTracking()
-            .AnyAsync(u => u.Id == uomId, cancellationToken);
+            .AnyAsync(u => u.Id == unitOfMeasureId, cancellationToken);
 
-        if (!uomExists)
+        if (!unitOfMeasureExists)
         {
-            return BulkResolveResult.ValidationError($"Unit of measure '{uomId}' was not found.");
+            return BulkResolveResult.ValidationError($"Unit of measure '{unitOfMeasureId}' was not found.");
         }
 
         var normalized = notes.Trim().ToLower();
@@ -52,7 +52,7 @@ public class ContainerResolutionService(MealsEnPlaceDbContext dbContext)
         {
             ingredient.IsContainerResolved = true;
             ingredient.Quantity = quantity;
-            ingredient.UomId = uomId;
+            ingredient.UnitOfMeasureId = unitOfMeasureId;
             // Notes preserved verbatim -- it is the audit trail for what was resolved.
         }
 
@@ -154,19 +154,19 @@ public class ContainerResolutionService(MealsEnPlaceDbContext dbContext)
             return ContainerResolutionResult.RecipeNotFound();
         }
 
-        var uomExists = await dbContext.UnitsOfMeasure
+        var unitOfMeasureExists = await dbContext.UnitsOfMeasure
             .AsNoTracking()
-            .AnyAsync(u => u.Id == request.UomId, cancellationToken);
+            .AnyAsync(u => u.Id == request.UnitOfMeasureId, cancellationToken);
 
-        if (!uomExists)
+        if (!unitOfMeasureExists)
         {
             return ContainerResolutionResult.ValidationError(
-                $"Unit of measure '{request.UomId}' was not found.");
+                $"Unit of measure '{request.UnitOfMeasureId}' was not found.");
         }
 
         var ingredient = await dbContext.RecipeIngredients
             .Include(ri => ri.CanonicalIngredient)
-            .Include(ri => ri.Uom)
+            .Include(ri => ri.UnitOfMeasure)
             .FirstOrDefaultAsync(
                 ri => ri.Id == ingredientId && ri.RecipeId == recipeId,
                 cancellationToken);
@@ -178,14 +178,14 @@ public class ContainerResolutionService(MealsEnPlaceDbContext dbContext)
 
         ingredient.IsContainerResolved = true;
         ingredient.Quantity = request.Quantity;
-        ingredient.UomId = request.UomId;
+        ingredient.UnitOfMeasureId = request.UnitOfMeasureId;
         // Notes is intentionally left unchanged — it preserves the original import string.
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Re-load navigation so the controller can access Uom.UomType for display conversion.
+        // Re-load navigation so the controller can access UnitOfMeasure.UnitOfMeasureType for display conversion.
         await dbContext.Entry(ingredient)
-            .Reference(ri => ri.Uom)
+            .Reference(ri => ri.UnitOfMeasure)
             .LoadAsync(cancellationToken);
 
         return ContainerResolutionResult.Success(ingredient);

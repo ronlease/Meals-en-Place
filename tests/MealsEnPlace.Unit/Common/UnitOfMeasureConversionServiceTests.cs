@@ -1,4 +1,4 @@
-// Feature: UOM Normalization — Conversion Service
+// Feature: unit of measure Normalization — Conversion Service
 //
 // Scenario: Convert a known volume unit (tsp) to its base unit (ml)
 //   Given 1 tsp with a ConversionFactor of 4.929
@@ -70,20 +70,20 @@
 //   Then Success is true
 //   And the returned quantity is approximately 16 oz
 //
-// Scenario: Unknown fromUomId returns not-found failure
+// Scenario: Unknown fromUnitOfMeasureId returns not-found failure
 //   Given a Guid that does not exist in the database
 //   When ConvertToBaseUnitsAsync is called
 //   Then Success is false
 //   And ErrorMessage references the missing Guid
 //
-// Scenario: Unknown fromUomId in ConvertBetweenAsync returns not-found failure
-//   Given a fromUomId Guid that does not exist in the database
+// Scenario: Unknown fromUnitOfMeasureId in ConvertBetweenAsync returns not-found failure
+//   Given a fromUnitOfMeasureId Guid that does not exist in the database
 //   When ConvertBetweenAsync is called
 //   Then Success is false
 //   And ConvertedQuantity is 0
 //
-// Scenario: Unknown toUomId in ConvertBetweenAsync returns not-found failure
-//   Given a valid fromUomId but a toUomId Guid that does not exist
+// Scenario: Unknown toUnitOfMeasureId in ConvertBetweenAsync returns not-found failure
+//   Given a valid fromUnitOfMeasureId but a toUnitOfMeasureId Guid that does not exist
 //   When ConvertBetweenAsync is called
 //   Then Success is false
 //   And ConvertedQuantity is 0
@@ -115,7 +115,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MealsEnPlace.Unit.Common;
 
-public class UomConversionServiceTests
+public class UnitOfMeasureConversionServiceTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -127,127 +127,127 @@ public class UomConversionServiceTests
 
         var dbContext = new MealsEnPlaceDbContext(options);
 
-        // Seed all canonical UOM rows using the same fixed Guids from UnitOfMeasureConfiguration.
-        // Base units first (no BaseUomId dependency).
+        // Seed all canonical unit of measure rows using the same fixed Guids from UnitOfMeasureConfiguration.
+        // Base units first (no BaseUnitOfMeasureId dependency).
         dbContext.UnitsOfMeasure.AddRange(
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             // Volume units
             new UnitOfMeasure
             {
                 Abbreviation = "cup",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 236.588m,
                 Id = UnitOfMeasureConfiguration.CupId,
                 Name = "Cup",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "fl oz",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 29.574m,
                 Id = UnitOfMeasureConfiguration.FlOzId,
                 Name = "Fluid Ounce",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "L",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 1000.0m,
                 Id = UnitOfMeasureConfiguration.LiterId,
                 Name = "Liter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "pt",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 473.176m,
                 Id = UnitOfMeasureConfiguration.PintId,
                 Name = "Pint",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "qt",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 946.353m,
                 Id = UnitOfMeasureConfiguration.QuartId,
                 Name = "Quart",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tbsp",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 14.787m,
                 Id = UnitOfMeasureConfiguration.TbspId,
                 Name = "Tablespoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tsp",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 4.929m,
                 Id = UnitOfMeasureConfiguration.TspId,
                 Name = "Teaspoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             // Weight units
             new UnitOfMeasure
             {
                 Abbreviation = "kg",
-                BaseUomId = UnitOfMeasureConfiguration.GramId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.GramId,
                 ConversionFactor = 1000.0m,
                 Id = UnitOfMeasureConfiguration.KgId,
                 Name = "Kilogram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "lb",
-                BaseUomId = UnitOfMeasureConfiguration.GramId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.GramId,
                 ConversionFactor = 453.592m,
                 Id = UnitOfMeasureConfiguration.LbId,
                 Name = "Pound",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "oz",
-                BaseUomId = UnitOfMeasureConfiguration.GramId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.GramId,
                 ConversionFactor = 28.350m,
                 Id = UnitOfMeasureConfiguration.OzId,
                 Name = "Ounce",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             }
         );
 
@@ -255,7 +255,7 @@ public class UomConversionServiceTests
         return dbContext;
     }
 
-    private static UomConversionService BuildService(MealsEnPlaceDbContext dbContext) =>
+    private static UnitOfMeasureConversionService BuildService(MealsEnPlaceDbContext dbContext) =>
         new(dbContext);
 
     // ── ConvertToBaseUnitsAsync — factor correctness ──────────────────────────
@@ -273,7 +273,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().BeApproximately(473.176m, 0.001m);
-        result.ToUom.Should().Be("ml");
+        result.ToUnitOfMeasure.Should().Be("ml");
     }
 
     [Fact]
@@ -289,7 +289,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().Be(6m);
-        result.ToUom.Should().Be("ea");
+        result.ToUnitOfMeasure.Should().Be("ea");
     }
 
     [Fact]
@@ -305,7 +305,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().BeApproximately(453.592m, 0.001m);
-        result.ToUom.Should().Be("g");
+        result.ToUnitOfMeasure.Should().Be("g");
     }
 
     [Fact]
@@ -321,7 +321,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().Be(250m);
-        result.ToUom.Should().Be("ml");
+        result.ToUnitOfMeasure.Should().Be("ml");
     }
 
     [Fact]
@@ -337,7 +337,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().Be(100m);
-        result.ToUom.Should().Be("g");
+        result.ToUnitOfMeasure.Should().Be("g");
     }
 
     [Fact]
@@ -353,7 +353,7 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().BeApproximately(14.787m, 0.001m);
-        result.ToUom.Should().Be("ml");
+        result.ToUnitOfMeasure.Should().Be("ml");
     }
 
     [Fact]
@@ -369,8 +369,8 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().BeApproximately(4.929m, 0.001m);
-        result.FromUom.Should().Be("tsp");
-        result.ToUom.Should().Be("ml");
+        result.FromUnitOfMeasure.Should().Be("tsp");
+        result.ToUnitOfMeasure.Should().Be("ml");
     }
 
     [Fact]
@@ -386,17 +386,17 @@ public class UomConversionServiceTests
         // Assert
         result.Success.Should().BeTrue();
         result.ConvertedQuantity.Should().BeApproximately(28.350m, 0.001m);
-        result.FromUom.Should().Be("oz");
-        result.ToUom.Should().Be("g");
+        result.FromUnitOfMeasure.Should().Be("oz");
+        result.ToUnitOfMeasure.Should().Be("g");
     }
 
-    // ── ConvertToBaseUnitsAsync — unknown UOM ─────────────────────────────────
+    // ── ConvertToBaseUnitsAsync — unknown unit of measure ─────────────────────────────────
 
     [Fact]
-    public async Task ConvertToBaseUnitsAsync_UnknownUomId_ReturnsNotFoundFailure()
+    public async Task ConvertToBaseUnitsAsync_UnknownUnitOfMeasureId_ReturnsNotFoundFailure()
     {
         // Arrange
-        await using var dbContext = CreateSeededDbContext(nameof(ConvertToBaseUnitsAsync_UnknownUomId_ReturnsNotFoundFailure));
+        await using var dbContext = CreateSeededDbContext(nameof(ConvertToBaseUnitsAsync_UnknownUnitOfMeasureId_ReturnsNotFoundFailure));
         var service = BuildService(dbContext);
         var unknownId = Guid.NewGuid();
 

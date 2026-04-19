@@ -17,7 +17,7 @@ User preferences management — currently supports display unit system (Imperial
 
 - **DisplaySystem**: Imperial (default) or Metric. Controls how quantities render in API responses.
 - **Single-row table**: UserPreferences is enforced as a single-row table with a fixed primary key.
-- **UomDisplayConverter**: Reads the preference and converts base metric units to the user's chosen display system.
+- **UnitOfMeasureDisplayConverter**: Reads the preference and converts base metric units to the user's chosen display system.
 
 ## Files
 

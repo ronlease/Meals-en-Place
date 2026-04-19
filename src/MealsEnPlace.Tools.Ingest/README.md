@@ -29,7 +29,7 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 - **Streams the CSV** row-by-row using CsvHelper. The full 2.31 GB file is never loaded into memory.
 - **Parses ingredient / directions / NER arrays** as JSON. Malformed rows are counted and skipped, not fatal.
 - **Detects container references** (can, jar, box, etc.) via `ContainerReferenceDetector`.
-- **Previews UOM resolution** against the database's abbreviations, names, aliases, and count-noun fallback. Tokens with no deterministic match are counted toward the review-queue deferral total (Phase 4a: count only; Phase 4b: actually persist the queue row).
+- **Previews unit of measure resolution** against the database's abbreviations, names, aliases, and count-noun fallback. Tokens with no deterministic match are counted toward the review-queue deferral total (Phase 4a: count only; Phase 4b: actually persist the queue row).
 - **Applies `InstructionProseFilter`** to directions. Steps with first-person pronouns or >40 words after parenthetical stripping are dropped.
 
 ## Connection string
@@ -42,7 +42,7 @@ Phase 4a is a **read-only dry-run skeleton**:
 
 - CSV streaming with filter ✓
 - Container detection count ✓
-- UOM deterministic-resolution preview (no writes) ✓
+- Unit of measure deterministic-resolution preview (no writes) ✓
 - Prose-filter retention count ✓
 - Summary output with timing ✓
 

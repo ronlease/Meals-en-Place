@@ -17,9 +17,9 @@ public sealed class UpdateInventoryItemRequest
     /// <summary>Optional notes field. Pass null to clear existing notes.</summary>
     public string? Notes { get; init; }
 
-    /// <summary>Updated quantity in the unit specified by <see cref="UomId"/>.</summary>
+    /// <summary>Updated quantity in the unit specified by <see cref="UnitOfMeasureId"/>.</summary>
     public decimal Quantity { get; init; }
 
     /// <summary>Unit of measure for <see cref="Quantity"/>.</summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

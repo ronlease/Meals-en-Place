@@ -12,7 +12,7 @@
 //   Then the dictionary contains two separate entries
 //
 // Scenario: Failed conversion — item is skipped
-//   Given an inventory item whose UOM conversion fails
+//   Given an inventory item whose unit of measure conversion fails
 //   When ConvertToBaseUnitsAsync is called
 //   Then that item is omitted from the result
 //
@@ -32,7 +32,7 @@ public class InventoryBaseHelperTests
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
-    private readonly Mock<IUomConversionService> _conversionServiceMock = new(MockBehavior.Strict);
+    private readonly Mock<IUnitOfMeasureConversionService> _conversionServiceMock = new(MockBehavior.Strict);
 
     // ── ConvertToBaseUnitsAsync — successful conversions ──────────────────────
 
@@ -41,13 +41,13 @@ public class InventoryBaseHelperTests
     {
         // Arrange
         var ingredientId = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var items = new List<InventoryItem>
         {
-            BuildInventoryItem(ingredientId, uomId, 100m),
-            BuildInventoryItem(ingredientId, uomId, 200m)
+            BuildInventoryItem(ingredientId, unitOfMeasureId, 100m),
+            BuildInventoryItem(ingredientId, unitOfMeasureId, 200m)
         };
-        SetupSuccessfulConversion(uomId, 1.0m, UomType.Weight);
+        SetupSuccessfulConversion(unitOfMeasureId, 1.0m, UnitOfMeasureType.Weight);
 
         // Act
         var result = await InventoryBaseHelper.ConvertToBaseUnitsAsync(
@@ -63,14 +63,14 @@ public class InventoryBaseHelperTests
     {
         // Arrange
         var ingredientId = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var items = new List<InventoryItem>
         {
-            BuildInventoryItem(ingredientId, uomId, 100m),
-            BuildInventoryItem(ingredientId, uomId, 200m)
+            BuildInventoryItem(ingredientId, unitOfMeasureId, 100m),
+            BuildInventoryItem(ingredientId, unitOfMeasureId, 200m)
         };
         _conversionServiceMock
-            .SetupSequence(s => s.ConvertToBaseUnitsAsync(It.IsAny<decimal>(), uomId, It.IsAny<CancellationToken>()))
+            .SetupSequence(s => s.ConvertToBaseUnitsAsync(It.IsAny<decimal>(), unitOfMeasureId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ConversionResult.Ok(100m, "g", "g"))
             .ReturnsAsync(ConversionResult.Ok(200m, "g", "g"));
 
@@ -89,13 +89,13 @@ public class InventoryBaseHelperTests
         // Arrange
         var ingredientId1 = Guid.NewGuid();
         var ingredientId2 = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var items = new List<InventoryItem>
         {
-            BuildInventoryItem(ingredientId1, uomId, 50m),
-            BuildInventoryItem(ingredientId2, uomId, 75m)
+            BuildInventoryItem(ingredientId1, unitOfMeasureId, 50m),
+            BuildInventoryItem(ingredientId2, unitOfMeasureId, 75m)
         };
-        SetupSuccessfulConversion(uomId, 1.0m, UomType.Weight);
+        SetupSuccessfulConversion(unitOfMeasureId, 1.0m, UnitOfMeasureType.Weight);
 
         // Act
         var result = await InventoryBaseHelper.ConvertToBaseUnitsAsync(
@@ -114,14 +114,14 @@ public class InventoryBaseHelperTests
     {
         // Arrange
         var ingredientId = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var items = new List<InventoryItem>
         {
-            BuildInventoryItem(ingredientId, uomId, 100m)
+            BuildInventoryItem(ingredientId, unitOfMeasureId, 100m)
         };
         _conversionServiceMock
-            .Setup(s => s.ConvertToBaseUnitsAsync(100m, uomId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ConversionResult.NotFound(uomId));
+            .Setup(s => s.ConvertToBaseUnitsAsync(100m, unitOfMeasureId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ConversionResult.NotFound(unitOfMeasureId));
 
         // Act
         var result = await InventoryBaseHelper.ConvertToBaseUnitsAsync(
@@ -136,19 +136,19 @@ public class InventoryBaseHelperTests
     {
         // Arrange
         var ingredientId = Guid.NewGuid();
-        var goodUomId = Guid.NewGuid();
-        var badUomId = Guid.NewGuid();
+        var goodUnitOfMeasureId = Guid.NewGuid();
+        var badUnitOfMeasureId = Guid.NewGuid();
         var items = new List<InventoryItem>
         {
-            BuildInventoryItem(ingredientId, goodUomId, 100m),
-            BuildInventoryItem(ingredientId, badUomId, 200m)
+            BuildInventoryItem(ingredientId, goodUnitOfMeasureId, 100m),
+            BuildInventoryItem(ingredientId, badUnitOfMeasureId, 200m)
         };
         _conversionServiceMock
-            .Setup(s => s.ConvertToBaseUnitsAsync(100m, goodUomId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ConvertToBaseUnitsAsync(100m, goodUnitOfMeasureId, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ConversionResult.Ok(100m, "g", "g"));
         _conversionServiceMock
-            .Setup(s => s.ConvertToBaseUnitsAsync(200m, badUomId, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(ConversionResult.NotFound(badUomId));
+            .Setup(s => s.ConvertToBaseUnitsAsync(200m, badUnitOfMeasureId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(ConversionResult.NotFound(badUnitOfMeasureId));
 
         // Act
         var result = await InventoryBaseHelper.ConvertToBaseUnitsAsync(
@@ -167,13 +167,13 @@ public class InventoryBaseHelperTests
     {
         // Arrange
         var ingredientId = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var expiry = DateOnly.FromDateTime(DateTime.Today.AddDays(3));
         var items = new List<InventoryItem>
         {
-            BuildInventoryItemWithExpiry(ingredientId, uomId, 100m, expiry)
+            BuildInventoryItemWithExpiry(ingredientId, unitOfMeasureId, 100m, expiry)
         };
-        SetupSuccessfulConversion(uomId, 1.0m, UomType.Weight);
+        SetupSuccessfulConversion(unitOfMeasureId, 1.0m, UnitOfMeasureType.Weight);
 
         // Act
         var result = await InventoryBaseHelper.ConvertToBaseUnitsAsync(
@@ -196,19 +196,19 @@ public class InventoryBaseHelperTests
 
     // ── Builder helpers ───────────────────────────────────────────────────────
 
-    private static InventoryItem BuildInventoryItem(Guid ingredientId, Guid uomId, decimal quantity) =>
-        BuildInventoryItemWithExpiry(ingredientId, uomId, quantity, null);
+    private static InventoryItem BuildInventoryItem(Guid ingredientId, Guid unitOfMeasureId, decimal quantity) =>
+        BuildInventoryItemWithExpiry(ingredientId, unitOfMeasureId, quantity, null);
 
     private static InventoryItem BuildInventoryItemWithExpiry(
-        Guid ingredientId, Guid uomId, decimal quantity, DateOnly? expiry)
+        Guid ingredientId, Guid unitOfMeasureId, decimal quantity, DateOnly? expiry)
     {
-        var uom = new UnitOfMeasure
+        var unitOfMeasure = new UnitOfMeasure
         {
             Abbreviation = "g",
             ConversionFactor = 1.0m,
-            Id = uomId,
+            Id = unitOfMeasureId,
             Name = "gram",
-            UomType = UomType.Weight
+            UnitOfMeasureType = UnitOfMeasureType.Weight
         };
 
         return new InventoryItem
@@ -216,7 +216,7 @@ public class InventoryBaseHelperTests
             CanonicalIngredient = new CanonicalIngredient
             {
                 Category = IngredientCategory.Other,
-                DefaultUomId = uomId,
+                DefaultUnitOfMeasureId = unitOfMeasureId,
                 Id = ingredientId,
                 Name = "Test Ingredient"
             },
@@ -225,16 +225,16 @@ public class InventoryBaseHelperTests
             Id = Guid.NewGuid(),
             Location = StorageLocation.Pantry,
             Quantity = quantity,
-            Uom = uom,
-            UomId = uomId
+            UnitOfMeasure = unitOfMeasure,
+            UnitOfMeasureId = unitOfMeasureId
         };
     }
 
-    private void SetupSuccessfulConversion(Guid uomId, decimal factor, UomType uomType)
+    private void SetupSuccessfulConversion(Guid unitOfMeasureId, decimal factor, UnitOfMeasureType unitOfMeasureType)
     {
         _conversionServiceMock
-            .Setup(s => s.ConvertToBaseUnitsAsync(It.IsAny<decimal>(), uomId, It.IsAny<CancellationToken>()))
+            .Setup(s => s.ConvertToBaseUnitsAsync(It.IsAny<decimal>(), unitOfMeasureId, It.IsAny<CancellationToken>()))
             .ReturnsAsync((decimal qty, Guid _, CancellationToken _) =>
-                ConversionResult.Ok(qty * factor, "g", uomType == UomType.Volume ? "ml" : "g"));
+                ConversionResult.Ok(qty * factor, "g", unitOfMeasureType == UnitOfMeasureType.Volume ? "ml" : "g"));
     }
 }

@@ -29,7 +29,7 @@ Manages pantry, fridge, and freezer inventory items with container reference det
 ## Files
 
 - `InventoryController.cs` — REST endpoints for inventory CRUD
-- `ReferenceDataController.cs` — Read-only endpoints for canonical ingredients and UOMs
+- `ReferenceDataController.cs` — Read-only endpoints for canonical ingredients and units of measure
 - `IInventoryService.cs` / `InventoryService.cs` — Business logic with container detection
 - `IInventoryRepository.cs` / `InventoryRepository.cs` — EF Core data access
 - `AddInventoryItemRequest.cs` — Request DTO for creating items
@@ -38,4 +38,4 @@ Manages pantry, fridge, and freezer inventory items with container reference det
 - `ContainerReferenceDetectedResponse.cs` — Returned when container reference detected
 - `CanonicalIngredientDto.cs` — Ingredient reference data DTO
 - `CreateCanonicalIngredientRequest.cs` — Request for creating ingredients
-- `UnitOfMeasureDto.cs` — UOM reference data DTO
+- `UnitOfMeasureDto.cs` — Unit of measure reference data DTO

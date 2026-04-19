@@ -97,7 +97,7 @@ internal sealed class CanonicalIngredientRegistry
         var newRow = new CanonicalIngredient
         {
             Category = IngestConstants.DefaultCanonicalIngredientCategory,
-            DefaultUomId = _defaultUnitOfMeasureId,
+            DefaultUnitOfMeasureId = _defaultUnitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = trimmed
         };

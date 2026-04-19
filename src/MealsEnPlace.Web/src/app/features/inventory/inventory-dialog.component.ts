@@ -40,7 +40,7 @@ export interface InventoryDialogData {
 
 interface ContainerForm {
   declaredQuantity: FormControl<number | null>;
-  declaredUomId: FormControl<string>;
+  declaredUnitOfMeasureId: FormControl<string>;
 }
 
 interface InventoryForm {
@@ -49,7 +49,7 @@ interface InventoryForm {
   location: FormControl<InventoryLocation>;
   notes: FormControl<string>;
   quantity: FormControl<number | null>;
-  uomId: FormControl<string>;
+  unitOfMeasureId: FormControl<string>;
 }
 
 @Component({
@@ -131,15 +131,15 @@ interface InventoryForm {
               }
             </mat-form-field>
 
-            <mat-form-field appearance="outline" class="uom-field">
-              <mat-label>UOM</mat-label>
-              <mat-select formControlName="uomId">
+            <mat-form-field appearance="outline" class="unit-of-measure-field">
+              <mat-label>Unit of Measure</mat-label>
+              <mat-select formControlName="unitOfMeasureId">
                 @for (unit of units(); track unit.id) {
                   <mat-option [value]="unit.id">{{ unit.abbreviation }}</mat-option>
                 }
               </mat-select>
-              @if (inventoryForm.controls.uomId.hasError('required')) {
-                <mat-error>UOM is required</mat-error>
+              @if (inventoryForm.controls.unitOfMeasureId.hasError('required')) {
+                <mat-error>Unit of measure is required</mat-error>
               }
             </mat-form-field>
           </div>
@@ -191,15 +191,15 @@ interface InventoryForm {
                   }
                 </mat-form-field>
 
-                <mat-form-field appearance="outline" class="uom-field">
-                  <mat-label>UOM</mat-label>
-                  <mat-select formControlName="declaredUomId">
+                <mat-form-field appearance="outline" class="unit-of-measure-field">
+                  <mat-label>Unit of Measure</mat-label>
+                  <mat-select formControlName="declaredUnitOfMeasureId">
                     @for (unit of units(); track unit.id) {
                       <mat-option [value]="unit.id">{{ unit.abbreviation }}</mat-option>
                     }
                   </mat-select>
-                  @if (containerForm.controls.declaredUomId.hasError('required')) {
-                    <mat-error>UOM is required</mat-error>
+                  @if (containerForm.controls.declaredUnitOfMeasureId.hasError('required')) {
+                    <mat-error>Unit of measure is required</mat-error>
                   }
                 </mat-form-field>
               </div>
@@ -251,7 +251,7 @@ interface InventoryForm {
         flex: 1;
       }
 
-      .uom-field {
+      .unit-of-measure-field {
         flex: 1;
       }
 
@@ -333,7 +333,7 @@ export class InventoryDialogComponent implements OnInit {
         Validators.required,
         Validators.min(0.001),
       ]),
-      declaredUomId: new FormControl<string>('', {
+      declaredUnitOfMeasureId: new FormControl<string>('', {
         nonNullable: true,
         validators: [Validators.required],
       }),
@@ -354,7 +354,7 @@ export class InventoryDialogComponent implements OnInit {
         Validators.required,
         Validators.min(0.001),
       ]),
-      uomId: new FormControl<string>('', {
+      unitOfMeasureId: new FormControl<string>('', {
         nonNullable: true,
         validators: [Validators.required],
       }),
@@ -390,10 +390,10 @@ export class InventoryDialogComponent implements OnInit {
     const name = this.inventoryForm.controls.canonicalIngredientName.value.trim();
     if (!name) return;
 
-    const defaultUomId = this.units()[0]?.id ?? '';
+    const defaultUnitOfMeasureId = this.units()[0]?.id ?? '';
     this.loading.set(true);
     this.referenceDataService
-      .createIngredient({ category: 'Other', defaultUomId, name })
+      .createIngredient({ category: 'Other', defaultUnitOfMeasureId, name })
       .subscribe({
         error: (err: HttpErrorResponse) => {
           this.loading.set(false);
@@ -462,7 +462,7 @@ export class InventoryDialogComponent implements OnInit {
         location: item.location,
         notes: item.notes ?? '',
         quantity: item.quantity,
-        uomId: item.uomId,
+        unitOfMeasureId: item.unitOfMeasureId,
       });
       this.selectedIngredientId.set(item.canonicalIngredientId);
     } else {
@@ -472,20 +472,20 @@ export class InventoryDialogComponent implements OnInit {
 
   private buildAddRequest(
     declaredQuantity?: number | null,
-    declaredUomId?: string | null
+    declaredUnitOfMeasureId?: string | null
   ): AddInventoryItemRequest {
     const v = this.inventoryForm.getRawValue();
     return {
       canonicalIngredientId: this.selectedIngredientId()!,
       declaredQuantity: declaredQuantity ?? null,
-      declaredUomId: declaredUomId ?? null,
+      declaredUnitOfMeasureId: declaredUnitOfMeasureId ?? null,
       expiryDate: v.expiryDate
         ? v.expiryDate.toISOString().substring(0, 10)
         : null,
       location: v.location,
       notes: v.notes,
       quantity: v.quantity!,
-      uomId: v.uomId,
+      unitOfMeasureId: v.unitOfMeasureId,
     };
   }
 
@@ -527,7 +527,7 @@ export class InventoryDialogComponent implements OnInit {
         location: v.location,
         notes: v.notes,
         quantity: v.quantity!,
-        uomId: v.uomId,
+        unitOfMeasureId: v.unitOfMeasureId,
       })
       .subscribe({
         error: (err: HttpErrorResponse) => {
@@ -549,7 +549,7 @@ export class InventoryDialogComponent implements OnInit {
   private submitWithContainerDeclaration(): void {
     this.loading.set(true);
     const cv = this.containerForm.getRawValue();
-    const request = this.buildAddRequest(cv.declaredQuantity, cv.declaredUomId);
+    const request = this.buildAddRequest(cv.declaredQuantity, cv.declaredUnitOfMeasureId);
     this.inventoryService.addItem(request).subscribe({
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);

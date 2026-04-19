@@ -1,13 +1,13 @@
 export interface CanonicalIngredientDto {
   category: string;
-  defaultUomId: string;
+  defaultUnitOfMeasureId: string;
   id: string;
   name: string;
 }
 
 export interface CreateIngredientRequest {
   category: string;
-  defaultUomId: string;
+  defaultUnitOfMeasureId: string;
   name: string;
 }
 
@@ -17,18 +17,18 @@ export interface UnitOfMeasureDto {
   abbreviation: string;
   id: string;
   name: string;
-  uomType: string;
+  unitOfMeasureType: string;
 }
 
 export interface AddInventoryItemRequest {
   canonicalIngredientId: string;
   declaredQuantity?: number | null;
-  declaredUomId?: string | null;
+  declaredUnitOfMeasureId?: string | null;
   expiryDate: string | null;
   location: InventoryLocation;
   notes: string;
   quantity: number;
-  uomId: string;
+  unitOfMeasureId: string;
 }
 
 export interface ContainerReferenceDetectedResponse {
@@ -45,8 +45,8 @@ export interface InventoryItemResponse {
   location: InventoryLocation;
   notes: string | null;
   quantity: number;
-  uomAbbreviation: string;
-  uomId: string;
+  unitOfMeasureAbbreviation: string;
+  unitOfMeasureId: string;
 }
 
 export interface UpdateInventoryItemRequest {
@@ -54,5 +54,5 @@ export interface UpdateInventoryItemRequest {
   location: InventoryLocation;
   notes?: string | null;
   quantity: number;
-  uomId: string;
+  unitOfMeasureId: string;
 }

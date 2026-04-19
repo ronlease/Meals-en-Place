@@ -12,8 +12,8 @@ namespace MealsEnPlace.Api.Features.Recipes;
 public class RecipeMatchingService(
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
-    IUomConversionService uomConversionService,
-    UomDisplayConverter uomDisplayConverter) : IRecipeMatchingService
+    IUnitOfMeasureConversionService unitOfMeasureConversionService,
+    UnitOfMeasureDisplayConverter unitOfMeasureDisplayConverter) : IRecipeMatchingService
 {
     private const int NearMatchClaudeLimit = 10;
     private const int WasteBonusDays = 3;
@@ -23,7 +23,7 @@ public class RecipeMatchingService(
     public async Task<RecipeMatchResponse> MatchRecipesAsync(RecipeMatchRequest request, CancellationToken cancellationToken = default)
     {
         var inventory = await InventoryBaseHelper.LoadInventoryAsync(dbContext, cancellationToken);
-        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, uomConversionService, cancellationToken);
+        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, unitOfMeasureConversionService, cancellationToken);
         var candidates = await LoadCandidateRecipesAsync(request, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
@@ -64,13 +64,13 @@ public class RecipeMatchingService(
         {
             var recipe = await dbContext.Recipes.AsNoTracking()
                 .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
-                .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+                .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
                 .FirstOrDefaultAsync(r => r.Id == dto.RecipeId, cancellationToken);
 
             if (recipe is null) { enriched.Add(dto); continue; }
 
             var missingForClaude = dto.MissingIngredients
-                .Select(m => new MissingIngredient { CanonicalIngredientName = m.IngredientName, RequiredQuantity = m.RequiredQuantity, RequiredUom = m.RequiredUom })
+                .Select(m => new MissingIngredient { CanonicalIngredientName = m.IngredientName, RequiredQuantity = m.RequiredQuantity, RequiredUnitOfMeasure = m.RequiredUnitOfMeasure })
                 .ToList();
 
             IReadOnlyList<SubstitutionSuggestion> suggestions;
@@ -89,7 +89,7 @@ public class RecipeMatchingService(
         var query = dbContext.Recipes.AsNoTracking()
             .Include(r => r.DietaryTags)
             .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient).ThenInclude(ci => ci.SeasonalityWindows)
-            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
             .Where(r => r.RecipeIngredients.All(ri => ri.IsContainerResolved) && r.RecipeIngredients.Any());
 
         if (!string.IsNullOrWhiteSpace(request.Cuisine))
@@ -130,15 +130,15 @@ public class RecipeMatchingService(
 
         foreach (var ri in recipe.RecipeIngredients)
         {
-            if (ri.UomId is null || ri.Uom is null) { missing.Add(await BuildMissingDtoAsync(ri, cancellationToken)); continue; }
+            if (ri.UnitOfMeasureId is null || ri.UnitOfMeasure is null) { missing.Add(await BuildMissingDtoAsync(ri, cancellationToken)); continue; }
 
-            var conv = await uomConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UomId.Value, cancellationToken);
+            var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UnitOfMeasureId.Value, cancellationToken);
             if (!conv.Success) { missing.Add(await BuildMissingDtoAsync(ri, cancellationToken)); continue; }
 
             if (!inventoryBase.TryGetValue(ri.CanonicalIngredientId, out var entries))
             { missing.Add(await BuildMissingDtoAsync(ri, cancellationToken)); continue; }
 
-            var compatible = entries.Where(e => e.UomType == ri.Uom.UomType).ToList();
+            var compatible = entries.Where(e => e.UnitOfMeasureType == ri.UnitOfMeasure.UnitOfMeasureType).ToList();
             var totalAvailable = compatible.Sum(e => e.BaseQuantity);
 
             if (totalAvailable < conv.ConvertedQuantity)
@@ -147,17 +147,17 @@ public class RecipeMatchingService(
             var isExpiring = compatible.Any(e => e.ExpiryDate.HasValue && e.ExpiryDate.Value <= today.AddDays(WasteBonusDays));
             if (isExpiring) wasteBonus += WasteBonusPerIngredient;
 
-            var (dispReq, reqUom) = await uomDisplayConverter.ConvertAsync(conv.ConvertedQuantity, ri.Uom.UomType, cancellationToken);
-            var (dispAvail, availUom) = await uomDisplayConverter.ConvertAsync(totalAvailable, ri.Uom.UomType, cancellationToken);
+            var (dispReq, reqUnitOfMeasure) = await unitOfMeasureDisplayConverter.ConvertAsync(conv.ConvertedQuantity, ri.UnitOfMeasure.UnitOfMeasureType, cancellationToken);
+            var (dispAvail, availUnitOfMeasure) = await unitOfMeasureDisplayConverter.ConvertAsync(totalAvailable, ri.UnitOfMeasure.UnitOfMeasureType, cancellationToken);
 
             matched.Add(new MatchedIngredientDto
             {
                 AvailableQuantity = dispAvail,
-                AvailableUom = availUom,
+                AvailableUnitOfMeasure = availUnitOfMeasure,
                 IngredientName = ri.CanonicalIngredient.Name,
                 IsExpiryImminent = isExpiring,
                 RequiredQuantity = dispReq,
-                RequiredUom = reqUom
+                RequiredUnitOfMeasure = reqUnitOfMeasure
             });
         }
 
@@ -188,14 +188,14 @@ public class RecipeMatchingService(
 
     private async Task<MissingIngredientDto> BuildMissingDtoAsync(RecipeIngredient ri, CancellationToken cancellationToken)
     {
-        if (ri.UomId is null || ri.Uom is null)
-            return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = ri.Quantity, RequiredUom = string.Empty };
+        if (ri.UnitOfMeasureId is null || ri.UnitOfMeasure is null)
+            return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = ri.Quantity, RequiredUnitOfMeasure = string.Empty };
 
-        var conv = await uomConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UomId.Value, cancellationToken);
+        var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UnitOfMeasureId.Value, cancellationToken);
         if (!conv.Success)
-            return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = ri.Quantity, RequiredUom = ri.Uom.Abbreviation };
+            return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = ri.Quantity, RequiredUnitOfMeasure = ri.UnitOfMeasure.Abbreviation };
 
-        var (qty, uom) = await uomDisplayConverter.ConvertAsync(conv.ConvertedQuantity, ri.Uom.UomType, cancellationToken);
-        return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = qty, RequiredUom = uom };
+        var (qty, unitOfMeasure) = await unitOfMeasureDisplayConverter.ConvertAsync(conv.ConvertedQuantity, ri.UnitOfMeasure.UnitOfMeasureType, cancellationToken);
+        return new MissingIngredientDto { IngredientName = ri.CanonicalIngredient.Name, RequiredQuantity = qty, RequiredUnitOfMeasure = unitOfMeasure };
     }
 }

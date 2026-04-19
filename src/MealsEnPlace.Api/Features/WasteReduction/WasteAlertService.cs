@@ -34,7 +34,7 @@ public class WasteAlertService(MealsEnPlaceDbContext dbContext) : IWasteAlertSer
         // Find inventory items expiring within threshold that have an expiry date set
         var expiringItems = await dbContext.InventoryItems
             .Include(i => i.CanonicalIngredient)
-            .Include(i => i.Uom)
+            .Include(i => i.UnitOfMeasure)
             .Where(i => i.ExpiryDate.HasValue && i.ExpiryDate.Value <= threshold)
             .ToListAsync(cancellationToken);
 
@@ -108,7 +108,7 @@ public class WasteAlertService(MealsEnPlaceDbContext dbContext) : IWasteAlertSer
 
         var alerts = await dbContext.WasteAlerts
             .Include(a => a.InventoryItem).ThenInclude(i => i.CanonicalIngredient)
-            .Include(a => a.InventoryItem).ThenInclude(i => i.Uom)
+            .Include(a => a.InventoryItem).ThenInclude(i => i.UnitOfMeasure)
             .Where(a => a.DismissedAt == null)
             .OrderBy(a => a.ExpiryDate)
             .ToListAsync(cancellationToken);
@@ -140,7 +140,7 @@ public class WasteAlertService(MealsEnPlaceDbContext dbContext) : IWasteAlertSer
                 .OrderBy(r => r.Title)
                 .ToList(),
             Quantity = a.InventoryItem.Quantity,
-            UomAbbreviation = a.InventoryItem.Uom.Abbreviation
+            UnitOfMeasureAbbreviation = a.InventoryItem.UnitOfMeasure.Abbreviation
         }).ToList();
     }
 }

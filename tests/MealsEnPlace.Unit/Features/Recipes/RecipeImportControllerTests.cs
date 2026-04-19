@@ -169,7 +169,7 @@ public class RecipeImportControllerTests
         // Arrange
         var request = new CreateRecipeRequest
         {
-            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UomId = Guid.NewGuid() }],
+            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UnitOfMeasureId = Guid.NewGuid() }],
             Title = string.Empty
         };
 
@@ -187,7 +187,7 @@ public class RecipeImportControllerTests
         // Arrange
         var request = new CreateRecipeRequest
         {
-            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UomId = Guid.NewGuid() }],
+            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UnitOfMeasureId = Guid.NewGuid() }],
             Title = string.Empty
         };
 
@@ -206,7 +206,7 @@ public class RecipeImportControllerTests
         // Arrange
         var request = new CreateRecipeRequest
         {
-            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UomId = Guid.NewGuid() }],
+            Ingredients = [new CreateRecipeIngredientRequest { CanonicalIngredientId = Guid.NewGuid(), Quantity = 1, UnitOfMeasureId = Guid.NewGuid() }],
             Title = "   "
         };
 
@@ -588,7 +588,7 @@ public class RecipeImportControllerTests
                 {
                     CanonicalIngredientId = Guid.NewGuid(),
                     Quantity = 200,
-                    UomId = Guid.NewGuid()
+                    UnitOfMeasureId = Guid.NewGuid()
                 }
             ],
             Instructions = "Cook it.",

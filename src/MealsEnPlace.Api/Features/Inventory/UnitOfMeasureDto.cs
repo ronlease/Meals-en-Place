@@ -17,5 +17,5 @@ public class UnitOfMeasureDto
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Dimensional type of this unit.</summary>
-    public UomType UomType { get; set; }
+    public UnitOfMeasureType UnitOfMeasureType { get; set; }
 }

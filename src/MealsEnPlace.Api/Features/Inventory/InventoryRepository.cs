@@ -18,10 +18,10 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
         dbContext.InventoryItems.Add(item);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        // Reload with navigation properties so the caller has Uom and CanonicalIngredient populated.
+        // Reload with navigation properties so the caller has UnitOfMeasure and CanonicalIngredient populated.
         return (await dbContext.InventoryItems
             .Include(ii => ii.CanonicalIngredient)
-            .Include(ii => ii.Uom)
+            .Include(ii => ii.UnitOfMeasure)
             .FirstAsync(ii => ii.Id == item.Id, cancellationToken));
     }
 
@@ -45,7 +45,7 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
     {
         return await dbContext.InventoryItems
             .Include(ii => ii.CanonicalIngredient)
-            .Include(ii => ii.Uom)
+            .Include(ii => ii.UnitOfMeasure)
             .FirstOrDefaultAsync(ii => ii.Id == id, cancellationToken);
     }
 
@@ -56,7 +56,7 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
     {
         var query = dbContext.InventoryItems
             .Include(ii => ii.CanonicalIngredient)
-            .Include(ii => ii.Uom)
+            .Include(ii => ii.UnitOfMeasure)
             .AsQueryable();
 
         if (location.HasValue)
@@ -77,7 +77,7 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
     {
         var item = await dbContext.InventoryItems
             .Include(ii => ii.CanonicalIngredient)
-            .Include(ii => ii.Uom)
+            .Include(ii => ii.UnitOfMeasure)
             .FirstOrDefaultAsync(ii => ii.Id == id, cancellationToken);
 
         if (item is null)
@@ -89,7 +89,7 @@ public class InventoryRepository(MealsEnPlaceDbContext dbContext) : IInventoryRe
         item.Location = request.Location;
         item.Notes = InputSanitizer.SanitizeForStorage(request.Notes, 500);
         item.Quantity = request.Quantity;
-        item.UomId = request.UomId;
+        item.UnitOfMeasureId = request.UnitOfMeasureId;
 
         await dbContext.SaveChangesAsync(cancellationToken);
         return item;

@@ -18,7 +18,7 @@ public interface IInventoryService
     /// </para>
     /// <para>
     /// When <see cref="AddInventoryItemRequest.DeclaredQuantity"/> and
-    /// <see cref="AddInventoryItemRequest.DeclaredUomId"/> are provided, the container
+    /// <see cref="AddInventoryItemRequest.DeclaredUnitOfMeasureId"/> are provided, the container
     /// size has already been declared by the user and the item is created directly.
     /// </para>
     /// </summary>

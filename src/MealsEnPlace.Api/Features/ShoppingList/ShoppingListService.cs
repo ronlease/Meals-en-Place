@@ -11,15 +11,15 @@ namespace MealsEnPlace.Api.Features.ShoppingList;
 /// </summary>
 public class ShoppingListService(
     MealsEnPlaceDbContext dbContext,
-    IUomConversionService uomConversionService,
-    UomDisplayConverter uomDisplayConverter) : IShoppingListService
+    IUnitOfMeasureConversionService unitOfMeasureConversionService,
+    UnitOfMeasureDisplayConverter unitOfMeasureDisplayConverter) : IShoppingListService
 {
     /// <inheritdoc />
     public async Task<List<ShoppingListItemResponse>> AddFromRecipeAsync(
         Guid recipeId, CancellationToken cancellationToken = default)
     {
         var recipe = await dbContext.Recipes
-            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
             .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
             .FirstOrDefaultAsync(r => r.Id == recipeId, cancellationToken);
 
@@ -27,13 +27,13 @@ public class ShoppingListService(
 
         // Load current inventory in base units
         var inventory = await dbContext.InventoryItems
-            .Include(i => i.Uom)
+            .Include(i => i.UnitOfMeasure)
             .ToListAsync(cancellationToken);
 
         var available = new Dictionary<Guid, decimal>();
         foreach (var item in inventory)
         {
-            var conv = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
+            var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UnitOfMeasureId, cancellationToken);
             if (!conv.Success) continue;
             available[item.CanonicalIngredientId] = available.GetValueOrDefault(item.CanonicalIngredientId) + conv.ConvertedQuantity;
         }
@@ -45,18 +45,18 @@ public class ShoppingListService(
 
         var existingByIngredient = existingStandalone.ToDictionary(sli => sli.CanonicalIngredientId);
 
-        // Determine base UOM IDs
-        var baseUoms = await dbContext.UnitsOfMeasure
-            .Where(u => u.BaseUomId == null)
-            .ToDictionaryAsync(u => u.UomType, cancellationToken);
+        // Determine base unit of measure IDs
+        var baseUnitOfMeasures = await dbContext.UnitsOfMeasure
+            .Where(u => u.BaseUnitOfMeasureId == null)
+            .ToDictionaryAsync(u => u.UnitOfMeasureType, cancellationToken);
 
         foreach (var ri in recipe.RecipeIngredients)
         {
-            if (ri.UomId is null || ri.Uom is null) continue;
+            if (ri.UnitOfMeasureId is null || ri.UnitOfMeasure is null) continue;
 
-            var conv = await uomConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UomId.Value, cancellationToken);
+            var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UnitOfMeasureId.Value, cancellationToken);
             if (!conv.Success) continue;
-            if (!baseUoms.TryGetValue(ri.Uom.UomType, out var baseUom)) continue;
+            if (!baseUnitOfMeasures.TryGetValue(ri.UnitOfMeasure.UnitOfMeasureType, out var baseUnitOfMeasure)) continue;
 
             // Check if we already have enough in inventory
             var avail = available.GetValueOrDefault(ri.CanonicalIngredientId);
@@ -81,7 +81,7 @@ public class ShoppingListService(
                     Id = Guid.NewGuid(),
                     MealPlanId = null,
                     Quantity = deficit,
-                    UomId = baseUom.Id
+                    UnitOfMeasureId = baseUnitOfMeasure.Id
                 };
                 dbContext.ShoppingListItems.Add(newItem);
                 existingByIngredient[ri.CanonicalIngredientId] = newItem;
@@ -100,7 +100,7 @@ public class ShoppingListService(
         Guid mealPlanId, CancellationToken cancellationToken = default)
     {
         var plan = await dbContext.MealPlans
-            .Include(mp => mp.Slots).ThenInclude(s => s.Recipe).ThenInclude(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(mp => mp.Slots).ThenInclude(s => s.Recipe).ThenInclude(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
             .Include(mp => mp.Slots).ThenInclude(s => s.Recipe).ThenInclude(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
             .FirstOrDefaultAsync(mp => mp.Id == mealPlanId, cancellationToken);
 
@@ -113,9 +113,9 @@ public class ShoppingListService(
         {
             foreach (var ri in slot.Recipe.RecipeIngredients)
             {
-                if (ri.UomId is null || ri.Uom is null) continue;
+                if (ri.UnitOfMeasureId is null || ri.UnitOfMeasure is null) continue;
 
-                var conv = await uomConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UomId.Value, cancellationToken);
+                var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(ri.Quantity, ri.UnitOfMeasureId.Value, cancellationToken);
                 if (!conv.Success) continue;
 
                 if (!required.TryGetValue(ri.CanonicalIngredientId, out var entry))
@@ -124,7 +124,7 @@ public class ShoppingListService(
                     {
                         BaseQuantity = 0m,
                         CanonicalIngredient = ri.CanonicalIngredient,
-                        UomType = ri.Uom.UomType
+                        UnitOfMeasureType = ri.UnitOfMeasure.UnitOfMeasureType
                     };
                     required[ri.CanonicalIngredientId] = entry;
                 }
@@ -134,13 +134,13 @@ public class ShoppingListService(
 
         // Load current inventory and aggregate available per ingredient in base units
         var inventory = await dbContext.InventoryItems
-            .Include(i => i.Uom)
+            .Include(i => i.UnitOfMeasure)
             .ToListAsync(cancellationToken);
 
         var available = new Dictionary<Guid, decimal>();
         foreach (var item in inventory)
         {
-            var conv = await uomConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UomId, cancellationToken);
+            var conv = await unitOfMeasureConversionService.ConvertToBaseUnitsAsync(item.Quantity, item.UnitOfMeasureId, cancellationToken);
             if (!conv.Success) continue;
 
             if (!available.TryGetValue(item.CanonicalIngredientId, out var total))
@@ -155,10 +155,10 @@ public class ShoppingListService(
             .ToListAsync(cancellationToken);
         dbContext.ShoppingListItems.RemoveRange(existing);
 
-        // Determine base UOM IDs
-        var baseUoms = await dbContext.UnitsOfMeasure
-            .Where(u => u.BaseUomId == null)
-            .ToDictionaryAsync(u => u.UomType, cancellationToken);
+        // Determine base unit of measure IDs
+        var baseUnitOfMeasures = await dbContext.UnitsOfMeasure
+            .Where(u => u.BaseUnitOfMeasureId == null)
+            .ToDictionaryAsync(u => u.UnitOfMeasureType, cancellationToken);
 
         var newItems = new List<ShoppingListItem>();
         foreach (var (ingredientId, req) in required)
@@ -167,7 +167,7 @@ public class ShoppingListService(
             var deficit = req.BaseQuantity - avail;
             if (deficit <= 0m) continue;
 
-            if (!baseUoms.TryGetValue(req.UomType, out var baseUom)) continue;
+            if (!baseUnitOfMeasures.TryGetValue(req.UnitOfMeasureType, out var baseUnitOfMeasure)) continue;
 
             newItems.Add(new ShoppingListItem
             {
@@ -175,7 +175,7 @@ public class ShoppingListService(
                 Id = Guid.NewGuid(),
                 MealPlanId = mealPlanId,
                 Quantity = deficit,
-                UomId = baseUom.Id
+                UnitOfMeasureId = baseUnitOfMeasure.Id
             });
         }
 
@@ -191,7 +191,7 @@ public class ShoppingListService(
     {
         var items = await dbContext.ShoppingListItems
             .Include(sli => sli.CanonicalIngredient)
-            .Include(sli => sli.Uom)
+            .Include(sli => sli.UnitOfMeasure)
             .Where(sli => sli.MealPlanId == mealPlanId)
             .OrderBy(sli => sli.CanonicalIngredient.Category)
             .ThenBy(sli => sli.CanonicalIngredient.Name)
@@ -206,7 +206,7 @@ public class ShoppingListService(
     {
         var items = await dbContext.ShoppingListItems
             .Include(sli => sli.CanonicalIngredient)
-            .Include(sli => sli.Uom)
+            .Include(sli => sli.UnitOfMeasure)
             .Where(sli => sli.MealPlanId == null)
             .OrderBy(sli => sli.CanonicalIngredient.Category)
             .ThenBy(sli => sli.CanonicalIngredient.Name)
@@ -221,8 +221,8 @@ public class ShoppingListService(
         var result = new List<ShoppingListItemResponse>();
         foreach (var item in items)
         {
-            var (displayQty, displayAbbrev) = await uomDisplayConverter.ConvertAsync(
-                item.Quantity, item.Uom.UomType, cancellationToken);
+            var (displayQty, displayAbbrev) = await unitOfMeasureDisplayConverter.ConvertAsync(
+                item.Quantity, item.UnitOfMeasure.UnitOfMeasureType, cancellationToken);
 
             result.Add(new ShoppingListItemResponse
             {
@@ -231,7 +231,7 @@ public class ShoppingListService(
                 Id = item.Id,
                 Notes = item.Notes,
                 Quantity = displayQty,
-                UomAbbreviation = displayAbbrev
+                UnitOfMeasureAbbreviation = displayAbbrev
             });
         }
         return result;
@@ -241,6 +241,6 @@ public class ShoppingListService(
     {
         public decimal BaseQuantity { get; set; }
         public required CanonicalIngredient CanonicalIngredient { get; init; }
-        public required UomType UomType { get; init; }
+        public required UnitOfMeasureType UnitOfMeasureType { get; init; }
     }
 }

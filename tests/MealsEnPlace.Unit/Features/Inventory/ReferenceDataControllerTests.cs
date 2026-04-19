@@ -5,8 +5,8 @@
 //   When POST /api/v1/reference-data/ingredients is called
 //   Then the response is 400 Bad Request
 //
-// Scenario: Create ingredient with UOM not found — returns 400 Bad Request
-//   Given a request with a DefaultUomId that does not exist in the database
+// Scenario: Create ingredient with unit of measure not found — returns 400 Bad Request
+//   Given a request with a DefaultUnitOfMeasureId that does not exist in the database
 //   When POST /api/v1/reference-data/ingredients is called
 //   Then the response is 400 Bad Request
 //
@@ -16,7 +16,7 @@
 //   Then the response is 409 Conflict
 //
 // Scenario: Create ingredient with valid request — returns 201 Created
-//   Given a valid request with a unique name and an existing DefaultUomId
+//   Given a valid request with a unique name and an existing DefaultUnitOfMeasureId
 //   When POST /api/v1/reference-data/ingredients is called
 //   Then the response is 201 Created with the new ingredient DTO
 //
@@ -66,7 +66,7 @@ public class ReferenceDataControllerTests : IDisposable
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = Guid.NewGuid(),
+            DefaultUnitOfMeasureId = Guid.NewGuid(),
             Name = string.Empty
         };
 
@@ -85,7 +85,7 @@ public class ReferenceDataControllerTests : IDisposable
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = Guid.NewGuid(),
+            DefaultUnitOfMeasureId = Guid.NewGuid(),
             Name = "   "
         };
 
@@ -97,16 +97,16 @@ public class ReferenceDataControllerTests : IDisposable
             .Which.StatusCode.Should().Be(400);
     }
 
-    // ── CreateIngredient — UOM not found ──────────────────────────────────────
+    // ── CreateIngredient — unit of measure not found ──────────────────────────────────────
 
     [Fact]
-    public async Task CreateIngredient_UomNotFound_Returns400BadRequest()
+    public async Task CreateIngredient_UnitOfMeasureNotFound_Returns400BadRequest()
     {
-        // Arrange — DefaultUomId references a UOM that does not exist in the DB
+        // Arrange — DefaultUnitOfMeasureId references a unit of measure that does not exist in the DB
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = Guid.NewGuid(),
+            DefaultUnitOfMeasureId = Guid.NewGuid(),
             Name = "Tomato"
         };
 
@@ -119,14 +119,14 @@ public class ReferenceDataControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task CreateIngredient_UomNotFound_ProblemDetailContainsUomId()
+    public async Task CreateIngredient_UnitOfMeasureNotFound_ProblemDetailContainsUnitOfMeasureId()
     {
         // Arrange
-        var missingUomId = Guid.NewGuid();
+        var missingUnitOfMeasureId = Guid.NewGuid();
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = missingUomId,
+            DefaultUnitOfMeasureId = missingUnitOfMeasureId,
             Name = "Tomato"
         };
 
@@ -136,7 +136,7 @@ public class ReferenceDataControllerTests : IDisposable
         // Assert
         var badRequest = result.Should().BeOfType<BadRequestObjectResult>().Subject;
         var problem = badRequest.Value.Should().BeOfType<ProblemDetails>().Subject;
-        problem.Detail.Should().Contain(missingUomId.ToString());
+        problem.Detail.Should().Contain(missingUnitOfMeasureId.ToString());
     }
 
     // ── CreateIngredient — duplicate name ─────────────────────────────────────
@@ -144,14 +144,14 @@ public class ReferenceDataControllerTests : IDisposable
     [Fact]
     public async Task CreateIngredient_DuplicateName_Returns409Conflict()
     {
-        // Arrange — seed a UOM and an existing ingredient
-        var uom = await SeedUomAsync();
-        await SeedIngredientAsync("Garlic", uom.Id);
+        // Arrange — seed a unit of measure and an existing ingredient
+        var unitOfMeasure = await SeedUnitOfMeasureAsync();
+        await SeedIngredientAsync("Garlic", unitOfMeasure.Id);
 
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Name = "Garlic"
         };
 
@@ -169,11 +169,11 @@ public class ReferenceDataControllerTests : IDisposable
     public async Task CreateIngredient_ValidRequest_Returns201Created()
     {
         // Arrange
-        var uom = await SeedUomAsync();
+        var unitOfMeasure = await SeedUnitOfMeasureAsync();
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Name = "Spinach"
         };
 
@@ -189,11 +189,11 @@ public class ReferenceDataControllerTests : IDisposable
     public async Task CreateIngredient_ValidRequest_ResponseBodyContainsIngredientDto()
     {
         // Arrange
-        var uom = await SeedUomAsync();
+        var unitOfMeasure = await SeedUnitOfMeasureAsync();
         var request = new CreateCanonicalIngredientRequest
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Name = "Kale"
         };
 
@@ -213,10 +213,10 @@ public class ReferenceDataControllerTests : IDisposable
     public async Task ListIngredients_IngredientsExist_Returns200WithOrderedList()
     {
         // Arrange
-        var uom = await SeedUomAsync();
-        await SeedIngredientAsync("Zucchini", uom.Id);
-        await SeedIngredientAsync("Apple", uom.Id);
-        await SeedIngredientAsync("Mango", uom.Id);
+        var unitOfMeasure = await SeedUnitOfMeasureAsync();
+        await SeedIngredientAsync("Zucchini", unitOfMeasure.Id);
+        await SeedIngredientAsync("Apple", unitOfMeasure.Id);
+        await SeedIngredientAsync("Mango", unitOfMeasure.Id);
 
         // Act
         var result = await _sut.ListIngredients(CancellationToken.None);
@@ -248,9 +248,9 @@ public class ReferenceDataControllerTests : IDisposable
     public async Task ListUnits_UnitsExist_Returns200WithOrderedList()
     {
         // Arrange
-        await SeedUomWithNameAsync("Teaspoon");
-        await SeedUomWithNameAsync("Cup");
-        await SeedUomWithNameAsync("Gram");
+        await SeedUnitOfMeasureWithNameAsync("Teaspoon");
+        await SeedUnitOfMeasureWithNameAsync("Cup");
+        await SeedUnitOfMeasureWithNameAsync("Gram");
 
         // Act
         var result = await _sut.ListUnits(CancellationToken.None);
@@ -278,12 +278,12 @@ public class ReferenceDataControllerTests : IDisposable
 
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
-    private async Task<CanonicalIngredient> SeedIngredientAsync(string name, Guid uomId)
+    private async Task<CanonicalIngredient> SeedIngredientAsync(string name, Guid unitOfMeasureId)
     {
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = uomId,
+            DefaultUnitOfMeasureId = unitOfMeasureId,
             Id = Guid.NewGuid(),
             Name = name
         };
@@ -292,23 +292,23 @@ public class ReferenceDataControllerTests : IDisposable
         return ingredient;
     }
 
-    private async Task<UnitOfMeasure> SeedUomAsync()
+    private async Task<UnitOfMeasure> SeedUnitOfMeasureAsync()
     {
-        return await SeedUomWithNameAsync("gram");
+        return await SeedUnitOfMeasureWithNameAsync("gram");
     }
 
-    private async Task<UnitOfMeasure> SeedUomWithNameAsync(string name)
+    private async Task<UnitOfMeasure> SeedUnitOfMeasureWithNameAsync(string name)
     {
-        var uom = new UnitOfMeasure
+        var unitOfMeasure = new UnitOfMeasure
         {
             Abbreviation = name[..1].ToLowerInvariant(),
             ConversionFactor = 1.0m,
             Id = Guid.NewGuid(),
             Name = name,
-            UomType = UomType.Weight
+            UnitOfMeasureType = UnitOfMeasureType.Weight
         };
-        _dbContext.UnitsOfMeasure.Add(uom);
+        _dbContext.UnitsOfMeasure.Add(unitOfMeasure);
         await _dbContext.SaveChangesAsync();
-        return uom;
+        return unitOfMeasure;
     }
 }

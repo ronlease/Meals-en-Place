@@ -3,7 +3,7 @@ namespace MealsEnPlace.Api.Models.Entities;
 /// <summary>
 /// A string variant that maps to a canonical <see cref="UnitOfMeasure"/>.
 /// Examples: "c.", "Tbsp.", "lbs" mapping to Cup, Tablespoon, Pound respectively.
-/// Consulted by <c>UomNormalizationService</c> after the abbreviation and name
+/// Consulted by <c>UnitOfMeasureNormalizationService</c> after the abbreviation and name
 /// lookups before falling back to the review queue.
 /// <para>
 /// No database-level uniqueness constraint on <see cref="Alias"/>. Recipe

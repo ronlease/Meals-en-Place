@@ -12,7 +12,7 @@ namespace MealsEnPlace.Tools.Ingest;
 /// database round-trips across a full 1.64M-row ingest run.
 /// <para>
 /// Applies the same deterministic resolution order as the runtime
-/// <see cref="UomNormalizationService"/>: abbreviation / name match, then
+/// <see cref="UnitOfMeasureNormalizationService"/>: abbreviation / name match, then
 /// alias match, then count-with-ingredient-noun fallback. When no step
 /// matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
 /// row via the supplied DbContext instead of invoking Claude.
@@ -115,7 +115,7 @@ internal sealed class InMemoryUnitOfMeasureResolver
     /// </summary>
     public IngestUnitOfMeasureResolution NormalizeOrDefer(string measureString, string ingredientName)
     {
-        var (quantity, unitToken) = UomTokenParser.Parse(measureString);
+        var (quantity, unitToken) = UnitOfMeasureTokenParser.Parse(measureString);
 
         // Step 1: abbreviation / name lookup. Mirror the runtime service by
         // trying the raw token and a plural-stripped variant so "cups" matches

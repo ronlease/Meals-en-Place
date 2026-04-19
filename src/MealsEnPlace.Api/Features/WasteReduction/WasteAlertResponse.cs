@@ -33,7 +33,7 @@ public record WasteAlertResponse
     public required decimal Quantity { get; init; }
 
     /// <summary>Display unit abbreviation.</summary>
-    public required string UomAbbreviation { get; init; }
+    public required string UnitOfMeasureAbbreviation { get; init; }
 }
 
 /// <summary>

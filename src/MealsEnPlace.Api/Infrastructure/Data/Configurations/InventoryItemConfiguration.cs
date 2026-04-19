@@ -30,9 +30,9 @@ public class InventoryItemConfiguration : IEntityTypeConfiguration<InventoryItem
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
-        builder.HasOne(ii => ii.Uom)
+        builder.HasOne(ii => ii.UnitOfMeasure)
             .WithMany()
-            .HasForeignKey(ii => ii.UomId)
+            .HasForeignKey(ii => ii.UnitOfMeasureId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
     }

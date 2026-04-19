@@ -29,7 +29,7 @@ public class RecipeIngredient
     public string? Notes { get; set; }
 
     /// <summary>
-    /// Resolved quantity in the unit specified by <see cref="UomId"/>.
+    /// Resolved quantity in the unit specified by <see cref="UnitOfMeasureId"/>.
     /// 0 for unresolved container references.
     /// </summary>
     public decimal Quantity { get; set; }
@@ -41,7 +41,7 @@ public class RecipeIngredient
     /// The unit of measure for <see cref="Quantity"/>. Null for unresolved
     /// container references.
     /// </summary>
-    public Guid? UomId { get; set; }
+    public Guid? UnitOfMeasureId { get; set; }
 
     // Navigation properties
 
@@ -52,5 +52,5 @@ public class RecipeIngredient
     public Recipe Recipe { get; set; } = null!;
 
     /// <summary>The unit of measure for this line's quantity.</summary>
-    public UnitOfMeasure? Uom { get; set; }
+    public UnitOfMeasure? UnitOfMeasure { get; set; }
 }

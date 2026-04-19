@@ -4,7 +4,7 @@ namespace MealsEnPlace.Api.Models.Entities;
 /// Dimensional type of a unit of measure. Cross-type conversions are never attempted
 /// without ingredient-specific density data.
 /// </summary>
-public enum UomType
+public enum UnitOfMeasureType
 {
     /// <summary>
     /// No fixed conversion exists. Requires user declaration before participating

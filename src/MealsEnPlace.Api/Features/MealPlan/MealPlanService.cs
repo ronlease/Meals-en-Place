@@ -13,7 +13,7 @@ namespace MealsEnPlace.Api.Features.MealPlan;
 public class MealPlanService(
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
-    IUomConversionService uomConversionService) : IMealPlanService
+    IUnitOfMeasureConversionService unitOfMeasureConversionService) : IMealPlanService
 {
     private const int ExpiryBonusDays = 3;
     private const decimal ExpiryBonusPerIngredient = 0.15m;
@@ -28,7 +28,7 @@ public class MealPlanService(
 
         // Load inventory in base units
         var inventory = await InventoryBaseHelper.LoadInventoryAsync(dbContext, cancellationToken);
-        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, uomConversionService, cancellationToken);
+        var inventoryBase = await InventoryBaseHelper.ConvertToBaseUnitsAsync(inventory, unitOfMeasureConversionService, cancellationToken);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
         // Load candidate recipes
@@ -233,7 +233,7 @@ public class MealPlanService(
         var query = dbContext.Recipes.AsNoTracking()
             .Include(r => r.DietaryTags)
             .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient).ThenInclude(ci => ci.SeasonalityWindows)
-            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
             .Where(r => r.RecipeIngredients.All(ri => ri.IsContainerResolved) && r.RecipeIngredients.Any());
 
         if (request.DietaryTags is { Count: > 0 })
@@ -294,7 +294,7 @@ public class MealPlanService(
         {
             if (inventoryBase.TryGetValue(ri.CanonicalIngredientId, out var entries))
             {
-                var compatible = entries.Where(e => ri.Uom != null && e.UomType == ri.Uom.UomType).ToList();
+                var compatible = entries.Where(e => ri.UnitOfMeasure != null && e.UnitOfMeasureType == ri.UnitOfMeasure.UnitOfMeasureType).ToList();
                 if (compatible.Sum(e => e.BaseQuantity) > 0)
                     matchedCount++;
 

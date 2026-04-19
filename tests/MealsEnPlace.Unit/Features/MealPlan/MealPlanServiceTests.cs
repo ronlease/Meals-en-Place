@@ -78,7 +78,7 @@ public class MealPlanServiceTests : IDisposable
             .Returns<IReadOnlyList<MealPlanSlotCandidate>, IReadOnlyList<InventoryItem>, CancellationToken>(
                 (candidates, _, _) => Task.FromResult(candidates));
 
-        var conversionService = new UomConversionService(_dbContext);
+        var conversionService = new UnitOfMeasureConversionService(_dbContext);
 
         _sut = new MealPlanService(
             _claudeServiceMock.Object,
@@ -96,29 +96,29 @@ public class MealPlanServiceTests : IDisposable
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
         _dbContext.SaveChanges();
     }
@@ -128,7 +128,7 @@ public class MealPlanServiceTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = EachId,
+            DefaultUnitOfMeasureId = EachId,
             Id = Guid.NewGuid(),
             Name = name
         };
@@ -140,7 +140,7 @@ public class MealPlanServiceTests : IDisposable
     private InventoryItem SeedInventoryItem(
         Guid canonicalIngredientId,
         decimal quantity,
-        Guid uomId,
+        Guid unitOfMeasureId,
         DateOnly? expiryDate = null)
     {
         var item = new InventoryItem
@@ -150,7 +150,7 @@ public class MealPlanServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Location = StorageLocation.Fridge,
             Quantity = quantity,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
         _dbContext.InventoryItems.Add(item);
         _dbContext.SaveChanges();
@@ -160,7 +160,7 @@ public class MealPlanServiceTests : IDisposable
     private Recipe SeedFullyResolvedRecipe(
         string title,
         string cuisineType,
-        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UomId)> ingredientLines,
+        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UnitOfMeasureId)> ingredientLines,
         List<DietaryTag>? dietaryTags = null)
     {
         var recipe = new Recipe
@@ -174,7 +174,7 @@ public class MealPlanServiceTests : IDisposable
         _dbContext.Recipes.Add(recipe);
         _dbContext.SaveChanges();
 
-        foreach (var (ingredientId, qty, uomId) in ingredientLines)
+        foreach (var (ingredientId, qty, unitOfMeasureId) in ingredientLines)
         {
             _dbContext.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -183,7 +183,7 @@ public class MealPlanServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = qty,
                 RecipeId = recipe.Id,
-                UomId = uomId
+                UnitOfMeasureId = unitOfMeasureId
             });
         }
 

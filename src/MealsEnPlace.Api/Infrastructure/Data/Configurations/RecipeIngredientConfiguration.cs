@@ -35,9 +35,9 @@ public class RecipeIngredientConfiguration : IEntityTypeConfiguration<RecipeIngr
             .IsRequired()
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasOne(ri => ri.Uom)
+        builder.HasOne(ri => ri.UnitOfMeasure)
             .WithMany()
-            .HasForeignKey(ri => ri.UomId)
+            .HasForeignKey(ri => ri.UnitOfMeasureId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
     }

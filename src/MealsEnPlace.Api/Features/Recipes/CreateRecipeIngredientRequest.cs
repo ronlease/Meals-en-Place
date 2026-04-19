@@ -14,12 +14,12 @@ public sealed class CreateRecipeIngredientRequest
     /// </summary>
     public string? Notes { get; init; }
 
-    /// <summary>Quantity in the unit specified by <see cref="UomId"/>.</summary>
+    /// <summary>Quantity in the unit specified by <see cref="UnitOfMeasureId"/>.</summary>
     public decimal Quantity { get; init; }
 
     /// <summary>
     /// The unit of measure identifier. Null signals a container reference that must be resolved
     /// before this recipe participates in matching.
     /// </summary>
-    public Guid? UomId { get; init; }
+    public Guid? UnitOfMeasureId { get; init; }
 }

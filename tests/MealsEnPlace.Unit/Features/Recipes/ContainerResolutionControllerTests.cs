@@ -53,7 +53,7 @@ public class ContainerResolutionControllerTests : IDisposable
     private readonly ContainerResolutionController _sut;
     private readonly Mock<IContainerResolutionService> _serviceMock = new(MockBehavior.Strict);
     private readonly MealsEnPlaceDbContext _dbContext;
-    private readonly UomDisplayConverter _displayConverter;
+    private readonly UnitOfMeasureDisplayConverter _displayConverter;
 
     public ContainerResolutionControllerTests()
     {
@@ -61,7 +61,7 @@ public class ContainerResolutionControllerTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _dbContext = new MealsEnPlaceDbContext(options);
-        _displayConverter = new UomDisplayConverter(_dbContext);
+        _displayConverter = new UnitOfMeasureDisplayConverter(_dbContext);
         _sut = new ContainerResolutionController(_serviceMock.Object, _displayConverter);
     }
 
@@ -185,7 +185,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = Guid.NewGuid() };
         var ingredient = BuildResolvedIngredient(recipeId, ingredientId);
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
@@ -205,7 +205,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = Guid.NewGuid() };
         var ingredient = BuildResolvedIngredient(recipeId, ingredientId);
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
@@ -227,7 +227,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = Guid.NewGuid() };
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ContainerResolutionResult.RecipeNotFound());
@@ -248,7 +248,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = Guid.NewGuid() };
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ContainerResolutionResult.IngredientNotFound());
@@ -269,7 +269,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = -1m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = -1m, UnitOfMeasureId = Guid.NewGuid() };
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ContainerResolutionResult.ValidationError("Quantity must be greater than zero."));
@@ -288,7 +288,7 @@ public class ContainerResolutionControllerTests : IDisposable
         // Arrange
         var recipeId = Guid.NewGuid();
         var ingredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = -1m, UomId = Guid.NewGuid() };
+        var request = new ResolveContainerRequest { Quantity = -1m, UnitOfMeasureId = Guid.NewGuid() };
         _serviceMock
             .Setup(s => s.ResolveAsync(recipeId, ingredientId, request, It.IsAny<CancellationToken>()))
             .ReturnsAsync(ContainerResolutionResult.ValidationError("Quantity must be greater than zero."));
@@ -309,7 +309,7 @@ public class ContainerResolutionControllerTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = Guid.NewGuid(),
+            DefaultUnitOfMeasureId = Guid.NewGuid(),
             Id = Guid.NewGuid(),
             Name = "Chopped Tomatoes"
         };
@@ -337,19 +337,19 @@ public class ContainerResolutionControllerTests : IDisposable
 
     private static RecipeIngredient BuildResolvedIngredient(Guid recipeId, Guid ingredientId)
     {
-        var uom = new UnitOfMeasure
+        var unitOfMeasure = new UnitOfMeasure
         {
             Abbreviation = "g",
             ConversionFactor = 1.0m,
             Id = Guid.NewGuid(),
             Name = "gram",
-            UomType = UomType.Weight
+            UnitOfMeasureType = UnitOfMeasureType.Weight
         };
 
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Id = Guid.NewGuid(),
             Name = "Chopped Tomatoes"
         };
@@ -363,8 +363,8 @@ public class ContainerResolutionControllerTests : IDisposable
             Notes = "1 can chopped tomatoes",
             Quantity = 411m,
             RecipeId = recipeId,
-            Uom = uom,
-            UomId = uom.Id
+            UnitOfMeasure = unitOfMeasure,
+            UnitOfMeasureId = unitOfMeasure.Id
         };
     }
 
@@ -439,10 +439,10 @@ public class ContainerResolutionControllerTests : IDisposable
     public async Task BulkResolveGroup_ServiceSuccess_Returns200WithAffectedCount()
     {
         var canonicalId = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         _serviceMock
             .Setup(s => s.BulkResolveAsync(
-                canonicalId, "1 can diced tomatoes", 14.5m, uomId,
+                canonicalId, "1 can diced tomatoes", 14.5m, unitOfMeasureId,
                 It.IsAny<CancellationToken>()))
             .ReturnsAsync(BulkResolveResult.Success(7));
 
@@ -451,7 +451,7 @@ public class ContainerResolutionControllerTests : IDisposable
             CanonicalIngredientId = canonicalId,
             Notes = "1 can diced tomatoes",
             Quantity = 14.5m,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
 
         var result = await _sut.BulkResolveGroup(request, CancellationToken.None);

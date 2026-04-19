@@ -4,7 +4,7 @@ namespace MealsEnPlace.Api.Models.Entities;
 /// A food item the user currently has on hand in their pantry, fridge, or freezer.
 /// When a container reference was detected on entry, the original entry string is preserved
 /// in <see cref="Notes"/> and the resolved net weight or volume is stored in
-/// <see cref="Quantity"/> and <see cref="UomId"/>.
+/// <see cref="Quantity"/> and <see cref="UnitOfMeasureId"/>.
 /// </summary>
 public class InventoryItem
 {
@@ -22,18 +22,18 @@ public class InventoryItem
 
     /// <summary>
     /// Preserves the original entry string when a container reference was declared
-    /// (e.g., "1 can of diced tomatoes"). Null for items entered with an explicit UOM.
+    /// (e.g., "1 can of diced tomatoes"). Null for items entered with an explicit unit of measure.
     /// </summary>
     public string? Notes { get; set; }
 
     /// <summary>
-    /// Quantity in the unit specified by <see cref="UomId"/>.
+    /// Quantity in the unit specified by <see cref="UnitOfMeasureId"/>.
     /// Always the resolved net quantity — never a container count.
     /// </summary>
     public decimal Quantity { get; set; }
 
     /// <summary>The unit of measure for <see cref="Quantity"/>.</summary>
-    public Guid UomId { get; set; }
+    public Guid UnitOfMeasureId { get; set; }
 
     // Navigation properties
 
@@ -41,7 +41,7 @@ public class InventoryItem
     public CanonicalIngredient CanonicalIngredient { get; set; } = null!;
 
     /// <summary>The unit of measure for this item's quantity.</summary>
-    public UnitOfMeasure Uom { get; set; } = null!;
+    public UnitOfMeasure UnitOfMeasure { get; set; } = null!;
 
     /// <summary>Waste alerts generated for this item.</summary>
     public ICollection<WasteAlert> WasteAlerts { get; set; } = new List<WasteAlert>();

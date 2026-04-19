@@ -89,29 +89,29 @@ public class WasteAlertServiceTests : IDisposable
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
         _dbContext.SaveChanges();
     }
@@ -121,7 +121,7 @@ public class WasteAlertServiceTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = EachId,
+            DefaultUnitOfMeasureId = EachId,
             Id = Guid.NewGuid(),
             Name = name
         };
@@ -133,7 +133,7 @@ public class WasteAlertServiceTests : IDisposable
     private InventoryItem SeedInventoryItem(
         Guid canonicalIngredientId,
         decimal quantity,
-        Guid uomId,
+        Guid unitOfMeasureId,
         DateOnly? expiryDate = null,
         StorageLocation location = StorageLocation.Fridge)
     {
@@ -144,7 +144,7 @@ public class WasteAlertServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Location = location,
             Quantity = quantity,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
         _dbContext.InventoryItems.Add(item);
         _dbContext.SaveChanges();
@@ -154,7 +154,7 @@ public class WasteAlertServiceTests : IDisposable
     private Recipe SeedFullyResolvedRecipe(
         string title,
         string cuisineType,
-        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UomId)> ingredientLines)
+        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UnitOfMeasureId)> ingredientLines)
     {
         var recipe = new Recipe
         {
@@ -167,7 +167,7 @@ public class WasteAlertServiceTests : IDisposable
         _dbContext.Recipes.Add(recipe);
         _dbContext.SaveChanges();
 
-        foreach (var (ingredientId, qty, uomId) in ingredientLines)
+        foreach (var (ingredientId, qty, unitOfMeasureId) in ingredientLines)
         {
             _dbContext.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -176,7 +176,7 @@ public class WasteAlertServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = qty,
                 RecipeId = recipe.Id,
-                UomId = uomId
+                UnitOfMeasureId = unitOfMeasureId
             });
         }
         _dbContext.SaveChanges();
@@ -187,7 +187,7 @@ public class WasteAlertServiceTests : IDisposable
         string title,
         Guid ingredientId,
         decimal quantity,
-        Guid uomId)
+        Guid unitOfMeasureId)
     {
         var recipe = new Recipe
         {
@@ -207,7 +207,7 @@ public class WasteAlertServiceTests : IDisposable
             IsContainerResolved = false,
             Quantity = quantity,
             RecipeId = recipe.Id,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         });
         _dbContext.SaveChanges();
         return recipe;

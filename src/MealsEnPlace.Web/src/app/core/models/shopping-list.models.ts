@@ -4,5 +4,5 @@ export interface ShoppingListItemResponse {
   id: string;
   notes: string | null;
   quantity: number;
-  uomAbbreviation: string;
+  unitOfMeasureAbbreviation: string;
 }

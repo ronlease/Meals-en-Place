@@ -161,7 +161,7 @@ public class StandaloneShoppingListControllerTests
                 Category = IngredientCategory.Protein,
                 Id = Guid.NewGuid(),
                 Quantity = 250m,
-                UomAbbreviation = "g"
+                UnitOfMeasureAbbreviation = "g"
             })
             .ToList();
 }

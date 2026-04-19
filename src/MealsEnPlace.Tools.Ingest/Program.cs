@@ -150,7 +150,7 @@ foreach (var row in streamResult.Rows)
                 Notes = rawIngredient,
                 Quantity = 0m,
                 RecipeId = recipe.Id,
-                UomId = null
+                UnitOfMeasureId = null
             });
             continue;
         }
@@ -158,7 +158,7 @@ foreach (var row in streamResult.Rows)
         var resolution = unitOfMeasureResolver.NormalizeOrDefer(rawIngredient, bestNer);
         if (resolution.WasDeferred)
         {
-            summary.UomDeferredToQueue++;
+            summary.UnitOfMeasureDeferredToQueue++;
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,
@@ -167,7 +167,7 @@ foreach (var row in streamResult.Rows)
                 Notes = rawIngredient,
                 Quantity = resolution.Quantity,
                 RecipeId = recipe.Id,
-                UomId = null
+                UnitOfMeasureId = null
             });
         }
         else
@@ -181,7 +181,7 @@ foreach (var row in streamResult.Rows)
                 Notes = null,
                 Quantity = resolution.Quantity,
                 RecipeId = recipe.Id,
-                UomId = resolution.UnitOfMeasureId
+                UnitOfMeasureId = resolution.UnitOfMeasureId
             });
         }
     }

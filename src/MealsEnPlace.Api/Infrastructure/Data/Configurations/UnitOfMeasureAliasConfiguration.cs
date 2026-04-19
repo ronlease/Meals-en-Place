@@ -172,12 +172,12 @@ public class UnitOfMeasureAliasConfiguration : IEntityTypeConfiguration<UnitOfMe
         );
     }
 
-    private static UnitOfMeasureAlias NewAlias(string id, string alias, Guid uomId, DateTime seededAt) =>
+    private static UnitOfMeasureAlias NewAlias(string id, string alias, Guid unitOfMeasureId, DateTime seededAt) =>
         new()
         {
             Alias = alias,
             CreatedAt = seededAt,
             Id = new Guid(id),
-            UnitOfMeasureId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
 }

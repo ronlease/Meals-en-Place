@@ -17,5 +17,5 @@ public sealed class ResolveContainerRequest
     /// The id of the <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure"/> that
     /// applies to <see cref="Quantity"/> (e.g., the id for "oz" or "ml").
     /// </summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

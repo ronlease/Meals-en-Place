@@ -31,7 +31,7 @@ tests/
     Infrastructure/
       Claude/             # Claude service unit tests (mocked)
       ExternalApis/       # TheMealDB and Open Food Facts client tests (mocked)
-    Common/               # UomDisplayConverter and ContainerReferenceDetector tests
+    Common/               # UnitOfMeasureDisplayConverter and ContainerReferenceDetector tests
   MealsEnPlace.Integration/
     Api/                  # Integration tests against in-memory EF Core
 ```
@@ -68,17 +68,17 @@ public async Task Match_AllIngredientsPresent_ReturnsFullMatch()
 ## Domain-Specific Test Priorities
 These areas carry the highest defect risk and require the most thorough coverage:
 
-- **UOM normalization:** Conversion math correctness for all seeded factors (tsp→ml, tbsp→ml,
+- **Unit of measure normalization:** Conversion math correctness for all seeded factors (tsp→ml, tbsp→ml,
   oz→g, lb→g, etc.); colloquial unit handling; Arbitrary unit flagging; cross-type conversion
   rejection (cups to grams must return ConversionNotPossibleResult, never a wrong value).
 
 - **Container reference detection:** Keyword detection for all container terms (can, jar, box,
-  packet, bag, bottle, carton, tube); detection fires before UOM parsing; no false positives
+  packet, bag, bottle, carton, tube); detection fires before unit of measure parsing; no false positives
   on non-container strings; confirmed that quantity math is blocked until resolution is
   declared; Notes field preservation of original string through the resolution flow.
 
 - **Container reference resolution — inventory side:** InventoryItem saves with declared
-  quantity/UOM after user declaration; original string preserved in Notes; resolved item
+  quantity/unit of measure after user declaration; original string preserved in Notes; resolved item
   participates correctly in matching math.
 
 - **Container reference resolution — recipe side:** RecipeIngredient created with
@@ -92,12 +92,12 @@ These areas carry the highest defect risk and require the most thorough coverage
   pushes FinalScore above 1.0; FullMatch threshold exactly 1.0; NearMatch threshold >= 0.75;
   below-0.5 discard; Claude substitution call fires only for NearMatch.
 
-- **Display conversion (UomDisplayConverter):** Imperial defaults when no UserPreferences
+- **Display conversion (UnitOfMeasureDisplayConverter):** Imperial defaults when no UserPreferences
   row exists; correct ml→cups/fl oz/quarts thresholds; correct g→oz/lb threshold at 454g;
   ea passes through unchanged; metric mode returns base units unchanged; display conversion
   never runs inside a service, only at the response layer.
 
-- **Claude service:** Correct prompt construction for all five use cases (UOM resolution,
+- **Claude service:** Correct prompt construction for all five use cases (unit of measure resolution,
   container reference detection assist, dietary classification, substitution suggestions,
   meal plan optimization); structured JSON parsing; graceful degradation on API error;
   never called for deterministically computable operations.
@@ -116,7 +116,7 @@ These areas carry the highest defect risk and require the most thorough coverage
   appear in MatchedRecipeIds.
 
 - **TheMealDB client:** Correct URL construction per query type; container reference
-  detection runs on every measure string before UOM parsing; colloquial measures routed to
+  detection runs on every measure string before unit of measure parsing; colloquial measures routed to
   Claude; known measures mapped deterministically.
 
 - **Seasonality:** Correct in-season determination by month and Zone; boundary conditions
@@ -126,7 +126,7 @@ These areas carry the highest defect risk and require the most thorough coverage
 ## Critical Edge Cases — Mandatory Individual Tests
 Each of the following must have a dedicated test method. These are high-probability bugs:
 
-1. **UOM cross-type conversion:** Cups (Volume) to grams (Weight) for a generic ingredient
+1. **Unit of measure cross-type conversion:** Cups (Volume) to grams (Weight) for a generic ingredient
    must return `ConversionNotPossibleResult`, never a numeric value.
 
 2. **Zero-quantity inventory item:** Quantity = 0 must not satisfy any RecipeIngredient
@@ -162,7 +162,7 @@ Each of the following must have a dedicated test method. These are high-probabil
 
 11. **All-container-reference recipe import:** A recipe where every ingredient measure is a
     container reference must import successfully with all IsContainerResolved = false; none
-    of the RecipeIngredients may have a UomId set until user declaration.
+    of the RecipeIngredients may have a UnitOfMeasureId set until user declaration.
 
 12. **Display converter Imperial default:** When no UserPreferences row exists, the converter
     must return Imperial units without throwing. Never a null reference.
