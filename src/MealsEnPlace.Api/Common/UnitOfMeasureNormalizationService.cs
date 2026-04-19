@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
@@ -141,6 +142,7 @@ public interface IUnitOfMeasureNormalizationService
 /// <inheritdoc cref="IUnitOfMeasureNormalizationService"/>
 /// </summary>
 public class UnitOfMeasureNormalizationService(
+    IClaudeAvailability claudeAvailability,
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext) : IUnitOfMeasureNormalizationService
 {
@@ -158,6 +160,14 @@ public class UnitOfMeasureNormalizationService(
         if (deterministic is not null)
         {
             return deterministic;
+        }
+
+        // MEP-032: when no Claude API key is configured, route the unresolved
+        // token to the review queue instead of calling the Claude fallback.
+        if (!await claudeAvailability.IsConfiguredAsync(cancellationToken))
+        {
+            return await DeferToReviewQueueAsync(
+                parsedQuantity, unitToken, measureString, ingredientName, cancellationToken);
         }
 
         // Claude fallback for colloquial or unmapped units.
@@ -199,7 +209,35 @@ public class UnitOfMeasureNormalizationService(
             return deterministic;
         }
 
-        // No deterministic match -- queue for review instead of invoking Claude.
+        return await DeferToReviewQueueAsync(
+            parsedQuantity, unitToken, measureString, ingredientName, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
+        string measureString,
+        CancellationToken cancellationToken = default)
+    {
+        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
+        return await TryResolveDeterministicallyCoreAsync(
+            parsedQuantity, unitToken, cancellationToken);
+    }
+
+    // ── Private helpers ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Records the unresolved token on the review queue and returns a
+    /// <see cref="NormalizationResult"/> flagged <see cref="NormalizationResult.WasDeferredToQueue"/>.
+    /// Used by both the ingest-time deferral path and the MEP-032 no-key fallback
+    /// so both surface identical review-queue behavior.
+    /// </summary>
+    private async Task<NormalizationResult> DeferToReviewQueueAsync(
+        decimal parsedQuantity,
+        string unitToken,
+        string measureString,
+        string ingredientName,
+        CancellationToken cancellationToken)
+    {
         await UpsertUnresolvedTokenAsync(
             unitToken, measureString, ingredientName, cancellationToken);
 
@@ -214,18 +252,6 @@ public class UnitOfMeasureNormalizationService(
             WasDeferredToQueue = true
         };
     }
-
-    /// <inheritdoc />
-    public async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
-        string measureString,
-        CancellationToken cancellationToken = default)
-    {
-        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
-        return await TryResolveDeterministicallyCoreAsync(
-            parsedQuantity, unitToken, cancellationToken);
-    }
-
-    // ── Private helpers ───────────────────────────────────────────────────────
 
     /// <summary>
     /// Runs the deterministic resolution steps (abbreviation / name, alias,

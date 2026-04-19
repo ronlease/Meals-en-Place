@@ -73,6 +73,7 @@
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.Recipes;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.Data.Configurations;
@@ -86,6 +87,7 @@ public class RecipeMatchingServiceTests : IDisposable
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
+    private readonly Mock<IClaudeAvailability> _claudeAvailabilityMock = new(MockBehavior.Loose);
     private readonly Mock<IClaudeService> _claudeServiceMock = new(MockBehavior.Loose);
     private readonly MealsEnPlaceDbContext _dbContext;
     private readonly RecipeMatchingService _sut;
@@ -118,7 +120,12 @@ public class RecipeMatchingServiceTests : IDisposable
         var conversionService = new UnitOfMeasureConversionService(_dbContext);
         var displayConverter = new UnitOfMeasureDisplayConverter(_dbContext);
 
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         _sut = new RecipeMatchingService(
+            _claudeAvailabilityMock.Object,
             _claudeServiceMock.Object,
             _dbContext,
             conversionService,
@@ -1046,5 +1053,56 @@ public class RecipeMatchingServiceTests : IDisposable
         // Assert — recipe with waste bonus should appear before recipe without bonus
         var fullMatchIds = response.FullMatches.Select(m => m.RecipeId).ToList();
         fullMatchIds.IndexOf(recipeWithBonus.Id).Should().BeLessThan(fullMatchIds.IndexOf(recipeWithoutBonus.Id));
+    }
+
+    // ── MEP-032: graceful degradation without a Claude API key ────────────────
+    //
+    // Scenario: Feasibility pass is skipped and response flag reflects it
+    //   Given no Claude API key is configured
+    //   And the matching pipeline produces at least one NearMatch
+    //   When MatchRecipesAsync is called
+    //   Then the response's ClaudeFeasibilityApplied flag is false
+    //   And Claude.SuggestSubstitutionsAsync is never invoked
+
+    [Fact]
+    public async Task MatchRecipesAsync_WithoutClaudeKey_SetsFlagFalseAndSkipsSubstitutions()
+    {
+        // Arrange — build a NearMatch (3 of 4 ingredients available)
+        var butter = SeedCanonicalIngredient("Butter");
+        var flour = SeedCanonicalIngredient("Flour");
+        var sugar = SeedCanonicalIngredient("Sugar");
+        var milk = SeedCanonicalIngredient("Milk");
+
+        SeedInventoryItem(butter.Id, 200m, GramId);
+        SeedInventoryItem(flour.Id, 300m, GramId);
+        SeedInventoryItem(sugar.Id, 100m, GramId);
+        // Milk deliberately missing to force NearMatch
+
+        SeedFullyResolvedRecipe("Shortbread", "British",
+        [
+            (butter.Id, 100m, GramId),
+            (flour.Id, 150m, GramId),
+            (sugar.Id, 50m, GramId),
+            (milk.Id, 30m, GramId)
+        ]);
+
+        // Flip availability off for this test
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        var response = await _sut.MatchRecipesAsync(EmptyRequest());
+
+        // Assert
+        response.ClaudeFeasibilityApplied.Should().BeFalse();
+        response.NearMatches.Should().NotBeEmpty();
+        _claudeServiceMock.Verify(
+            c => c.SuggestSubstitutionsAsync(
+                It.IsAny<Recipe>(),
+                It.IsAny<IReadOnlyList<MissingIngredient>>(),
+                It.IsAny<IReadOnlyList<InventoryItem>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 }

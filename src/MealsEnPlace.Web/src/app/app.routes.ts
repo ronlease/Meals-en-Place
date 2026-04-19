@@ -38,6 +38,13 @@ export const routes: Routes = [
   },
   {
     loadChildren: () =>
+      import('./features/settings/settings.routes').then(
+        (m) => m.settingsRoutes
+      ),
+    path: 'settings',
+  },
+  {
+    loadChildren: () =>
       import('./features/shopping-list/shopping-list.routes').then(
         (m) => m.shoppingListRoutes
       ),

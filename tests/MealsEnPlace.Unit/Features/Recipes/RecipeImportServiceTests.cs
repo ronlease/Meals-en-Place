@@ -51,6 +51,7 @@
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.Recipes;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
@@ -65,6 +66,7 @@ public class RecipeImportServiceTests : IDisposable
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
+    private readonly Mock<IClaudeAvailability> _claudeAvailabilityMock = new(MockBehavior.Loose);
     private readonly Mock<IClaudeService> _claudeServiceMock = new(MockBehavior.Loose);
     private readonly MealsEnPlaceDbContext _dbContext;
     private readonly Mock<ITheMealDbClient> _theMealDbClientMock = new(MockBehavior.Strict);
@@ -102,7 +104,12 @@ public class RecipeImportServiceTests : IDisposable
 
         SeedReferenceData();
 
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         _sut = new RecipeImportService(
+            _claudeAvailabilityMock.Object,
             _claudeServiceMock.Object,
             _dbContext,
             NullLogger<RecipeImportService>.Instance,
@@ -954,6 +961,64 @@ public class RecipeImportServiceTests : IDisposable
         var saved = await _dbContext.Recipes.AsNoTracking()
             .FirstOrDefaultAsync(r => r.Title == "Simple Pasta");
         saved.Should().NotBeNull();
+    }
+
+    // ── MEP-032: graceful degradation without a Claude API key ────────────────
+    //
+    // Scenario: CreateRecipeAsync skips dietary classification when no Claude key is configured
+    //   Given IClaudeAvailability.IsConfiguredAsync returns false
+    //   When CreateRecipeAsync is called
+    //   Then Claude.ClassifyDietaryTagsAsync is never invoked
+    //   And the recipe is persisted with an empty RecipeDietaryTag collection
+
+    [Fact]
+    public async Task CreateRecipeAsync_WithoutClaudeKey_SkipsDietaryClassification()
+    {
+        // Arrange — flip availability off and make any Claude call fail the test
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        var canonicalIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Grain,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Pasta"
+        };
+        _dbContext.CanonicalIngredients.Add(canonicalIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "Italian",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = canonicalIngredient.Id,
+                    Quantity = 200m,
+                    UnitOfMeasureId = GramUnitOfMeasureId
+                }
+            ],
+            Instructions = "Boil pasta.",
+            ServingCount = 4,
+            Title = "Plain Pasta"
+        };
+
+        // Act
+        await _sut.CreateRecipeAsync(request);
+
+        // Assert — Claude classification never invoked
+        _claudeServiceMock.Verify(
+            c => c.ClassifyDietaryTagsAsync(It.IsAny<Recipe>()),
+            Times.Never);
+
+        // And recipe saved without any dietary tags
+        var saved = await _dbContext.Recipes.AsNoTracking()
+            .FirstAsync(r => r.Title == "Plain Pasta");
+        var tagCount = await _dbContext.RecipeDietaryTags.CountAsync(t => t.RecipeId == saved.Id);
+        tagCount.Should().Be(0);
     }
 
     // ── GetAllLocalRecipesAsync — empty database ───────────────────────────────

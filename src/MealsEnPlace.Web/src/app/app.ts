@@ -7,15 +7,18 @@ import { MatSidenav, MatSidenavModule } from '@angular/material/sidenav';
 import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AiAvailabilityService } from './core/services/ai-availability.service';
 import { InstallPromptService } from './core/services/install-prompt.service';
 import { PreferencesService } from './core/services/preferences.service';
 import { ThemeService } from './core/services/theme.service';
+import { AiDisabledBannerComponent } from './shared/ai-disabled-banner/ai-disabled-banner.component';
 import { OfflineBannerComponent } from './shared/offline-banner/offline-banner';
 
 @Component({
   selector: 'app-root',
   standalone: true,
   imports: [
+    AiDisabledBannerComponent,
     MatButtonModule,
     MatIconModule,
     MatListModule,
@@ -31,6 +34,7 @@ import { OfflineBannerComponent } from './shared/offline-banner/offline-banner';
   styleUrl: './app.scss',
 })
 export class App implements OnInit {
+  protected readonly aiAvailability = inject(AiAvailabilityService);
   protected readonly installPromptService = inject(InstallPromptService);
   protected readonly isMobile = signal(false);
   protected readonly preferencesService = inject(PreferencesService);
@@ -42,6 +46,7 @@ export class App implements OnInit {
 
   ngOnInit(): void {
     this.preferencesService.loadPreferences();
+    this.aiAvailability.refresh();
 
     this.breakpointObserver
       .observe(['(max-width: 768px)'])
