@@ -46,7 +46,7 @@ public class MealsEnPlaceDbContext(DbContextOptions<MealsEnPlaceDbContext> optio
     public DbSet<UnitOfMeasure> UnitsOfMeasure => Set<UnitOfMeasure>();
 
     /// <summary>Unit tokens deferred for user review during ingest.</summary>
-    public DbSet<UnresolvedUomToken> UnresolvedUomTokens => Set<UnresolvedUomToken>();
+    public DbSet<UnresolvedUnitOfMeasureToken> UnresolvedUnitOfMeasureTokens => Set<UnresolvedUnitOfMeasureToken>();
 
     /// <summary>Single-row application preferences table.</summary>
     public DbSet<UserPreferences> UserPreferences => Set<UserPreferences>();

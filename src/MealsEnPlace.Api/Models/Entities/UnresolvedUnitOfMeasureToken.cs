@@ -11,7 +11,7 @@ namespace MealsEnPlace.Api.Models.Entities;
 /// a new row.
 /// </para>
 /// </summary>
-public class UnresolvedUomToken
+public class UnresolvedUnitOfMeasureToken
 {
     /// <summary>Running count of occurrences across all ingest runs.</summary>
     public int Count { get; set; }

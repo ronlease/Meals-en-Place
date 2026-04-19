@@ -5,14 +5,14 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 namespace MealsEnPlace.Api.Infrastructure.Data.Configurations;
 
 /// <summary>
-/// Fluent API configuration for <see cref="UnresolvedUomToken"/>.
-/// Uniqueness on <see cref="UnresolvedUomToken.UnitToken"/> is enforced at the
+/// Fluent API configuration for <see cref="UnresolvedUnitOfMeasureToken"/>.
+/// Uniqueness on <see cref="UnresolvedUnitOfMeasureToken.UnitToken"/> is enforced at the
 /// service layer (upsert semantics), not by a DB-level unique index, to mirror
 /// the case-sensitive-by-default stance used for <see cref="UnitOfMeasureAlias"/>.
 /// </summary>
-public class UnresolvedUomTokenConfiguration : IEntityTypeConfiguration<UnresolvedUomToken>
+public class UnresolvedUnitOfMeasureTokenConfiguration : IEntityTypeConfiguration<UnresolvedUnitOfMeasureToken>
 {
-    public void Configure(EntityTypeBuilder<UnresolvedUomToken> builder)
+    public void Configure(EntityTypeBuilder<UnresolvedUnitOfMeasureToken> builder)
     {
         builder.HasKey(t => t.Id);
 

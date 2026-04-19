@@ -549,31 +549,75 @@ Feature: Metric Display
 
 ---
 
-## [MEP-012] Store Sale Integration
+## [MEP-012] Store Sale Integration from User-Provided PDF Flyer
 
 **Status:** Backlog
-**Priority:** Low
+**Priority:** Medium
 
 ### Business Problem
-Knowing which ingredients are on sale at local grocery stores would help me save money by aligning my meal plan with current deals. This feature would integrate with store circulars to surface sale prices alongside my shopping list, enabling cost-conscious meal planning.
+Knowing which ingredients are on sale at my local grocery store would help me plan meals and shop around current deals. Earlier framing of this feature stalled because most major grocery chains prohibit scraping of their circular and pricing data. The revised approach is simpler and legally clean: I already download the weekly flyer as a PDF from the store's own website (they distribute it for consumer viewing), and the app parses *my own local copy* to extract sale items and match them to my `CanonicalIngredient` library. Factual pricing data (item name, sale price, unit pricing) is not copyrightable under 17 USC §102(b), so extracting facts from a legitimately-obtained PDF for personal single-user use is on firm ground. The legal-review blocker from the previous framing is removed.
 
-**Blocked Reason:** Most major grocery chains prohibit scraping of their circular and pricing data. Implementing this feature requires either a vendor API partnership or a paid aggregator service (e.g., Flipp API). Do not implement until a viable, legal data source is secured.
+Extraction uses Claude Vision (per-page structured output) rather than brittle PDF-text-extraction or scraping, because grocery flyers mix decorative layouts with prices expressed in idioms like "2 for $5" that regex-style parsers mishandle.
+
+**Distribution caveat:** if this app is ever distributed beyond the single-user local deployment, the sale-parsing feature must be optional (disabled by default) so that the maintainer is not implicitly endorsing or facilitating any one grocer's data. Users who opt in take responsibility for supplying their own flyer PDFs obtained under each store's viewing terms.
 
 ### Acceptance Criteria
 ```gherkin
-Feature: Store Sale Integration
+Feature: Store Sale Integration from User-Provided PDF Flyer
 
-  Scenario: Display sale items alongside shopping list
-    Given I have a generated shopping list
-    And store sale data is available for my local area
-    When I view my shopping list
-    Then items currently on sale are highlighted with the sale price
+  Scenario: StoreSale entity persists extracted sale items with a validity window
+    Given extracted items have a start and end date from the flyer
+    When the schema is extended
+    Then a StoreSale entity is added with columns: Id, CanonicalIngredientId, StoreName, SalePrice, RegularPrice, UnitPrice (nullable), ValidFrom, ValidTo, CreatedAt, SourceFlyerHash
+    And an EF Core migration creates the table
+    And an index on (CanonicalIngredientId, ValidFrom, ValidTo) supports "is this on sale right now" lookups
 
-  Scenario: Suggest meal plan adjustments based on sales
-    Given store sale data is available
-    When I generate a meal plan
-    Then the system factors sale prices into recipe ranking
-    And recipes using on-sale ingredients receive a cost bonus
+  Scenario: User provides a flyer PDF from a local path
+    Given the user has downloaded a weekly flyer PDF from their grocer's website
+    When the user invokes the sale-import action (CLI or API endpoint) with the PDF path and a store name
+    Then the tool hashes the PDF content (for idempotency) and refuses to re-ingest a flyer already on record
+    And the tool renders each PDF page to a PNG at a reasonable DPI (e.g. 200)
+
+  Scenario: Claude Vision extracts structured sale data per page
+    Given each PDF page has been rendered to PNG
+    When the tool sends each image to the Claude API with a structured-output prompt
+    Then Claude returns a JSON array of { ItemName, SalePrice, RegularPrice (nullable), UnitPrice (nullable), Size (nullable), Notes (nullable) }
+    And the tool merges results across pages into a single item list per flyer
+    And items with obviously-invalid extractions (e.g., SalePrice missing or non-numeric) are logged and skipped
+
+  Scenario: Extracted items match to CanonicalIngredient rows
+    Given the extracted item list
+    When the matching pass runs
+    Then each item is matched to an existing CanonicalIngredient via case-insensitive name lookup
+    And unmatched items are written to a review queue (same pattern as MEP-026's UnresolvedUnitOfMeasureToken) so the user can confirm or create a new CanonicalIngredient
+    And matched items become StoreSale rows scoped to the flyer's validity window
+
+  Scenario: Shopping list surfaces currently-valid sales
+    Given the user has a generated ShoppingList
+    And one or more ShoppingListItem rows map to CanonicalIngredients that have an active StoreSale row
+    When the user views the shopping list
+    Then those items display a visible sale indicator with the sale price and validity end date
+    And a filter lets the user view only items currently on sale
+
+  Scenario: Sale-parsing is an opt-in feature gated by configuration
+    Given the app may be distributed beyond a single-user local deployment
+    When a user installs the app
+    Then the store-sale ingest feature is disabled by default
+    And enabling it requires an explicit UserPreferences opt-in with a short disclosure about the user's responsibility for obtaining flyers legitimately
+    And the disclosure links to the store's publicly-posted terms where practical
+
+  Scenario: No runtime dependency on any one grocer
+    Given the design must not embed a specific grocer's assets
+    When the feature is implemented
+    Then no grocer logo, flyer URL, or proprietary data is bundled with the app
+    And the StoreName field on StoreSale is free-text so any grocer's flyer can be ingested
+
+  Scenario: Claude API unavailable disables the feature cleanly
+    Given Claude Vision is the extraction engine
+    And the user does not have a Claude API token configured (see MEP-032)
+    When the user attempts to import a flyer
+    Then a clear message explains that flyer parsing requires Claude and points at the Claude settings page
+    And no partial StoreSale rows are persisted
 ```
 
 ---
@@ -1352,16 +1396,16 @@ Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
   Scenario: Unresolved UOM tokens are queued for user review
     Given a measure string with a unit token that matches no abbreviation, name, or alias
     When UomNormalizationService.NormalizeAsync is called in ingest mode
-    Then an UnresolvedUomToken row is written capturing the original measure string, the extracted unit token, and the ingredient context
+    Then an UnresolvedUnitOfMeasureToken row is written capturing the original measure string, the extracted unit token, and the ingredient context
     And the ingestion of that ingredient is deferred until the token is resolved
     And Claude is NOT automatically invoked for unresolved tokens during bulk ingest
 
   Scenario: User resolves an unresolved token via the review queue
-    Given one or more UnresolvedUomToken rows exist
+    Given one or more UnresolvedUnitOfMeasureToken rows exist
     When the user reviews a token via a UI or CLI
     Then the user may choose: (a) map to an existing UnitOfMeasure (creates a new UnitOfMeasureAlias row), (b) defer to Claude for this one occurrence, or (c) ignore this token permanently
     And choosing (a) retroactively resolves every deferred ingredient that matched the same unresolved token
-    And the UnresolvedUomToken row is deleted after the decision is persisted
+    And the UnresolvedUnitOfMeasureToken row is deleted after the decision is persisted
 
   Scenario: Alias uniqueness is enforced by the service, not the database
     Given recipe notation uses case meaningfully (uppercase "T" = Tablespoon, lowercase "t" = Teaspoon, a 3x quantity difference)
@@ -1421,3 +1465,494 @@ Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
     And the application is not deployed beyond the user's local machine
     And any future commercialization triggers a re-evaluation of the data source
 ```
+
+## [MEP-027] Mark Meal as Eaten with Optional Inventory Auto-Deplete
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+When a planned meal is cooked, the ingredients it used are no longer in inventory but the system still thinks they are. Manually opening each ingredient and subtracting the amount consumed is friction I would rather not accept. I want to mark a `MealPlanSlot` as "eaten" from the meal plan board, and -- if I opt in -- have the system automatically deduct the recipe's ingredient quantities from current inventory in the background. The opt-in toggle matters because some users (or some weeks) want a review-before-commit experience, while others want friction-free auto-deplete. The default is off so inventory is never silently modified without explicit consent.
+
+### Acceptance Criteria
+```gherkin
+Feature: Mark Meal as Eaten with Optional Inventory Auto-Deplete
+
+  Scenario: MealPlanSlot gains a Consumed state
+    Given the existing MealPlanSlot entity
+    When the schema is extended
+    Then a ConsumedAt nullable DateTime column is added to MealPlanSlot
+    And a ConsumedWithAutoDeplete nullable boolean column is added to record whether the user's preference was on at the time of consume
+    And an EF Core migration applies these columns without data loss
+
+  Scenario: User marks a slot as eaten from the meal plan board
+    Given a MealPlanSlot with an assigned Recipe
+    When the user clicks "Mark as eaten" on that slot
+    Then ConsumedAt is set to the current UTC time
+    And the UI renders the slot with a visual indicator (checkmark, muted styling, or similar)
+    And a POST /api/v1/meal-plan-slots/{id}/consume endpoint persists the state
+
+  Scenario: UserPreferences gains the AutoDepleteOnConsume toggle
+    Given the existing UserPreferences singleton
+    When the schema is extended
+    Then an AutoDepleteOnConsume boolean column is added with default false
+    And a settings UI control exposes the toggle with a clear description of what it does
+
+  Scenario: Consuming a slot with auto-deplete ON deducts ingredients from inventory
+    Given AutoDepleteOnConsume is true
+    And the Recipe has RecipeIngredient rows each mapped to a CanonicalIngredient
+    When the user marks the slot as eaten
+    Then for each RecipeIngredient the service selects matching InventoryItem rows for that CanonicalIngredient
+    And decrements Quantity from the oldest-expiry row first, falling back to the next row when one is exhausted
+    And the ConsumedWithAutoDeplete column on the slot is set to true
+
+  Scenario: Consuming a slot with auto-deplete OFF is a state-only change
+    Given AutoDepleteOnConsume is false
+    When the user marks the slot as eaten
+    Then ConsumedAt is set but no InventoryItem rows are modified
+    And the ConsumedWithAutoDeplete column on the slot is set to false
+
+  Scenario: Insufficient inventory surfaces a warning but does not block the consume
+    Given auto-deplete is on
+    And the Recipe calls for 500g of flour
+    And total flour in inventory is only 300g across all rows
+    When the user marks the slot as eaten
+    Then inventory flour is depleted to 0g (not below)
+    And the UI shows a warning listing the short ingredients
+    And the consume still succeeds
+```
+
+## [MEP-028] Push Shopping List to External Todo Provider (Todoist first)
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+My shopping list currently lives only in the app. When I am at the grocery store on my phone, I would rather glance at Todoist -- which I already use for life errands -- than open a separate web app. I want a one-click action that pushes the current shopping list to my Todoist account, with each shopping item becoming a Todoist task under a configurable project. Todoist is the first target because it has a clean documented REST API and apps on every platform; the design should introduce an abstraction boundary so Google Tasks, Microsoft To Do, or Apple Reminders can slot in later without a rewrite.
+
+### Acceptance Criteria
+```gherkin
+Feature: Push Shopping List to External Todo Provider
+
+  Scenario: IShoppingListPushTarget abstraction defines the contract
+    Given multiple todo providers may be supported over time
+    When the feature is designed
+    Then an IShoppingListPushTarget interface is introduced with a PushAsync method
+    And a TodoistShoppingListPushTarget implementation is registered as the first provider
+    And the abstraction allows additional providers to be added without touching callers
+
+  Scenario: User configures a Todoist API token
+    Given Todoist requires a personal API token for authentication
+    When the user opens the provider settings
+    Then a password-style input accepts the Todoist API token
+    And the token is stored via dotnet user-secrets locally (never in the database or repo)
+    And a "Test connection" button verifies the token by hitting the Todoist /projects endpoint
+
+  Scenario: User configures a target Todoist project
+    Given the user may want shopping items in a specific project (not Inbox)
+    When configuration is open
+    Then the UI fetches the user's Todoist projects and presents a dropdown
+    And the selected project ID is saved to UserPreferences (or equivalent)
+    And a missing / deleted project falls back to Inbox with a clear message
+
+  Scenario: User pushes a shopping list to Todoist
+    Given a ShoppingList exists with one or more ShoppingListItem rows
+    And a valid Todoist token and project are configured
+    When the user clicks "Push to Todoist" on the shopping list page
+    Then each ShoppingListItem becomes a Todoist task titled "{Quantity} {UomAbbreviation} {IngredientName}"
+    And the tasks are created in the configured Todoist project
+    And a last-pushed timestamp is persisted per ShoppingList
+
+  Scenario: Re-pushing an already-pushed list updates rather than duplicates
+    Given a ShoppingList was previously pushed to Todoist
+    And the ShoppingList items have changed (added, removed, or quantities changed)
+    When the user pushes again
+    Then the existing Todoist tasks are updated / closed / created as needed
+    And no duplicate tasks are created for items that already exist
+
+  Scenario: Network or Todoist errors are surfaced as retryable
+    Given the Todoist API is unreachable or returns an error
+    When the user pushes
+    Then a clear error message is shown with the Todoist-reported reason
+    And the shopping list remains in a push-eligible state so the user can retry
+    And no partial push leaves the user uncertain about what succeeded
+```
+
+## [MEP-029] Push Meal Plan to External Todo Provider (Todoist first)
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+Sister story to MEP-028. I want my weekly meal plan visible in Todoist alongside the rest of my calendar and tasks, so I can see "what's for dinner Thursday" at a glance without opening the Meals en Place app. Each `MealPlanSlot` should become a Todoist task scheduled for the slot's date, with a title like `"Dinner: Chicken Scampi"`. The same provider abstraction from MEP-028 applies.
+
+### Acceptance Criteria
+```gherkin
+Feature: Push Meal Plan to External Todo Provider
+
+  Scenario: IMealPlanPushTarget abstraction defines the contract
+    Given the same multi-provider concern as shopping list push
+    When the feature is designed
+    Then an IMealPlanPushTarget interface is introduced with a PushAsync method
+    And a TodoistMealPlanPushTarget implementation is the first provider
+    And the Todoist API token is shared with the MEP-028 configuration (not re-prompted)
+
+  Scenario: User configures a target Todoist project for meal plans
+    Given meal plans may go to a different project than shopping lists
+    When configuration is open
+    Then the UI offers a dropdown of the user's Todoist projects
+    And the selected project ID is saved independently of the shopping list project
+
+  Scenario: User pushes a meal plan to Todoist
+    Given a MealPlan with one or more MealPlanSlot rows assigned to Recipes
+    And a valid Todoist token and project are configured
+    When the user clicks "Push to Todoist" on the meal plan board
+    Then each slot becomes a Todoist task titled "{MealType}: {Recipe.Title}"
+    And the task due date matches the slot's date
+    And tasks are created in the configured Todoist project
+
+  Scenario: Swapping or deleting a slot updates the existing Todoist task on next push
+    Given a previously-pushed MealPlan
+    And the user has since swapped a recipe or cleared a slot
+    When the user pushes again
+    Then the corresponding Todoist tasks are updated (title change) or closed (slot cleared)
+    And no orphaned tasks remain for removed slots
+
+  Scenario: Todoist errors are surfaced as retryable
+    Given the Todoist API is unreachable
+    When the user pushes
+    Then a clear error message is shown
+    And the meal plan remains in a push-eligible state
+```
+
+## [MEP-030] Reorder Meal Plan to Prioritize Expiring Ingredients
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+MEP-007's meal plan generation considers waste-reduction in its initial candidate ranking, but that ranking is only as fresh as the moment of generation. Mid-week I buy produce, forget about leftovers, or have an ingredient sneak up on its expiry date -- and the existing plan no longer reflects the updated urgency. I want an explicit "reorder my planned meals to put expiry-consuming meals first" action that shuffles the slot dates within the existing plan (without regenerating or swapping recipes), so I cook the urgent stuff first. This is different from generating a new plan; it preserves every recipe the user already picked and only rearranges their sequencing.
+
+### Acceptance Criteria
+```gherkin
+Feature: Reorder Meal Plan to Prioritize Expiring Ingredients
+
+  Scenario: "Reorder by expiry" action is available on the meal plan board
+    Given a MealPlan with at least two MealPlanSlot rows assigned to Recipes
+    When the user views the meal plan board
+    Then a "Reorder by expiry" action is visible
+    And clicking it opens a preview of the proposed reorder
+
+  Scenario: Service computes an expiry-urgency score per planned recipe
+    Given each assigned Recipe has RecipeIngredient rows mapped to CanonicalIngredients
+    And each CanonicalIngredient may have InventoryItem rows with ExpiryDate
+    When the service computes the reorder
+    Then each planned recipe receives a score based on how many of its ingredients are expiring within a configurable urgency window (default 7 days)
+    And the score accounts for both count of expiring ingredients and remaining days until expiry
+
+  Scenario: Slot dates are shuffled so higher-urgency recipes move earlier in the plan window
+    Given a MealPlan spanning a date range (e.g., Mon through Sun)
+    When the reorder is computed
+    Then slot dates are reassigned so highest-urgency recipes occupy the earliest slots
+    And recipes with equal urgency retain their relative ordering
+    And no recipe moves outside the original MealPlan date range
+    And MealType (Breakfast/Lunch/Dinner) is preserved per slot unless the user explicitly opts in to cross-meal-type reordering (TBD)
+
+  Scenario: User previews before commit
+    Given the service has proposed a reorder
+    When the preview is displayed
+    Then the user sees a side-by-side of current vs proposed slot dates
+    And the user may confirm (apply the reorder) or cancel (no change)
+    And confirming persists the new slot dates
+
+  Scenario: Plans without any expiring-ingredient input are a no-op
+    Given no assigned recipe has any ingredient expiring within the urgency window
+    When the user clicks "Reorder by expiry"
+    Then a clear message explains that nothing needs reordering
+    And no slot dates are changed
+```
+
+## [MEP-031] Auto-Restore Inventory When a Consumed Meal is Unmarked
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-027
+
+### Business Problem
+Paired with MEP-027. If `AutoDepleteOnConsume` is on and the user accidentally marks a meal as eaten -- or the household plan changes and a meal actually did not happen -- the inventory depletion must be symmetrically reversible. Without this, a single mis-click permanently subtracts ingredients and the user has to re-add them by hand. Unmarking a slot should restore the same ingredient quantities that were originally deducted, to the same `CanonicalIngredient` rows where possible, preserving expiry tracking.
+
+### Acceptance Criteria
+```gherkin
+Feature: Auto-Restore Inventory When a Consumed Meal is Unmarked
+
+  Scenario: Unmarking a consumed slot reverses the depletion only when auto-deplete was on at consume time
+    Given a MealPlanSlot has ConsumedAt set
+    And ConsumedWithAutoDeplete is true (preference was on at the time the slot was marked eaten)
+    When the user unmarks the slot via the UI
+    Then ConsumedAt is cleared
+    And for each RecipeIngredient the service adds the consumed quantity back to inventory
+
+  Scenario: Restored quantities go back to the same InventoryItem rows when possible
+    Given the original consume recorded which InventoryItem rows were decremented and by how much (via a per-consume audit row)
+    When the unmark runs
+    Then the service attempts to add each quantity back to the same InventoryItem row
+    And the row's expiry date is preserved
+
+  Scenario: Restored quantities create a new InventoryItem row when the original row has been deleted
+    Given an InventoryItem row that was previously decremented has since been deleted
+    When the unmark runs
+    Then a new InventoryItem row is created with the restored quantity
+    And the ExpiryDate is copied from the audit row where possible
+    And the Location is copied from the audit row where possible
+
+  Scenario: Unmarking a slot that was consumed with auto-deplete OFF is a state-only change
+    Given a MealPlanSlot has ConsumedAt set
+    And ConsumedWithAutoDeplete is false
+    When the user unmarks the slot
+    Then ConsumedAt is cleared
+    And no InventoryItem rows are modified
+```
+
+## [MEP-032] Settings Page with Bring-Your-Own Claude API Key and Graceful AI Degradation
+
+**Status:** Backlog
+**Priority:** High
+
+### Business Problem
+The app currently assumes a Claude API token is available at all times (configured via `dotnet user-secrets` during development). If the app is distributed to anyone beyond the original developer -- or if the developer ever runs without a token configured -- every AI-backed path breaks in unclear ways. Two related needs:
+
+1. **Bring-your-own Claude auth.** Users must be able to paste their own Anthropic API key into a settings page, have the app verify it works, and persist it securely across restarts. The key is never shipped with the app, never stored in plaintext, never exposed through any API response.
+
+2. **Graceful degradation without AI.** When no key is configured (or the configured key fails), the app must still function end-to-end for every non-AI path. AI-specific features disable cleanly with clear user-facing explanations of what is and is not available.
+
+This story also lands the consolidated settings page as a UI scaffold, so future BYO-credential settings (Todoist API token from MEP-028/029, `AutoDepleteOnConsume` toggle from MEP-027, store-sale opt-in from MEP-012, etc.) have a home to plug into.
+
+### Acceptance Criteria
+```gherkin
+Feature: Settings Page with Bring-Your-Own Claude API Key and Graceful AI Degradation
+
+  Scenario: Settings page exists as a dedicated route with navigable sections
+    Given the Angular frontend does not currently have a consolidated settings page
+    When the feature is built
+    Then a /settings route and Angular component are added, linked from the main navigation
+    And the page is organized into sections (Display, AI, External Integrations, Inventory Behavior) so future BYO-credential stories have a clear home
+
+  Scenario: User pastes a Claude API key into the AI section
+    Given the AI section of the settings page
+    When the user enters a key into a password-style input and clicks Save
+    Then a POST /api/v1/settings/claude/token endpoint receives the key
+    And the backend persists the key using ASP.NET DataProtection (or equivalent) to an encrypted local file outside the repo
+    And the response body does NOT include the key -- only a { configured: true } indicator
+
+  Scenario: Test Connection verifies the key against the Anthropic API
+    Given a key has been entered
+    When the user clicks "Test connection"
+    Then the backend invokes a cheap Claude API call (e.g., a small messages request) using the entered key
+    And returns success / failure with the Anthropic-reported error message on failure
+    And an invalid key does not overwrite a previously-valid stored key
+
+  Scenario: Configured key persists across app restarts
+    Given a valid key has been saved
+    When the app is restarted
+    Then subsequent Claude-backed operations read the key from the encrypted local store
+    And the settings page reflects { configured: true } without re-prompting
+
+  Scenario: User can clear the stored key
+    Given a configured key exists
+    When the user clicks "Remove key" in the AI section
+    Then the stored key is deleted from the local store
+    And the next call to any Claude-backed operation enters the degraded path described below
+    And a confirmation prompt appears before deletion so a mis-click is recoverable
+
+  Scenario: API never leaks the key in any response
+    Given a configured key exists
+    When any endpoint returns settings, user preferences, or diagnostic info
+    Then the response contains at most { configured: true } or a masked indicator
+    And the raw key value is never present in any HTTP response body, header, or log line
+
+  Scenario: UOM normalization degrades gracefully without a key
+    Given no Claude API key is configured
+    When UomNormalizationService encounters a measure string that does not resolve via abbreviation, name, alias, or count-noun fallback
+    Then the service routes the ingredient to the MEP-026 review queue instead of attempting a Claude call
+    And the ingredient is preserved in its raw form with a flag indicating user resolution is required
+
+  Scenario: Recipe dietary classification degrades gracefully without a key
+    Given no Claude API key is configured
+    When a recipe is imported or created
+    Then no dietary tags are auto-assigned
+    And the recipe is persisted normally with an empty RecipeDietaryTag collection
+    And the user may manually apply tags via the existing recipe edit UI
+
+  Scenario: Recipe matching Claude feasibility pass is skipped without a key
+    Given no Claude API key is configured
+    And the user invokes "What can I make?"
+    When the matching pipeline runs
+    Then the deterministic ranking (matched / total ingredients, expiry bonus) produces the result list
+    And the Claude-backed feasibility and substitution pass is skipped
+    And the UI shows a subtle note that AI-suggested substitutions are unavailable
+
+  Scenario: Meal plan optimization Claude review is skipped without a key
+    Given no Claude API key is configured
+    And the user generates a meal plan
+    When the plan is produced
+    Then the deterministic ranking (waste score, seasonal affinity, dietary filter, recency) drives selection
+    And the Claude-backed variety-and-waste-optimization pass is skipped
+    And the plan is persisted normally
+
+  Scenario: Store sale ingest requires Claude Vision and refuses cleanly without a key
+    Given no Claude API key is configured
+    And the user attempts to import a flyer PDF (MEP-012)
+    When the ingest action runs
+    Then a clear message explains that flyer parsing requires Claude Vision
+    And the message links to the AI section of the settings page
+    And no partial StoreSale rows are persisted
+
+  Scenario: Persistent UI indicator when AI is disabled
+    Given no Claude API key is configured
+    When the user is anywhere in the app
+    Then a subtle badge or banner (e.g., in the header or nav) indicates "AI features disabled"
+    And the badge links to the AI section of the settings page
+    And the badge is dismissible but reappears on next app load until a key is configured
+
+  Scenario: Non-AI features continue to work identically with or without a key
+    Given no Claude API key is configured
+    When the user exercises: inventory CRUD, container-reference detection, deterministic UOM lookup, recipe manual entry, recipe import from TheMealDB (no Claude classification step), shopping list generation, seasonal produce view, waste alerts, meal plan manual editing, display-system toggle, dark mode
+    Then every listed feature functions identically to the key-configured experience
+    And no silent failures or unexplained empty results occur
+```
+
+## [MEP-033] Remove TheMealDB Integration
+
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** MEP-026 (Kaggle ingest) must land first so the app has a working catalog source before TheMealDB is removed.
+
+### Business Problem
+TheMealDB was chosen early as the recipe catalog source because it is free, open, and required no auth. Its ~600-recipe catalog turned out to be the gating constraint that drove MEP-025 (the spike to evaluate larger sources) and MEP-026 (the Kaggle 2M ingest). Once the Kaggle path is working, TheMealDB's catalog is superfluous and its integration code is pure maintenance burden: the HTTP client, DTOs, import service, UI import flow, tests, C4 diagram node, README copy, and the `TheMealDbId` column on the `Recipe` entity all exist for a source the user no longer plans to pull from.
+
+This story removes that surface area in one coherent sweep. Recipes previously imported from TheMealDB are preserved in the database (they are just rows in the `Recipe` table at this point) -- only the import path, the dedicated identifier column, and the ancillary scaffolding go away.
+
+### Acceptance Criteria
+```gherkin
+Feature: Remove TheMealDB Integration
+
+  Scenario: TheMealDB client code is deleted
+    Given the src/MealsEnPlace.Api/Infrastructure/ExternalApis/TheMealDb/ folder exists
+    When this story is implemented
+    Then the entire folder is removed from the repository
+    And all corresponding unit and integration tests are removed
+    And any DI registrations for TheMealDbClient or ITheMealDbClient are removed from Program.cs
+
+  Scenario: TheMealDB import controller and service are deleted
+    Given Features/Recipes contains a TheMealDB-specific import flow
+    When this story is implemented
+    Then any controllers, services, DTOs, request/response types exclusive to the TheMealDB import are removed
+    And the generic recipe-import service (used by MEP-018 manual entry and MEP-026 bulk ingest) remains intact
+    And Swagger no longer lists any TheMealDB-specific endpoint
+
+  Scenario: TheMealDbId column on Recipe is removed via migration
+    Given the Recipe entity has a TheMealDbId property and column
+    When this story is implemented
+    Then an EF Core migration drops the TheMealDbId column from the Recipes table
+    And the Recipe entity no longer exposes the TheMealDbId property
+    And existing Recipe rows are preserved -- only the column is removed
+    And existing Recipe rows that were originally sourced from TheMealDB continue to function normally in matching, meal plans, and shopping lists
+
+  Scenario: Angular frontend loses any TheMealDB import UI
+    Given the recipe browser / import pages reference a TheMealDB import flow
+    When this story is implemented
+    Then the corresponding Angular components, services, and routes are removed
+    And no dead code, unused imports, or stale feature flags remain
+    And the manual recipe entry UI (MEP-018) and the bulk-ingest tooling UI (MEP-026) continue to function
+
+  Scenario: C4 diagrams remove TheMealDB as an external system
+    Given docs/c4/context.puml and container.puml reference TheMealDB as an external system
+    When this story is implemented
+    Then TheMealDB is removed from the C4 .puml sources
+    And the render-c4 workflow produces updated PNGs
+    And the README architecture section reflects the removal
+
+  Scenario: README and CLAUDE.md reflect the removal
+    Given several documentation files reference TheMealDB as the recipe data source
+    When this story is implemented
+    Then README.md tech stack, project structure, and feature sections are updated
+    And CLAUDE.md external APIs section is updated
+    And per-feature README files under Features/Recipes/ are updated
+    And no stale reference to TheMealDB remains in any tracked file (verified via a grep step in review)
+
+  Scenario: Backlog is updated to reflect the historical record
+    Given MEP-004 (Recipe Library Import) is marked Done based on a TheMealDB implementation
+    When this story is implemented
+    Then MEP-004 remains marked Done (the historical outcome stands) but gains a brief note that the TheMealDB implementation was superseded by MEP-026
+    And no other backlog items referencing TheMealDB as an active dependency remain
+
+  Scenario: Full test suite passes after removal
+    Given the sweep is complete
+    When dotnet test is run
+    Then all remaining tests pass
+    And code coverage does not regress below the 90% pre-PR threshold
+    And any tests that were TheMealDB-only are removed (not skipped or commented out)
+```
+
+## [MEP-034] Retroactive Rename: UOM / Uom → UnitOfMeasure Across Codebase
+
+**Status:** Backlog
+**Priority:** Low
+
+### Business Problem
+Early in the project, "unit of measure" was abbreviated as `UOM` / `Uom` in C# class names (`UomNormalizationService`, `UomDisplayConverter`, `UomConversionService`, `UomType`, `UomAbbreviation`), database columns (`UomId`, `DefaultUomId`), DTO properties, Angular models, and API response bodies. The project convention has since shifted to "avoid abbreviations in domain names; spell out terms like `UnitOfMeasure`" (see CLAUDE.md and MEP-026 Phase 5d notes). New code written under MEP-026 uses the spelled-out form; the legacy surface area still uses the abbreviated form.
+
+This story is the retroactive cleanup to make the whole codebase consistent. It is deliberately scoped as a standalone story because it touches the database schema (column renames require EF Core migrations with production implications), public API response shapes (clients would need to update), and every consumer of the legacy types. None of those changes are urgent, so the cleanup is kept as a low-priority backlog item rather than smuggled into an unrelated PR.
+
+### Acceptance Criteria
+```gherkin
+Feature: Retroactive Rename UOM to UnitOfMeasure Across Codebase
+
+  Scenario: C# class, interface, method, and file names are spelled out
+    Given existing types like UomNormalizationService, UomDisplayConverter, UomConversionService, UomType, UomAbbreviation
+    When the rename runs
+    Then every "Uom" token in C# identifiers becomes "UnitOfMeasure"
+    And corresponding .cs files are renamed accordingly
+    And no "Uom"-prefixed identifier remains in src/ (verified via grep gate in review)
+
+  Scenario: Database columns are renamed via EF Core migration
+    Given existing columns such as RecipeIngredient.UomId, CanonicalIngredient.DefaultUomId
+    When a new migration is generated
+    Then the migration uses RenameColumn to change UomId to UnitOfMeasureId and similar spelled-out forms
+    And existing row data is preserved
+    And a rollback path (Down) restores the original column names
+
+  Scenario: DTOs and API response bodies use spelled-out names
+    Given existing response DTOs with UomId / UomAbbreviation / UomType fields
+    When the rename runs
+    Then the JSON property names become UnitOfMeasureId / UnitOfMeasureAbbreviation / UnitOfMeasureType
+    And Swagger / OpenAPI docs reflect the new shapes
+    And the API version is bumped (or a migration strategy documented) so clients know to update
+
+  Scenario: Angular models and components follow the rename
+    Given existing TypeScript files referencing uomId, uomAbbreviation, UnitOfMeasureDto
+    When the rename runs
+    Then the TypeScript identifiers spell out UnitOfMeasure
+    And ng build passes with zero errors
+    And ng lint passes with zero warnings
+
+  Scenario: Tests are updated in lockstep
+    Given existing unit and integration tests referencing Uom*-named types and properties
+    When the rename runs
+    Then every test compiles and passes
+    And the total passing test count is preserved (no silent skips)
+
+  Scenario: Legacy URL routes are updated or aliased
+    Given URL routes that embed "uom" (e.g. /api/v1/uom-review-queue)
+    When the rename runs
+    Then the routes are updated to spelled-out kebab-case form (/api/v1/unit-of-measure-review-queue)
+    And old routes either return 301 redirects or are removed (documented decision)
+
+  Scenario: Migration script is smoke-tested against a populated database
+    Given a local dev database with real ingested data (MEP-026)
+    When the rename migration is applied
+    Then no data loss occurs
+    And application endpoints function identically against the renamed schema
+    And rolling the migration back restores the original column names without data loss
+```
+

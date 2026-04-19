@@ -1,11 +1,11 @@
-namespace MealsEnPlace.Api.Features.UomReviewQueue;
+namespace MealsEnPlace.Api.Features.UnitOfMeasureReviewQueue;
 
 /// <summary>
-/// A single row in the UOM review queue: a unit token that could not be
-/// resolved deterministically during ingest and needs the user to decide
-/// how to map it (or ignore it).
+/// A single row in the unit-of-measure review queue: a unit token that could
+/// not be resolved deterministically during ingest and needs the user to
+/// decide how to map it (or ignore it).
 /// </summary>
-public sealed class UnresolvedUomTokenResponse
+public sealed class UnresolvedUnitOfMeasureTokenResponse
 {
     /// <summary>Running count of occurrences across ingest runs.</summary>
     public int Count { get; init; }

@@ -50,7 +50,7 @@ Phase 4b will add:
 
 - Recipe / RecipeIngredient persistence
 - CanonicalIngredient upserts from NER
-- `NormalizeOrDeferAsync` writes to the `UnresolvedUomToken` review queue
+- `NormalizeOrDeferAsync` writes to the `UnresolvedUnitOfMeasureToken` review queue
 - Batched `SaveChangesAsync` flushing
 
 Phase 4c will add:

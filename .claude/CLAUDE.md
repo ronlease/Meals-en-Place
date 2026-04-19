@@ -85,6 +85,7 @@ MealsEnPlace/
 - Angular uses standalone components. No NgModules.
 - All new features require a backlog entry before implementation.
 - **All fields, properties, methods, and variables within a class must be declared in alphabetical order.** Applies to both C# and TypeScript. Enforced to ease diffs and code review.
+- **Avoid abbreviations in domain names.** Spell out terms like `UnitOfMeasure` (not `UOM` / `Uom`), `UnitOfMeasureAlias`, etc. Universal programming abbreviations (HTTP, JSON, SQL, CSV, API, UI, DB, DTO, EF, ID) are OK. Existing legacy `Uom...` naming predates this rule; do not undertake a repo-wide rename without explicit request.
 - Commit locally freely as work progresses. Only push to origin or open/update PRs when explicitly asked.
 - Never commit directly to main. Always create a feature branch and commit there.
 

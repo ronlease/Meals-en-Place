@@ -1,12 +1,12 @@
-namespace MealsEnPlace.Api.Features.UomReviewQueue;
+namespace MealsEnPlace.Api.Features.UnitOfMeasureReviewQueue;
 
 /// <summary>
-/// Request body for mapping an unresolved UOM token to a canonical
-/// <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure"/>. Creates a
-/// new <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> row
-/// so future occurrences of the same token resolve deterministically.
+/// Request body for mapping an unresolved unit-of-measure token to a canonical
+/// <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure"/>. Creates a new
+/// <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> row so
+/// future occurrences of the same token resolve deterministically.
 /// </summary>
-public sealed class MapTokenToUomRequest
+public sealed class MapTokenToUnitOfMeasureRequest
 {
     /// <summary>
     /// When true, the controller inserts the alias even if another alias with
