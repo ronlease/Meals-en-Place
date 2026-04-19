@@ -2,8 +2,8 @@ namespace MealsEnPlace.Api.Models.Entities;
 
 /// <summary>
 /// A canonical unit of measure with an optional conversion factor to its base unit.
-/// ConversionFactor converts FROM this unit TO the base unit for its <see cref="UomType"/>.
-/// Base units (ml, g, ea) have <see cref="BaseUomId"/> = null and
+/// ConversionFactor converts FROM this unit TO the base unit for its <see cref="UnitOfMeasureType"/>.
+/// Base units (ml, g, ea) have <see cref="BaseUnitOfMeasureId"/> = null and
 /// <see cref="ConversionFactor"/> = 1.0.
 /// </summary>
 public class UnitOfMeasure
@@ -14,7 +14,7 @@ public class UnitOfMeasure
     /// <summary>
     /// Id of the base unit for this type. Null when this unit is itself the base unit.
     /// </summary>
-    public Guid? BaseUomId { get; set; }
+    public Guid? BaseUnitOfMeasureId { get; set; }
 
     /// <summary>
     /// Factor that converts a quantity in this unit to a quantity in the base unit.
@@ -29,12 +29,12 @@ public class UnitOfMeasure
     public string Name { get; set; } = string.Empty;
 
     /// <summary>Dimensional type of this unit.</summary>
-    public UomType UomType { get; set; }
+    public UnitOfMeasureType UnitOfMeasureType { get; set; }
 
     // Navigation properties
 
     /// <summary>The base unit that this unit converts into. Null when this is the base.</summary>
-    public UnitOfMeasure? BaseUom { get; set; }
+    public UnitOfMeasure? BaseUnitOfMeasure { get; set; }
 
     /// <summary>Derived units that convert into this base unit.</summary>
     public ICollection<UnitOfMeasure> DerivedUnits { get; set; } = new List<UnitOfMeasure>();

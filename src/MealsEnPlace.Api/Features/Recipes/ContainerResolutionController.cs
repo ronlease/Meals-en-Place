@@ -15,7 +15,7 @@ namespace MealsEnPlace.Api.Features.Recipes;
 [Produces("application/json")]
 public class ContainerResolutionController(
     IContainerResolutionService containerResolutionService,
-    UomDisplayConverter displayConverter) : ControllerBase
+    UnitOfMeasureDisplayConverter displayConverter) : ControllerBase
 {
     /// <summary>
     /// Returns unresolved container references grouped by canonical ingredient
@@ -47,11 +47,11 @@ public class ContainerResolutionController(
     /// canonical ingredient id and notes phrase) in a single transaction.
     /// Applies the declared net weight or volume to every matching row.
     /// </summary>
-    /// <param name="request">Group key, declared quantity, and UOM.</param>
+    /// <param name="request">Group key, declared quantity, and unit of measure.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 200 with the count of rows updated; 400 when the request fails validation
-    /// (non-positive quantity, unknown UOM, or empty notes).
+    /// (non-positive quantity, unknown unit of measure, or empty notes).
     /// </returns>
     [HttpPost("unresolved-groups/resolve")]
     [ProducesResponseType(typeof(BulkResolveGroupResponse), StatusCodes.Status200OK)]
@@ -64,7 +64,7 @@ public class ContainerResolutionController(
             request.CanonicalIngredientId,
             request.Notes,
             request.Quantity,
-            request.UomId,
+            request.UnitOfMeasureId,
             cancellationToken);
 
         if (result.IsValidationError)
@@ -140,7 +140,7 @@ public class ContainerResolutionController(
     /// </summary>
     /// <remarks>
     /// After this call the ingredient's <c>IsContainerResolved</c> flag is set to true,
-    /// <c>Quantity</c> and <c>UomId</c> are updated to the declared values, and
+    /// <c>Quantity</c> and <c>UnitOfMeasureId</c> are updated to the declared values, and
     /// <c>Notes</c> is preserved unchanged (it continues to hold the original import string
     /// such as "1 can chopped tomatoes"). Once all ingredients in the recipe are resolved
     /// the recipe enters the matching pool automatically.
@@ -151,7 +151,7 @@ public class ContainerResolutionController(
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 200 with the updated <see cref="ResolvedIngredientResponse"/>;
-    /// 400 when the request fails validation (quantity not positive, UOM not found);
+    /// 400 when the request fails validation (quantity not positive, unit of measure not found);
     /// 404 when the recipe or ingredient does not exist.
     /// </returns>
     [HttpPut("{recipeId:guid}/ingredients/{ingredientId:guid}/resolve")]
@@ -231,9 +231,9 @@ public class ContainerResolutionController(
         RecipeIngredient ingredient,
         CancellationToken cancellationToken)
     {
-        var uomType = ingredient.Uom?.UomType ?? UomType.Arbitrary;
+        var unitOfMeasureType = ingredient.UnitOfMeasure?.UnitOfMeasureType ?? UnitOfMeasureType.Arbitrary;
         var (displayQty, displayAbbr) = await displayConverter.ConvertAsync(
-            ingredient.Quantity, uomType, cancellationToken);
+            ingredient.Quantity, unitOfMeasureType, cancellationToken);
 
         return new ResolvedIngredientResponse
         {
@@ -243,8 +243,8 @@ public class ContainerResolutionController(
             Notes = ingredient.Notes,
             Quantity = displayQty,
             RecipeId = ingredient.RecipeId,
-            UomAbbreviation = displayAbbr,
-            UomId = ingredient.UomId ?? Guid.Empty
+            UnitOfMeasureAbbreviation = displayAbbr,
+            UnitOfMeasureId = ingredient.UnitOfMeasureId ?? Guid.Empty
         };
     }
 }

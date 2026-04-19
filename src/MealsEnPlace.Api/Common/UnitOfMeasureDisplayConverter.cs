@@ -22,44 +22,44 @@ namespace MealsEnPlace.Api.Common;
 /// Metric display: pass base units through unchanged.
 /// </para>
 /// </summary>
-public class UomDisplayConverter(MealsEnPlaceDbContext dbContext)
+public class UnitOfMeasureDisplayConverter(MealsEnPlaceDbContext dbContext)
 {
     private DisplaySystem? _cachedDisplaySystem;
 
     /// <summary>
     /// Converts <paramref name="baseQuantity"/> from the base unit implied by
-    /// <paramref name="uomType"/> to the display unit appropriate for the current
+    /// <paramref name="unitOfMeasureType"/> to the display unit appropriate for the current
     /// <see cref="DisplaySystem"/> preference.
     /// </summary>
     /// <param name="baseQuantity">Quantity in the metric base unit (ml, g, or ea).</param>
-    /// <param name="uomType">Dimensional type of the quantity.</param>
+    /// <param name="unitOfMeasureType">Dimensional type of the quantity.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// A tuple of the converted quantity and its display abbreviation.
     /// </returns>
     public async Task<(decimal DisplayQuantity, string DisplayAbbreviation)> ConvertAsync(
         decimal baseQuantity,
-        UomType uomType,
+        UnitOfMeasureType unitOfMeasureType,
         CancellationToken cancellationToken = default)
     {
         var displaySystem = await GetDisplaySystemAsync(cancellationToken);
 
-        if (displaySystem == DisplaySystem.Metric || uomType == UomType.Arbitrary || uomType == UomType.Count)
+        if (displaySystem == DisplaySystem.Metric || unitOfMeasureType == UnitOfMeasureType.Arbitrary || unitOfMeasureType == UnitOfMeasureType.Count)
         {
-            var abbreviation = uomType switch
+            var abbreviation = unitOfMeasureType switch
             {
-                UomType.Volume => "ml",
-                UomType.Weight => "g",
+                UnitOfMeasureType.Volume => "ml",
+                UnitOfMeasureType.Weight => "g",
                 _ => "ea"
             };
             return (baseQuantity, abbreviation);
         }
 
         // Imperial conversions
-        return uomType switch
+        return unitOfMeasureType switch
         {
-            UomType.Volume => ConvertVolumeToImperial(baseQuantity),
-            UomType.Weight => ConvertWeightToImperial(baseQuantity),
+            UnitOfMeasureType.Volume => ConvertVolumeToImperial(baseQuantity),
+            UnitOfMeasureType.Weight => ConvertWeightToImperial(baseQuantity),
             _ => (baseQuantity, "ea")
         };
     }

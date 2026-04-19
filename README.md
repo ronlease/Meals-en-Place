@@ -51,7 +51,7 @@ dotnet test
 ```
 src/
   MealsEnPlace.Api/          # ASP.NET Core Web API
-    Common/                   # Shared types, UOM conversion/normalization, container detection
+    Common/                   # Shared types, unit of measure conversion/normalization, container detection
     Features/
       Inventory/              # Inventory CRUD, reference data endpoints
       MealPlan/               # Meal plan generation, slot swapping
@@ -131,8 +131,8 @@ C4 diagrams below are rendered from [docs/c4/](docs/c4/) on every push to `main`
 
 ## Implemented Features
 
-- **Inventory Management** (MEP-001) -- Track items across Pantry, Fridge, and Freezer with quantity, UOM, and expiry dates
-- **UOM Normalization** (MEP-002) -- Convert between units; Claude resolves colloquial measures
+- **Inventory Management** (MEP-001) -- Track items across Pantry, Fridge, and Freezer with quantity, unit of measure, and expiry dates
+- **unit of measure Normalization** (MEP-002) -- Convert between units; Claude resolves colloquial measures
 - **Container Reference Resolution** (MEP-003) -- Detect "1 can", "1 jar" and prompt for actual weight/volume
 - **Recipe Import** (MEP-004) -- Import from TheMealDB by name, cuisine, or category
 - **Dietary Classification** (MEP-005) -- Rule-based dietary tagging (Vegetarian, Vegan, GlutenFree, etc.) with library filtering

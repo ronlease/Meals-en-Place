@@ -67,16 +67,16 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "cup",
-                BaseUomId = UnitOfMeasureConfiguration.MlId,
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 236.588m,
                 Id = UnitOfMeasureConfiguration.CupId,
                 Name = "Cup",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
@@ -84,7 +84,7 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
 
         _dbContext.UnitOfMeasureAliases.Add(new UnitOfMeasureAlias

@@ -64,14 +64,14 @@ public class CanonicalIngredientRegistryTests : IDisposable
             .Options;
         _dbContext = new MealsEnPlaceDbContext(options);
 
-        // The registry requires the default-each UOM to exist at load time.
+        // The registry requires the default-each unit of measure to exist at load time.
         _dbContext.UnitsOfMeasure.Add(new UnitOfMeasure
         {
             Abbreviation = "ea",
             ConversionFactor = 1.0m,
             Id = UnitOfMeasureConfiguration.EachId,
             Name = "Each",
-            UomType = UomType.Count
+            UnitOfMeasureType = UnitOfMeasureType.Count
         });
         _dbContext.SaveChanges();
     }
@@ -83,7 +83,7 @@ public class CanonicalIngredientRegistryTests : IDisposable
         _dbContext.CanonicalIngredients.Add(new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = UnitOfMeasureConfiguration.EachId,
+            DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
             Id = id,
             Name = name
         });

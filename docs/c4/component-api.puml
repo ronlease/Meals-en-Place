@@ -7,7 +7,7 @@ title Component Diagram for API Container — Meals en Place
 
 Container_Ext(web, "Angular Web App", "Angular 21, Angular Material", "Frontend SPA")
 ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality, preferences")
-System_Ext(claude, "Claude API", "UOM normalization, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(claude, "Claude API", "unit of measure normalization, dietary classification, meal plan optimization, substitution suggestions")
 System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 
 Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
@@ -26,13 +26,13 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
     ' === Infrastructure Components ===
 
-    Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, UOM resolution, meal plan optimization, substitution suggestions (currently stub)")
+    Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, unit of measure resolution, meal plan optimization, substitution suggestions (currently stub)")
     Component(themealdbClient, "TheMealDB Client", "TheMealDbClient", "HTTP client for external recipe API")
     Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 13 entity configurations")
 
     ' === Common / Shared Components ===
 
-    Component(uomServices, "UOM Services", "UomConversionService, UomNormalizationService, UomDisplayConverter", "Convert to base units, parse measure strings, convert base units to display units per user preference")
+    Component(unitOfMeasureServices, "unit of measure Services", "UnitOfMeasureConversionService, UnitOfMeasureNormalizationService, UnitOfMeasureDisplayConverter", "Convert to base units, parse measure strings, convert base units to display units per user preference")
     Component(containerDetector, "Container Reference Detector", "ContainerReferenceDetector", "Detects container keywords (can, jar, box, packet) in ingredient strings")
     Component(inputSanitizer, "Input Sanitizer", "InputSanitizer", "Strips HTML, control characters, enforces length limits")
 }
@@ -54,15 +54,15 @@ Rel(web, userPreferences, "Gets and updates preferences", "HTTP/JSON")
 Rel(inventory, dataAccess, "Reads/Writes inventory", "EF Core")
 Rel(inventory, containerDetector, "Detects container references in entries")
 Rel(recipeImport, themealdbClient, "Fetches recipes")
-Rel(recipeImport, uomServices, "Normalizes ingredient measures")
+Rel(recipeImport, unitOfMeasureServices, "Normalizes ingredient measures")
 Rel(recipeImport, containerDetector, "Detects container references in imported ingredients")
 Rel(recipeImport, claudeClient, "Requests dietary classification")
-Rel(recipeMatching, uomServices, "Converts quantities for comparison")
+Rel(recipeMatching, unitOfMeasureServices, "Converts quantities for comparison")
 Rel(recipeMatching, claudeClient, "Evaluates substitutions for NearMatch candidates")
 Rel(containerResolution, dataAccess, "Reads/Writes resolved references", "EF Core")
-Rel(mealPlan, uomServices, "Converts quantities for scoring")
+Rel(mealPlan, unitOfMeasureServices, "Converts quantities for scoring")
 Rel(mealPlan, claudeClient, "Optimizes meal plan for variety and waste reduction")
-Rel(shoppingList, uomServices, "Converts and formats display quantities")
+Rel(shoppingList, unitOfMeasureServices, "Converts and formats display quantities")
 Rel(wasteReduction, dataAccess, "Reads expiry data and recipes", "EF Core")
 Rel(seasonalProduce, dataAccess, "Reads seasonality windows", "EF Core")
 Rel(userPreferences, dataAccess, "Reads/Writes display preferences", "EF Core")

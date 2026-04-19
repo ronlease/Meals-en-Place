@@ -49,17 +49,17 @@ definitions. No cross-feature service dependencies — shared logic lives in `co
 The inventory feature is the foundational data entry surface. Implement as three tabs:
 Pantry, Fridge, Freezer.
 - Each tab renders a `mat-table` of InventoryItems with columns:
-  Ingredient | Quantity | UOM | Expiry Date | Actions
+  Ingredient | Quantity | unit of measure | Expiry Date | Actions
 - Expiry date column renders a colored badge: >7 days (default), 3–7 days (amber), <3 days (red)
 - Add item opens a `mat-dialog` with: Ingredient (autocomplete from CanonicalIngredients),
-  Quantity, UOM (dropdown), Location (pre-set to active tab), Expiry Date (optional datepicker)
+  Quantity, unit of measure (dropdown), Location (pre-set to active tab), Expiry Date (optional datepicker)
 - **Container reference flow:** If the API returns a `ContainerReferenceDetected` response
   after the user submits an item, the dialog stays open and renders an inline prompt:
   "We detected a container reference ('can'). What is the net weight or volume of this
-  container?" The user enters a quantity and selects a UOM (oz, g, ml, etc.) from a
+  container?" The user enters a quantity and selects a unit of measure (oz, g, ml, etc.) from a
   dropdown. The dialog resubmits with the declared values. Do not close the dialog until
   the API confirms the item was saved successfully.
-- UOM resolution warnings (Low confidence or Arbitrary from Claude) surface inline below
+- unit of measure resolution warnings (Low confidence or Arbitrary from Claude) surface inline below
   the Quantity field with an amber icon and the Claude-provided note
 - Edit and delete available per row via icon buttons
 
@@ -93,7 +93,7 @@ A dedicated view (accessible from the import summary and from the Recipe Browser
 listing all recipes with unresolved container references.
 - List of recipes, each expandable to show its unresolved RecipeIngredients
 - Each unresolved ingredient shows the original text (from Notes) and an inline input:
-  Quantity field + UOM dropdown
+  Quantity field + unit of measure dropdown
 - "Resolve" button per ingredient submits the declaration to the API
 - Once all ingredients in a recipe are resolved, the recipe row collapses and shows a
   "Ready for Matching" success state
@@ -116,7 +116,7 @@ The meal plan board is the signature UI surface. Implement as a 7-column weekly 
 
 ### Shopping List
 - Grouped list by ingredient category (Produce, Protein, Dairy, Grain, Spice, Condiment, Other)
-- Each item shows: Ingredient Name, Quantity, UOM (in user's display system — Imperial by default)
+- Each item shows: Ingredient Name, Quantity, unit of measure (in user's display system — Imperial by default)
 - Checkbox per item for marking as purchased (local UI state only — not persisted)
 - "Copy to Clipboard" action outputs a plain-text grocery list
 - Quantities auto-update when the active meal plan changes
@@ -148,7 +148,7 @@ without a message.
 
 ## Display System
 All quantity values that come from the API are already converted to the user's display
-system by the `UomDisplayConverter` on the server. The frontend does not perform unit
+system by the `UnitOfMeasureDisplayConverter` on the server. The frontend does not perform unit
 conversion — it displays whatever the API returns. Do not implement client-side unit
 conversion logic.
 

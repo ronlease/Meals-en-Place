@@ -26,12 +26,12 @@ public sealed class RecipeIngredientDetailDto
     /// </summary>
     public string? Notes { get; init; }
 
-    /// <summary>Resolved quantity in the unit described by <see cref="UomAbbreviation"/>.</summary>
+    /// <summary>Resolved quantity in the unit described by <see cref="UnitOfMeasureAbbreviation"/>.</summary>
     public decimal Quantity { get; init; }
 
     /// <summary>Abbreviation of the unit of measure (e.g., "oz", "ml", "ea"). Empty for unresolved container references.</summary>
-    public string UomAbbreviation { get; init; } = string.Empty;
+    public string UnitOfMeasureAbbreviation { get; init; } = string.Empty;
 
     /// <summary>The unit of measure identifier. Null for unresolved container references.</summary>
-    public Guid? UomId { get; init; }
+    public Guid? UnitOfMeasureId { get; init; }
 }

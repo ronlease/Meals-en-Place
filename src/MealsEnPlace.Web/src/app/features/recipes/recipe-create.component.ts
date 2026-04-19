@@ -18,7 +18,7 @@ interface RecipeIngredientFormValue {
   canonicalIngredientId: string;
   notes: string | null;
   quantity: number;
-  uomId: string | null;
+  unitOfMeasureId: string | null;
 }
 
 @Component({
@@ -75,9 +75,9 @@ interface RecipeIngredientFormValue {
             <input matInput type="number" formControlName="quantity" min="0" step="0.1" required />
           </mat-form-field>
 
-          <mat-form-field appearance="outline" class="uom-field">
+          <mat-form-field appearance="outline" class="unit-of-measure-field">
             <mat-label>Unit</mat-label>
-            <mat-select formControlName="uomId">
+            <mat-select formControlName="unitOfMeasureId">
               <mat-option [value]="null">None</mat-option>
               @for (u of units(); track u.id) {
                 <mat-option [value]="u.id">{{ u.abbreviation }} ({{ u.name }})</mat-option>
@@ -178,7 +178,7 @@ interface RecipeIngredientFormValue {
         min-width: 80px;
       }
 
-      .uom-field {
+      .unit-of-measure-field {
         flex: 2;
       }
 
@@ -232,7 +232,7 @@ export class RecipeCreateComponent implements OnInit {
         canonicalIngredientId: ['', Validators.required],
         notes: [''],
         quantity: [1, [Validators.required, Validators.min(0)]],
-        uomId: [null as string | null],
+        unitOfMeasureId: [null as string | null],
       })
     );
   }
@@ -266,7 +266,7 @@ export class RecipeCreateComponent implements OnInit {
         canonicalIngredientId: i.canonicalIngredientId,
         notes: i.notes || null,
         quantity: i.quantity,
-        uomId: i.uomId || null,
+        unitOfMeasureId: i.unitOfMeasureId || null,
       })),
       instructions: val.instructions || '',
       servingCount: val.servingCount || 4,

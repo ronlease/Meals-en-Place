@@ -17,9 +17,9 @@ public sealed class BulkResolveGroupRequest
     /// </summary>
     public string Notes { get; init; } = string.Empty;
 
-    /// <summary>Declared net weight or volume, in the unit identified by <see cref="UomId"/>.</summary>
+    /// <summary>Declared net weight or volume, in the unit identified by <see cref="UnitOfMeasureId"/>.</summary>
     public decimal Quantity { get; init; }
 
     /// <summary>The canonical <c>UnitOfMeasure</c> for <see cref="Quantity"/>.</summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

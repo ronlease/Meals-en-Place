@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace MealsEnPlace.Api.Common;
 
 /// <summary>
-/// The result of a <see cref="IUomNormalizationService.NormalizeAsync"/> call.
+/// The result of a <see cref="IUnitOfMeasureNormalizationService.NormalizeAsync"/> call.
 /// Describes the resolved quantity, unit, confidence, and whether Claude was invoked.
 /// </summary>
 public sealed class NormalizationResult
@@ -14,7 +14,7 @@ public sealed class NormalizationResult
     /// <summary>
     /// Confidence level of the resolution.
     /// For deterministic lookups this is always <see cref="ClaudeConfidence.High"/>.
-    /// For Claude resolutions this reflects <see cref="UomResolutionResult.Confidence"/>.
+    /// For Claude resolutions this reflects <see cref="UnitOfMeasureResolutionResult.Confidence"/>.
     /// </summary>
     public ClaudeConfidence Confidence { get; init; }
 
@@ -24,18 +24,18 @@ public sealed class NormalizationResult
     /// </summary>
     public string? Notes { get; init; }
 
-    /// <summary>The resolved numeric quantity in <see cref="UomAbbreviation"/> units.</summary>
+    /// <summary>The resolved numeric quantity in <see cref="UnitOfMeasureAbbreviation"/> units.</summary>
     public decimal Quantity { get; init; }
 
     /// <summary>The abbreviation of the resolved canonical unit (e.g., "g", "ml", "ea", "cup").</summary>
-    public string UomAbbreviation { get; init; } = string.Empty;
+    public string UnitOfMeasureAbbreviation { get; init; } = string.Empty;
 
     /// <summary>
     /// The <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Id"/> of the resolved unit.
     /// <see cref="Guid.Empty"/> when Claude could not resolve to a known unit
     /// or when the ingredient was deferred to the review queue.
     /// </summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 
     /// <summary>
     /// True when Claude was invoked to resolve the measure string.
@@ -56,7 +56,7 @@ public sealed class NormalizationResult
 
 /// <summary>
 /// Normalizes raw measure strings from recipe imports and inventory entries into
-/// canonical units tracked in the UOM conversion table.
+/// canonical units tracked in the unit of measure conversion table.
 /// <para>
 /// Resolution order:
 /// <list type="number">
@@ -64,7 +64,7 @@ public sealed class NormalizationResult
 ///   <item><description>Look up the unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
 ///   <item><description>If not found, look up against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> to catch dataset variants (e.g., "c.", "Tbsp.", "lbs").</description></item>
 ///   <item><description>If still not found and a positive quantity parsed, default to "each" (count-with-ingredient-noun pattern, e.g. "4 chicken breasts").</description></item>
-///   <item><description>If still not found, fall back to Claude via <see cref="IClaudeService.ResolveUomAsync"/>.</description></item>
+///   <item><description>If still not found, fall back to Claude via <see cref="IClaudeService.ResolveUnitOfMeasureAsync"/>.</description></item>
 /// </list>
 /// </para>
 /// <para>
@@ -72,7 +72,7 @@ public sealed class NormalizationResult
 /// calling this service — this service does not repeat that check.
 /// </para>
 /// </summary>
-public interface IUomNormalizationService
+public interface IUnitOfMeasureNormalizationService
 {
     /// <summary>
     /// Attempts to normalize <paramref name="measureString"/> to a canonical quantity and unit.
@@ -138,11 +138,11 @@ public interface IUomNormalizationService
 }
 
 /// <summary>
-/// <inheritdoc cref="IUomNormalizationService"/>
+/// <inheritdoc cref="IUnitOfMeasureNormalizationService"/>
 /// </summary>
-public class UomNormalizationService(
+public class UnitOfMeasureNormalizationService(
     IClaudeService claudeService,
-    MealsEnPlaceDbContext dbContext) : IUomNormalizationService
+    MealsEnPlaceDbContext dbContext) : IUnitOfMeasureNormalizationService
 {
     /// <inheritdoc />
     public async Task<NormalizationResult> NormalizeAsync(
@@ -161,15 +161,15 @@ public class UomNormalizationService(
         }
 
         // Claude fallback for colloquial or unmapped units.
-        var claudeResult = await claudeService.ResolveUomAsync(measureString, ingredientName);
+        var claudeResult = await claudeService.ResolveUnitOfMeasureAsync(measureString, ingredientName);
 
-        // Attempt to map the Claude-resolved abbreviation back to a known UOM.
-        var resolvedUom = string.IsNullOrWhiteSpace(claudeResult.ResolvedUom)
+        // Attempt to map the Claude-resolved abbreviation back to a known unit of measure.
+        var resolvedUnitOfMeasure = string.IsNullOrWhiteSpace(claudeResult.ResolvedUnitOfMeasure)
             ? null
             : await dbContext.UnitsOfMeasure
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    u => u.Abbreviation.ToLower() == claudeResult.ResolvedUom.ToLower(),
+                    u => u.Abbreviation.ToLower() == claudeResult.ResolvedUnitOfMeasure.ToLower(),
                     cancellationToken);
 
         return new NormalizationResult
@@ -177,8 +177,8 @@ public class UomNormalizationService(
             Confidence = claudeResult.Confidence,
             Notes = claudeResult.Notes,
             Quantity = claudeResult.ResolvedQuantity,
-            UomAbbreviation = resolvedUom?.Abbreviation ?? claudeResult.ResolvedUom,
-            UomId = resolvedUom?.Id ?? Guid.Empty,
+            UnitOfMeasureAbbreviation = resolvedUnitOfMeasure?.Abbreviation ?? claudeResult.ResolvedUnitOfMeasure,
+            UnitOfMeasureId = resolvedUnitOfMeasure?.Id ?? Guid.Empty,
             WasClaudeResolved = true
         };
     }
@@ -208,8 +208,8 @@ public class UomNormalizationService(
             Confidence = ClaudeConfidence.Low,
             Notes = "Deferred to review queue.",
             Quantity = parsedQuantity,
-            UomAbbreviation = string.Empty,
-            UomId = Guid.Empty,
+            UnitOfMeasureAbbreviation = string.Empty,
+            UnitOfMeasureId = Guid.Empty,
             WasClaudeResolved = false,
             WasDeferredToQueue = true
         };
@@ -242,7 +242,7 @@ public class UomNormalizationService(
         if (!string.IsNullOrWhiteSpace(unitToken))
         {
             var normalizedToken = unitToken.ToLower().TrimEnd('s');
-            var uom = await dbContext.UnitsOfMeasure
+            var unitOfMeasure = await dbContext.UnitsOfMeasure
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
                     u => u.Abbreviation.ToLower() == unitToken.ToLower()
@@ -251,33 +251,33 @@ public class UomNormalizationService(
                          || u.Name.ToLower() == normalizedToken,
                     cancellationToken);
 
-            if (uom is not null)
+            if (unitOfMeasure is not null)
             {
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
                     Quantity = parsedQuantity,
-                    UomAbbreviation = uom.Abbreviation,
-                    UomId = uom.Id,
+                    UnitOfMeasureAbbreviation = unitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = unitOfMeasure.Id,
                     WasClaudeResolved = false
                 };
             }
 
             // Step 2: alias-table lookup for dataset variants (e.g. "c.", "Tbsp.", "lbs").
-            var aliasedUom = await dbContext.UnitOfMeasureAliases
+            var aliasedUnitOfMeasure = await dbContext.UnitOfMeasureAliases
                 .AsNoTracking()
                 .Where(a => a.Alias.ToLower() == unitToken.ToLower())
                 .Select(a => a.UnitOfMeasure!)
                 .FirstOrDefaultAsync(cancellationToken);
 
-            if (aliasedUom is not null)
+            if (aliasedUnitOfMeasure is not null)
             {
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
                     Quantity = parsedQuantity,
-                    UomAbbreviation = aliasedUom.Abbreviation,
-                    UomId = aliasedUom.Id,
+                    UnitOfMeasureAbbreviation = aliasedUnitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = aliasedUnitOfMeasure.Id,
                     WasClaudeResolved = false
                 };
             }
@@ -286,18 +286,18 @@ public class UomNormalizationService(
         // Step 3: count-with-ingredient-noun fallback.
         if (parsedQuantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
         {
-            var eachUom = await dbContext.UnitsOfMeasure
+            var eachUnitOfMeasure = await dbContext.UnitsOfMeasure
                 .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Abbreviation == "ea", cancellationToken);
 
-            if (eachUom is not null)
+            if (eachUnitOfMeasure is not null)
             {
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
                     Quantity = parsedQuantity,
-                    UomAbbreviation = eachUom.Abbreviation,
-                    UomId = eachUom.Id,
+                    UnitOfMeasureAbbreviation = eachUnitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = eachUnitOfMeasure.Id,
                     WasClaudeResolved = false
                 };
             }
@@ -355,9 +355,9 @@ public class UomNormalizationService(
     }
 
     /// <summary>
-    /// Back-compat delegate to <see cref="UomTokenParser.Parse"/> so existing
+    /// Back-compat delegate to <see cref="UnitOfMeasureTokenParser.Parse"/> so existing
     /// call sites in this class do not need refactoring.
     /// </summary>
     private static (decimal Quantity, string UnitToken) ParseMeasureString(string measureString) =>
-        UomTokenParser.Parse(measureString);
+        UnitOfMeasureTokenParser.Parse(measureString);
 }

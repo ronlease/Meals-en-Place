@@ -51,11 +51,11 @@ public class SeasonalProduceServiceTests : IDisposable
         _dbContext.UnitsOfMeasure.Add(new UnitOfMeasure
         {
             Abbreviation = "ea",
-            BaseUomId = null,
+            BaseUnitOfMeasureId = null,
             ConversionFactor = 1.0m,
             Id = EachId,
             Name = "Each",
-            UomType = UomType.Count
+            UnitOfMeasureType = UnitOfMeasureType.Count
         });
         _dbContext.SaveChanges();
     }
@@ -65,7 +65,7 @@ public class SeasonalProduceServiceTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = EachId,
+            DefaultUnitOfMeasureId = EachId,
             Id = Guid.NewGuid(),
             Name = name
         };

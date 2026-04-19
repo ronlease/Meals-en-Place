@@ -2,25 +2,25 @@
 //
 // Scenario: Resolve an unresolved ingredient — sets IsContainerResolved = true
 //   Given a recipe with one unresolved RecipeIngredient
-//   And a valid ResolveContainerRequest with positive quantity and a known UomId
+//   And a valid ResolveContainerRequest with positive quantity and a known UnitOfMeasureId
 //   When ResolveAsync is called
 //   Then the result IsSuccess is true
 //   And the returned ingredient has IsContainerResolved = true
 //
-// Scenario: Resolve an unresolved ingredient — stores correct quantity and UOM
+// Scenario: Resolve an unresolved ingredient — stores correct quantity and unit of measure
 //   Given a recipe with one unresolved RecipeIngredient
-//   And a ResolveContainerRequest with Quantity 14.5 and a known oz UomId
+//   And a ResolveContainerRequest with Quantity 14.5 and a known oz UnitOfMeasureId
 //   When ResolveAsync is called
 //   Then the resolved ingredient Quantity equals 14.5
-//   And the resolved ingredient UomId equals the declared oz UomId
+//   And the resolved ingredient UnitOfMeasureId equals the declared oz UnitOfMeasureId
 //
 // Scenario: Resolve an unresolved ingredient — Notes field is preserved unchanged
 //   Given a RecipeIngredient with Notes "1 can chopped tomatoes" and IsContainerResolved = false
 //   When ResolveAsync is called with a valid declaration
 //   Then the resolved ingredient Notes still equals "1 can chopped tomatoes"
 //
-// Scenario: Resolve with invalid UOM id — returns validation error
-//   Given a ResolveContainerRequest whose UomId does not exist in the database
+// Scenario: Resolve with invalid unit of measure id — returns validation error
+//   Given a ResolveContainerRequest whose UnitOfMeasureId does not exist in the database
 //   When ResolveAsync is called
 //   Then the result IsValidationError is true
 //   And the result ErrorMessage is not empty
@@ -37,7 +37,7 @@
 //   Then the result IsRecipeNotFound is true
 //
 // Scenario: Ingredient not found — returns IngredientNotFound
-//   Given a valid recipe and a valid UOM
+//   Given a valid recipe and a valid unit of measure
 //   But an ingredientId that does not belong to that recipe
 //   When ResolveAsync is called
 //   Then the result IsIngredientNotFound is true
@@ -88,8 +88,8 @@ public class ContainerResolutionServiceTests : IDisposable
     private static readonly Guid CanonicalIngredientId2 = Guid.NewGuid();
     private static readonly Guid CanonicalIngredientId3 = Guid.NewGuid();
     private static readonly Guid CanonicalIngredientId4 = Guid.NewGuid();
-    private static readonly Guid OzUomId = Guid.NewGuid();
-    private static readonly Guid GramsUomId = Guid.NewGuid();
+    private static readonly Guid OzUnitOfMeasureId = Guid.NewGuid();
+    private static readonly Guid GramsUnitOfMeasureId = Guid.NewGuid();
 
     public ContainerResolutionServiceTests()
     {
@@ -114,17 +114,17 @@ public class ContainerResolutionServiceTests : IDisposable
             {
                 Abbreviation = "g",
                 ConversionFactor = 1m,
-                Id = GramsUomId,
+                Id = GramsUnitOfMeasureId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "oz",
                 ConversionFactor = 28.3495m,
-                Id = OzUomId,
+                Id = OzUnitOfMeasureId,
                 Name = "Ounce",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             });
 
         _dbContext.CanonicalIngredients.AddRange(
@@ -140,7 +140,7 @@ public class ContainerResolutionServiceTests : IDisposable
         new()
         {
             Category = IngredientCategory.Produce,
-            DefaultUomId = GramsUomId,
+            DefaultUnitOfMeasureId = GramsUnitOfMeasureId,
             Id = id,
             Name = name
         };
@@ -181,7 +181,7 @@ public class ContainerResolutionServiceTests : IDisposable
             IsContainerResolved = false,
             Notes = notes,
             Quantity = 0m,
-            UomId = null
+            UnitOfMeasureId = null
         };
 
     private static RecipeIngredient BuildResolvedIngredient(
@@ -194,7 +194,7 @@ public class ContainerResolutionServiceTests : IDisposable
             IsContainerResolved = true,
             Notes = null,
             Quantity = quantity,
-            UomId = GramsUomId
+            UnitOfMeasureId = GramsUnitOfMeasureId
         };
 
     // ── GetUnresolvedIngredientsAsync ─────────────────────────────────────────
@@ -388,7 +388,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 0m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 0m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -408,7 +408,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = -5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = -5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -419,7 +419,7 @@ public class ContainerResolutionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ResolveAsync_UnknownUomId_ReturnsValidationError()
+    public async Task ResolveAsync_UnknownUnitOfMeasureId_ReturnsValidationError()
     {
         // Arrange
         var recipe = SeedRecipeWithIngredients("Tomato Soup", [
@@ -428,8 +428,8 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var nonExistentUomId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = nonExistentUomId };
+        var nonExistentUnitOfMeasureId = Guid.NewGuid();
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = nonExistentUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -447,7 +447,7 @@ public class ContainerResolutionServiceTests : IDisposable
         // Arrange
         var nonExistentRecipeId = Guid.NewGuid();
         var nonExistentIngredientId = Guid.NewGuid();
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(nonExistentRecipeId, nonExistentIngredientId, request);
@@ -471,7 +471,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var foreignIngredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == otherRecipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 24m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 24m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, foreignIngredientId, request);
@@ -492,7 +492,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -512,7 +512,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -532,7 +532,7 @@ public class ContainerResolutionServiceTests : IDisposable
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
         const decimal declaredQuantity = 14.5m;
-        var request = new ResolveContainerRequest { Quantity = declaredQuantity, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = declaredQuantity, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -542,7 +542,7 @@ public class ContainerResolutionServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task ResolveAsync_ValidRequest_StoresDeclaredUomIdOnIngredient()
+    public async Task ResolveAsync_ValidRequest_StoresDeclaredUnitOfMeasureIdOnIngredient()
     {
         // Arrange
         var recipe = SeedRecipeWithIngredients("Tomato Soup", [
@@ -551,13 +551,13 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
 
         // Assert
-        result.ResolvedIngredient!.UomId.Should().Be(OzUomId);
+        result.ResolvedIngredient!.UnitOfMeasureId.Should().Be(OzUnitOfMeasureId);
     }
 
     [Fact]
@@ -571,7 +571,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -590,7 +590,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -602,7 +602,7 @@ public class ContainerResolutionServiceTests : IDisposable
 
         persisted.IsContainerResolved.Should().BeTrue();
         persisted.Quantity.Should().Be(14.5m);
-        persisted.UomId.Should().Be(OzUomId);
+        persisted.UnitOfMeasureId.Should().Be(OzUnitOfMeasureId);
     }
 
     [Fact]
@@ -617,7 +617,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 24m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 24m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -626,7 +626,7 @@ public class ContainerResolutionServiceTests : IDisposable
         result.IsSuccess.Should().BeTrue();
         result.ResolvedIngredient!.Notes.Should().Be(originalNotes);
         result.ResolvedIngredient.Quantity.Should().Be(24m);
-        result.ResolvedIngredient.UomId.Should().Be(OzUomId);
+        result.ResolvedIngredient.UnitOfMeasureId.Should().Be(OzUnitOfMeasureId);
         result.ResolvedIngredient.IsContainerResolved.Should().BeTrue();
     }
 
@@ -642,7 +642,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var ingredientId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 0m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 0m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(recipe.Id, ingredientId, request);
@@ -656,7 +656,7 @@ public class ContainerResolutionServiceTests : IDisposable
     public async Task ResolveAsync_RecipeNotFound_IsSuccessIsFalse()
     {
         // Arrange
-        var request = new ResolveContainerRequest { Quantity = 14.5m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 14.5m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         var result = await _sut.ResolveAsync(Guid.NewGuid(), Guid.NewGuid(), request);
@@ -680,7 +680,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var unresolvedId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id && !ri.IsContainerResolved).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 15m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 15m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         await _sut.ResolveAsync(recipe.Id, unresolvedId, request);
@@ -700,7 +700,7 @@ public class ContainerResolutionServiceTests : IDisposable
         var unresolvedId = _dbContext.RecipeIngredients
             .First(ri => ri.RecipeId == recipe.Id).Id;
 
-        var request = new ResolveContainerRequest { Quantity = 15m, UomId = OzUomId };
+        var request = new ResolveContainerRequest { Quantity = 15m, UnitOfMeasureId = OzUnitOfMeasureId };
 
         // Act
         await _sut.ResolveAsync(recipe.Id, unresolvedId, request);
@@ -823,7 +823,7 @@ public class ContainerResolutionServiceTests : IDisposable
     // Scenario: Updates all matching unresolved rows in one call
     //   Given 3 recipes each with "1 can diced tomatoes" for the same canonical
     //   When BulkResolveAsync is called with that key and a valid declaration
-    //   Then all 3 rows are updated (IsContainerResolved = true, Quantity / UomId set)
+    //   Then all 3 rows are updated (IsContainerResolved = true, Quantity / UnitOfMeasureId set)
     //   And AffectedCount is 3
     //
     // Scenario: Does not touch rows in a different group
@@ -840,8 +840,8 @@ public class ContainerResolutionServiceTests : IDisposable
     //   When BulkResolveAsync is called with Quantity = 0
     //   Then IsValidationError is true
     //
-    // Scenario: Unknown UOM is rejected
-    //   When BulkResolveAsync is called with a UomId that does not exist
+    // Scenario: Unknown unit of measure is rejected
+    //   When BulkResolveAsync is called with a UnitOfMeasureId that does not exist
     //   Then IsValidationError is true
     //
     // Scenario: Empty notes key is rejected
@@ -860,7 +860,7 @@ public class ContainerResolutionServiceTests : IDisposable
         SeedRecipeWithIngredients("B", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
         SeedRecipeWithIngredients("C", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
 
-        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUnitOfMeasureId);
 
         result.IsValidationError.Should().BeFalse();
         result.AffectedCount.Should().Be(3);
@@ -870,7 +870,7 @@ public class ContainerResolutionServiceTests : IDisposable
             .ToListAsync();
         rows.Should().OnlyContain(ri => ri.IsContainerResolved
                                         && ri.Quantity == 14.5m
-                                        && ri.UomId == OzUomId);
+                                        && ri.UnitOfMeasureId == OzUnitOfMeasureId);
         rows.Should().OnlyContain(ri => ri.Notes == "1 can diced tomatoes"); // preserved
     }
 
@@ -882,7 +882,7 @@ public class ContainerResolutionServiceTests : IDisposable
             BuildUnresolvedIngredient(CanonicalIngredientId2, "1 jar marinara sauce")
         ]);
 
-        await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+        await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUnitOfMeasureId);
 
         var marinara = await _dbContext.RecipeIngredients
             .FirstAsync(ri => ri.CanonicalIngredientId == CanonicalIngredientId2);
@@ -897,7 +897,7 @@ public class ContainerResolutionServiceTests : IDisposable
             BuildResolvedIngredient(CanonicalIngredientId1)
         ]);
 
-        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUnitOfMeasureId);
 
         result.AffectedCount.Should().Be(1);
     }
@@ -905,14 +905,14 @@ public class ContainerResolutionServiceTests : IDisposable
     [Fact]
     public async Task BulkResolveAsync_NonPositiveQuantity_IsRejected()
     {
-        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 0m, OzUomId);
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 0m, OzUnitOfMeasureId);
 
         result.IsValidationError.Should().BeTrue();
         result.AffectedCount.Should().Be(0);
     }
 
     [Fact]
-    public async Task BulkResolveAsync_UnknownUom_IsRejected()
+    public async Task BulkResolveAsync_UnknownUnitOfMeasure_IsRejected()
     {
         var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, Guid.NewGuid());
 
@@ -922,7 +922,7 @@ public class ContainerResolutionServiceTests : IDisposable
     [Fact]
     public async Task BulkResolveAsync_EmptyNotes_IsRejected()
     {
-        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "   ", 14.5m, OzUomId);
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "   ", 14.5m, OzUnitOfMeasureId);
 
         result.IsValidationError.Should().BeTrue();
     }
@@ -934,7 +934,7 @@ public class ContainerResolutionServiceTests : IDisposable
             BuildUnresolvedIngredient(CanonicalIngredientId1, "1 Can Diced Tomatoes")
         ]);
 
-        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUnitOfMeasureId);
 
         result.AffectedCount.Should().Be(1);
     }

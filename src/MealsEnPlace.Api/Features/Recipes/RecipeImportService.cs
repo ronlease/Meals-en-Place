@@ -15,7 +15,7 @@ public sealed class RecipeImportService(
     MealsEnPlaceDbContext dbContext,
     ILogger<RecipeImportService> logger,
     ITheMealDbClient theMealDbClient,
-    IUomNormalizationService uomNormalizationService) : IRecipeImportService
+    IUnitOfMeasureNormalizationService unitOfMeasureNormalizationService) : IRecipeImportService
 {
     /// <inheritdoc />
     public async Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default)
@@ -33,7 +33,7 @@ public sealed class RecipeImportService(
 
         foreach (var ing in request.Ingredients)
         {
-            var isResolved = ing.UomId.HasValue;
+            var isResolved = ing.UnitOfMeasureId.HasValue;
             var detectionResult = ContainerReferenceDetector.Detect(ing.Notes);
 
             recipe.RecipeIngredients.Add(new RecipeIngredient
@@ -44,7 +44,7 @@ public sealed class RecipeImportService(
                 Notes = InputSanitizer.SanitizeForStorage(ing.Notes, 500),
                 Quantity = ing.Quantity,
                 RecipeId = recipe.Id,
-                UomId = ing.UomId
+                UnitOfMeasureId = ing.UnitOfMeasureId
             });
         }
 
@@ -111,7 +111,7 @@ public sealed class RecipeImportService(
             .AsNoTracking()
             .Include(r => r.DietaryTags)
             .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient)
-            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.Uom)
+            .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
             .FirstOrDefaultAsync(r => r.Id == id, cancellationToken);
 
         return recipe is null ? null : MapToDetailDto(recipe);
@@ -160,12 +160,12 @@ public sealed class RecipeImportService(
                     Notes = string.IsNullOrWhiteSpace(measureString) ? $"1 {detectionResult.DetectedKeyword} {ingredientName}" : measureString,
                     Quantity = 0m,
                     RecipeId = recipe.Id,
-                    UomId = null
+                    UnitOfMeasureId = null
                 };
             }
             else
             {
-                var normalization = await uomNormalizationService.NormalizeAsync(
+                var normalization = await unitOfMeasureNormalizationService.NormalizeAsync(
                     string.IsNullOrWhiteSpace(measureString) ? "1 ea" : measureString,
                     ingredientName, cancellationToken);
 
@@ -177,7 +177,7 @@ public sealed class RecipeImportService(
                     Notes = normalization.WasClaudeResolved ? normalization.Notes : null,
                     Quantity = normalization.Quantity,
                     RecipeId = recipe.Id,
-                    UomId = normalization.UomId == Guid.Empty ? canonicalIngredient.DefaultUomId : normalization.UomId
+                    UnitOfMeasureId = normalization.UnitOfMeasureId == Guid.Empty ? canonicalIngredient.DefaultUnitOfMeasureId : normalization.UnitOfMeasureId
                 };
             }
 
@@ -248,8 +248,8 @@ public sealed class RecipeImportService(
                     IsContainerResolved = ri.IsContainerResolved,
                     Notes = ri.Notes,
                     Quantity = ri.Quantity,
-                    UomAbbreviation = ri.Uom?.Abbreviation ?? string.Empty,
-                    UomId = ri.UomId
+                    UnitOfMeasureAbbreviation = ri.UnitOfMeasure?.Abbreviation ?? string.Empty,
+                    UnitOfMeasureId = ri.UnitOfMeasureId
                 })
                 .ToList(),
             Instructions = recipe.Instructions,
@@ -267,11 +267,11 @@ public sealed class RecipeImportService(
 
         if (existing is not null) return existing;
 
-        var eachUom = await dbContext.UnitsOfMeasure.FirstAsync(u => u.Abbreviation == "ea", cancellationToken);
+        var eachUnitOfMeasure = await dbContext.UnitsOfMeasure.FirstAsync(u => u.Abbreviation == "ea", cancellationToken);
         var newIngredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = eachUom.Id,
+            DefaultUnitOfMeasureId = eachUnitOfMeasure.Id,
             Id = Guid.NewGuid(),
             Name = normalized
         };

@@ -9,7 +9,7 @@ public sealed class MatchedIngredientDto
     public decimal AvailableQuantity { get; init; }
 
     /// <summary>Display unit for available quantity.</summary>
-    public string AvailableUom { get; init; } = string.Empty;
+    public string AvailableUnitOfMeasure { get; init; } = string.Empty;
 
     /// <summary>Ingredient name.</summary>
     public string IngredientName { get; init; } = string.Empty;
@@ -21,5 +21,5 @@ public sealed class MatchedIngredientDto
     public decimal RequiredQuantity { get; init; }
 
     /// <summary>Display unit for required quantity.</summary>
-    public string RequiredUom { get; init; } = string.Empty;
+    public string RequiredUnitOfMeasure { get; init; } = string.Empty;
 }

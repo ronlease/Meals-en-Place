@@ -4,7 +4,7 @@ namespace MealsEnPlace.Api.Features.Inventory;
 
 /// <summary>
 /// Request body for adding a new inventory item.
-/// When <see cref="DeclaredQuantity"/> and <see cref="DeclaredUomId"/> are supplied
+/// When <see cref="DeclaredQuantity"/> and <see cref="DeclaredUnitOfMeasureId"/> are supplied
 /// alongside a container-reference entry string, the system stores the item directly
 /// without issuing a <see cref="ContainerReferenceDetectedResponse"/>.
 /// </summary>
@@ -17,7 +17,7 @@ public sealed class AddInventoryItemRequest
 
     /// <summary>
     /// The net quantity declared by the user after a container reference was detected.
-    /// Supply this together with <see cref="DeclaredUomId"/> on the second POST to
+    /// Supply this together with <see cref="DeclaredUnitOfMeasureId"/> on the second POST to
     /// bypass container-reference detection for a known container size.
     /// Null on the initial entry.
     /// </summary>
@@ -27,7 +27,7 @@ public sealed class AddInventoryItemRequest
     /// The unit of measure for <see cref="DeclaredQuantity"/>.
     /// Null on the initial entry.
     /// </summary>
-    public Guid? DeclaredUomId { get; init; }
+    public Guid? DeclaredUnitOfMeasureId { get; init; }
 
     /// <summary>
     /// Optional expiry date for this item.
@@ -47,14 +47,14 @@ public sealed class AddInventoryItemRequest
     public string Notes { get; init; } = string.Empty;
 
     /// <summary>
-    /// Quantity in the unit specified by <see cref="UomId"/>.
+    /// Quantity in the unit specified by <see cref="UnitOfMeasureId"/>.
     /// Ignored when <see cref="DeclaredQuantity"/> is provided.
     /// </summary>
     public decimal Quantity { get; init; }
 
     /// <summary>
     /// Unit of measure for <see cref="Quantity"/>.
-    /// Ignored when <see cref="DeclaredUomId"/> is provided.
+    /// Ignored when <see cref="DeclaredUnitOfMeasureId"/> is provided.
     /// </summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

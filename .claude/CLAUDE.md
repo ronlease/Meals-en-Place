@@ -85,7 +85,7 @@ MealsEnPlace/
 - Angular uses standalone components. No NgModules.
 - All new features require a backlog entry before implementation.
 - **All fields, properties, methods, and variables within a class must be declared in alphabetical order.** Applies to both C# and TypeScript. Enforced to ease diffs and code review.
-- **Avoid abbreviations in domain names.** Spell out terms like `UnitOfMeasure` (not `UOM` / `Uom`), `UnitOfMeasureAlias`, etc. Universal programming abbreviations (HTTP, JSON, SQL, CSV, API, UI, DB, DTO, EF, ID) are OK. Existing legacy `Uom...` naming predates this rule; do not undertake a repo-wide rename without explicit request.
+- **Avoid abbreviations in domain names.** Spell out terms like `UnitOfMeasure` (not `UOM` / `Uom`), `UnitOfMeasureAlias`, etc. Universal programming abbreviations (HTTP, JSON, SQL, CSV, API, UI, DB, DTO, EF, ID) are OK.
 - Commit locally freely as work progresses. Only push to origin or open/update PRs when explicitly asked.
 - Never commit directly to main. Always create a feature branch and commit there.
 
@@ -94,7 +94,7 @@ MealsEnPlace/
 - **CanonicalIngredient:** A normalized ingredient entity that multiple inventory items and recipe ingredients map into (e.g., "Chicken Breast" regardless of brand or description).
 - **UnitOfMeasure (UOM):** A canonical unit (cup, gram, oz, each, tbsp, etc.) with conversion factors between compatible units. The system resolves known units deterministically; Claude resolves colloquial or ambiguous units. Container references ("1 can", "1 jar", "1 box", "1 packet") are never a UOM — they are flagged for user declaration.
 - **ContainerReference:** A string from a recipe ingredient or inventory entry that refers to a container size rather than a unit of measure (e.g., "1 can", "1 jar"). The system detects these on import, flags them, and requires the user to declare the net weight or volume before the ingredient participates in matching math. The original string is preserved in the Notes field.
-- **DisplaySystem:** User preference controlling whether quantities render as Imperial or Metric in the UI. Default: Imperial. Storage and all computation use metric base units internally (ml, g, ea); conversion to display units runs at the API response layer via `UomDisplayConverter`. Metric display is a future preference toggle — the `DisplaySystem` preference field is stubbed in the schema now to avoid a migration later.
+- **DisplaySystem:** User preference controlling whether quantities render as Imperial or Metric in the UI. Default: Imperial. Storage and all computation use metric base units internally (ml, g, ea); conversion to display units runs at the API response layer via `UnitOfMeasureDisplayConverter`. Metric display is a future preference toggle — the `DisplaySystem` preference field is stubbed in the schema now to avoid a migration later.
 - **Recipe:** A dish with a title, source, ingredient list (each with quantity and UOM), instructions, cuisine, dietary tags, and season affinity.
 - **RecipeIngredient:** A join between a Recipe and a CanonicalIngredient with quantity, UOM, and a Notes field. Notes preserves the original recipe text (e.g., "1 can") when a container reference has been resolved to a declared weight or volume.
 - **DietaryTag:** A Claude-derived classification: Vegetarian, Vegan, Carnivore, LowCarb, GlutenFree, DairyFree. A recipe may carry multiple tags.
@@ -110,13 +110,13 @@ before any quantity math runs.
 
 **Inventory side:** User adds "1 can of diced tomatoes." The system detects "can" as a
 ContainerReference. The add/edit dialog prompts: "What is the net weight or volume of this
-container?" User enters 14.5 oz. The InventoryItem stores Quantity = 14.5, UomId = oz, and
+container?" User enters 14.5 oz. The InventoryItem stores Quantity = 14.5, UnitOfMeasureId = oz, and
 preserves the original entry string in Notes.
 
 **Recipe side:** TheMealDB returns "1 can chopped tomatoes." On import, the system detects
 "can" as a ContainerReference. The import flow flags this RecipeIngredient as unresolved.
 The user is prompted to declare the expected size before the recipe participates in matching.
-Once declared, RecipeIngredient stores Quantity = 14.5, UomId = oz, Notes = "1 can chopped
+Once declared, RecipeIngredient stores Quantity = 14.5, UnitOfMeasureId = oz, Notes = "1 can chopped
 tomatoes." The recipe is marked fully resolved and enters the matching pool.
 
 **Unresolved recipes do not participate in recipe matching.** A recipe with one or more

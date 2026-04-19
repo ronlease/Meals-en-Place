@@ -1,19 +1,19 @@
-// Feature: UOM Review Queue Controller
+// Feature: unit of measure Review Queue Controller
 //
 // Scenario: List returns 200 with queue rows ordered by Count then LastSeenAt descending
 //   Given three UnresolvedUnitOfMeasureToken rows with varying counts and timestamps
-//   When GET /api/v1/uom-review-queue is called
+//   When GET /api/v1/unit-of-measure-review-queue is called
 //   Then the response is 200 OK
 //   And the rows are ordered by Count desc, LastSeenAt desc
 //
 // Scenario: Map returns 404 when the queue row does not exist
 //   Given no UnresolvedUnitOfMeasureToken row with the given id
-//   When POST /api/v1/uom-review-queue/{id}/map is called
+//   When POST /api/v1/unit-of-measure-review-queue/{id}/map is called
 //   Then the response is 404 Not Found
 //
-// Scenario: Map returns 404 when the target UOM does not exist
+// Scenario: Map returns 404 when the target unit of measure does not exist
 //   Given a valid queue row but a non-existent target UnitOfMeasure id
-//   When POST /api/v1/uom-review-queue/{id}/map is called
+//   When POST /api/v1/unit-of-measure-review-queue/{id}/map is called
 //   Then the response is 404 Not Found
 //
 // Scenario: Map succeeds for a unique alias
@@ -38,7 +38,7 @@
 //   And the queue row is deleted
 //
 // Scenario: Ignore returns 404 when the queue row does not exist
-//   When POST /api/v1/uom-review-queue/{id}/ignore is called with an unknown id
+//   When POST /api/v1/unit-of-measure-review-queue/{id}/ignore is called with an unknown id
 //   Then the response is 404 Not Found
 //
 // Scenario: Ignore deletes the queue row and returns 204
@@ -71,13 +71,13 @@ public class UnitOfMeasureReviewQueueControllerTests : IDisposable
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .Options;
         _dbContext = new MealsEnPlaceDbContext(options);
-        SeedUoms();
+        SeedUnitOfMeasures();
         _sut = new UnitOfMeasureReviewQueueController(_dbContext);
     }
 
     public void Dispose() => _dbContext.Dispose();
 
-    private void SeedUoms()
+    private void SeedUnitOfMeasures()
     {
         _dbContext.UnitsOfMeasure.AddRange(
             new UnitOfMeasure
@@ -86,7 +86,7 @@ public class UnitOfMeasureReviewQueueControllerTests : IDisposable
                 ConversionFactor = 4.929m,
                 Id = UnitOfMeasureConfiguration.TspId,
                 Name = "Teaspoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
@@ -94,7 +94,7 @@ public class UnitOfMeasureReviewQueueControllerTests : IDisposable
                 ConversionFactor = 14.787m,
                 Id = UnitOfMeasureConfiguration.TbspId,
                 Name = "Tablespoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
         _dbContext.SaveChanges();
     }
@@ -154,7 +154,7 @@ public class UnitOfMeasureReviewQueueControllerTests : IDisposable
     }
 
     [Fact]
-    public async Task Map_TargetUomDoesNotExist_Returns404()
+    public async Task Map_TargetUnitOfMeasureDoesNotExist_Returns404()
     {
         // Arrange
         var row = AddQueueRow("smidge");

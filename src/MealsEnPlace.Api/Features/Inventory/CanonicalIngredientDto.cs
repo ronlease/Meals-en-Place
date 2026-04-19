@@ -11,7 +11,7 @@ public class CanonicalIngredientDto
     public IngredientCategory Category { get; set; }
 
     /// <summary>Id of the preferred unit of measure when none is specified.</summary>
-    public Guid DefaultUomId { get; set; }
+    public Guid DefaultUnitOfMeasureId { get; set; }
 
     /// <summary>Primary key.</summary>
     public Guid Id { get; set; }

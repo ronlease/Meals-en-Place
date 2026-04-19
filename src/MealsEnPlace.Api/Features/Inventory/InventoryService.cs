@@ -16,7 +16,7 @@ public class InventoryService(IInventoryRepository repository) : IInventoryServi
         CancellationToken cancellationToken = default)
     {
         // When the user has already declared a container size, skip detection.
-        var hasDeclaredSize = request.DeclaredQuantity.HasValue && request.DeclaredUomId.HasValue;
+        var hasDeclaredSize = request.DeclaredQuantity.HasValue && request.DeclaredUnitOfMeasureId.HasValue;
 
         if (!hasDeclaredSize)
         {
@@ -42,7 +42,7 @@ public class InventoryService(IInventoryRepository repository) : IInventoryServi
             Location = request.Location,
             Notes = hasDeclaredSize ? InputSanitizer.SanitizeForStorage(request.Notes, 500) : null,
             Quantity = hasDeclaredSize ? request.DeclaredQuantity!.Value : request.Quantity,
-            UomId = hasDeclaredSize ? request.DeclaredUomId!.Value : request.UomId
+            UnitOfMeasureId = hasDeclaredSize ? request.DeclaredUnitOfMeasureId!.Value : request.UnitOfMeasureId
         };
 
         return await repository.AddAsync(item, cancellationToken);

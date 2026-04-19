@@ -4,10 +4,10 @@ namespace MealsEnPlace.Api.Common;
 /// Splits a raw measure string into a numeric quantity and a unit token.
 /// Handles common formats: "2 cups", "500g", "1/2 tbsp", "a knob".
 /// Pure function with no dependencies; shared between the runtime service
-/// (<see cref="UomNormalizationService"/>) and the offline ingest tool so
+/// (<see cref="UnitOfMeasureNormalizationService"/>) and the offline ingest tool so
 /// both paths see identical parse semantics.
 /// </summary>
-public static class UomTokenParser
+public static class UnitOfMeasureTokenParser
 {
     /// <summary>
     /// Splits <paramref name="measureString"/> into a numeric quantity and

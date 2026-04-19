@@ -65,8 +65,8 @@ public class ShoppingListServiceTests : IDisposable
         _dbContext = new MealsEnPlaceDbContext(options);
         SeedUnitOfMeasures();
 
-        var conversionService = new UomConversionService(_dbContext);
-        var displayConverter = new UomDisplayConverter(_dbContext);
+        var conversionService = new UnitOfMeasureConversionService(_dbContext);
+        var displayConverter = new UnitOfMeasureDisplayConverter(_dbContext);
 
         _sut = new ShoppingListService(_dbContext, conversionService, displayConverter);
     }
@@ -81,29 +81,29 @@ public class ShoppingListServiceTests : IDisposable
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
         _dbContext.SaveChanges();
     }
@@ -113,7 +113,7 @@ public class ShoppingListServiceTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = category,
-            DefaultUomId = EachId,
+            DefaultUnitOfMeasureId = EachId,
             Id = Guid.NewGuid(),
             Name = name
         };
@@ -122,7 +122,7 @@ public class ShoppingListServiceTests : IDisposable
         return ingredient;
     }
 
-    private InventoryItem SeedInventoryItem(Guid canonicalIngredientId, decimal quantity, Guid uomId)
+    private InventoryItem SeedInventoryItem(Guid canonicalIngredientId, decimal quantity, Guid unitOfMeasureId)
     {
         var item = new InventoryItem
         {
@@ -130,7 +130,7 @@ public class ShoppingListServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Location = StorageLocation.Pantry,
             Quantity = quantity,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
         _dbContext.InventoryItems.Add(item);
         _dbContext.SaveChanges();
@@ -139,7 +139,7 @@ public class ShoppingListServiceTests : IDisposable
 
     private (Api.Models.Entities.MealPlan Plan, Recipe Recipe) SeedMealPlanWithRecipe(
         string recipeTitle,
-        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UomId)> ingredientLines)
+        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UnitOfMeasureId)> ingredientLines)
     {
         var recipe = new Recipe
         {
@@ -152,7 +152,7 @@ public class ShoppingListServiceTests : IDisposable
         _dbContext.Recipes.Add(recipe);
         _dbContext.SaveChanges();
 
-        foreach (var (ingredientId, qty, uomId) in ingredientLines)
+        foreach (var (ingredientId, qty, unitOfMeasureId) in ingredientLines)
         {
             _dbContext.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -161,7 +161,7 @@ public class ShoppingListServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = qty,
                 RecipeId = recipe.Id,
-                UomId = uomId
+                UnitOfMeasureId = unitOfMeasureId
             });
         }
         _dbContext.SaveChanges();
@@ -248,7 +248,7 @@ public class ShoppingListServiceTests : IDisposable
             IsContainerResolved = true,
             Quantity = 500m,
             RecipeId = recipe.Id,
-            UomId = GramId
+            UnitOfMeasureId = GramId
         });
         await _dbContext.SaveChangesAsync();
 
@@ -317,7 +317,7 @@ public class ShoppingListServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = 30m,
                 RecipeId = recipe.Id,
-                UomId = MlId
+                UnitOfMeasureId = MlId
             });
         }
         _dbContext.SaveChanges();
@@ -473,7 +473,7 @@ public class ShoppingListServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 MealPlanId = planA.Id,
                 Quantity = 100m,
-                UomId = GramId
+                UnitOfMeasureId = GramId
             },
             new ShoppingListItem
             {
@@ -481,7 +481,7 @@ public class ShoppingListServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 MealPlanId = planB.Id,
                 Quantity = 200m,
-                UomId = GramId
+                UnitOfMeasureId = GramId
             });
         await _dbContext.SaveChangesAsync();
 
@@ -536,7 +536,7 @@ public class ShoppingListServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 MealPlanId = plan.Id,   // plan-scoped — should NOT appear
                 Quantity = 500m,
-                UomId = MlId
+                UnitOfMeasureId = MlId
             },
             new ShoppingListItem
             {
@@ -544,7 +544,7 @@ public class ShoppingListServiceTests : IDisposable
                 Id = Guid.NewGuid(),
                 MealPlanId = null,      // standalone — SHOULD appear
                 Quantity = 250m,
-                UomId = MlId
+                UnitOfMeasureId = MlId
             });
         await _dbContext.SaveChangesAsync();
 

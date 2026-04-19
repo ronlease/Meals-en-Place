@@ -36,9 +36,9 @@ public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<Canonic
 
         builder.HasIndex(ci => ci.Name).IsUnique();
 
-        builder.HasOne(ci => ci.DefaultUom)
+        builder.HasOne(ci => ci.DefaultUnitOfMeasure)
             .WithMany()
-            .HasForeignKey(ci => ci.DefaultUomId)
+            .HasForeignKey(ci => ci.DefaultUnitOfMeasureId)
             .IsRequired()
             .OnDelete(DeleteBehavior.Restrict);
 
@@ -47,70 +47,70 @@ public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<Canonic
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = ApplesId,
                 Name = "Apples"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = AsparagusId,
                 Name = "Asparagus"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = BroccoliId,
                 Name = "Broccoli"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = CornId,
                 Name = "Corn"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = KaleId,
                 Name = "Kale"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = PeachesId,
                 Name = "Peaches"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = PumpkinId,
                 Name = "Pumpkin"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = StrawberriesId,
                 Name = "Strawberries"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = TomatoesId,
                 Name = "Tomatoes"
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
-                DefaultUomId = UnitOfMeasureConfiguration.EachId,
+                DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = ZucchiniId,
                 Name = "Zucchini"
             }

@@ -10,7 +10,7 @@ public class CanonicalIngredient
     public IngredientCategory Category { get; set; }
 
     /// <summary>The preferred unit of measure when no explicit unit is specified.</summary>
-    public Guid DefaultUomId { get; set; }
+    public Guid DefaultUnitOfMeasureId { get; set; }
 
     /// <summary>Primary key.</summary>
     public Guid Id { get; set; }
@@ -21,7 +21,7 @@ public class CanonicalIngredient
     // Navigation properties
 
     /// <summary>The default unit of measure for this ingredient.</summary>
-    public UnitOfMeasure DefaultUom { get; set; } = null!;
+    public UnitOfMeasure DefaultUnitOfMeasure { get; set; } = null!;
 
     /// <summary>Inventory items mapped to this canonical ingredient.</summary>
     public ICollection<InventoryItem> InventoryItems { get; set; } = new List<InventoryItem>();

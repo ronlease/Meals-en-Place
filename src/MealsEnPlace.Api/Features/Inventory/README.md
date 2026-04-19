@@ -38,4 +38,4 @@ Manages pantry, fridge, and freezer inventory items with container reference det
 - `ContainerReferenceDetectedResponse.cs` — Returned when container reference detected
 - `CanonicalIngredientDto.cs` — Ingredient reference data DTO
 - `CreateCanonicalIngredientRequest.cs` — Request for creating ingredients
-- `UnitOfMeasureDto.cs` — UOM reference data DTO
+- `UnitOfMeasureDto.cs` — unit of measure reference data DTO

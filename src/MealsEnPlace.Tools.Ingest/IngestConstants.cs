@@ -89,7 +89,7 @@ internal static class IngestConstants
     /// </summary>
     public const string InstructionStepSeparator = "\n\n";
 
-    // ── Ingest mode UOM context ─────────────────────────────────────────────
+    // ── Ingest mode unit of measure context ─────────────────────────────────────────────
 
     /// <summary>
     /// Generic ingredient-name context string passed to the review-queue

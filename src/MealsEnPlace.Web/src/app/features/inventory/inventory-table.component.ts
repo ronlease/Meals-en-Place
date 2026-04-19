@@ -57,9 +57,9 @@ import {
           <mat-cell *matCellDef="let item">{{ item.quantity }}</mat-cell>
         </ng-container>
 
-        <ng-container matColumnDef="uomAbbreviation">
-          <mat-header-cell *matHeaderCellDef>UOM</mat-header-cell>
-          <mat-cell *matCellDef="let item">{{ item.uomAbbreviation }}</mat-cell>
+        <ng-container matColumnDef="unitOfMeasureAbbreviation">
+          <mat-header-cell *matHeaderCellDef>unit of measure</mat-header-cell>
+          <mat-cell *matCellDef="let item">{{ item.unitOfMeasureAbbreviation }}</mat-cell>
         </ng-container>
 
         <ng-container matColumnDef="expiryDate">
@@ -180,7 +180,7 @@ export class InventoryTableComponent implements OnInit {
   protected readonly displayedColumns = [
     'canonicalIngredientName',
     'quantity',
-    'uomAbbreviation',
+    'unitOfMeasureAbbreviation',
     'expiryDate',
     'actions',
   ];

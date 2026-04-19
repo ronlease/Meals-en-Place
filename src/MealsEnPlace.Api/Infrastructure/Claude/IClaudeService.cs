@@ -3,7 +3,7 @@ using MealsEnPlace.Api.Models.Entities;
 namespace MealsEnPlace.Api.Infrastructure.Claude;
 
 /// <summary>
-/// Confidence level for a Claude-resolved UOM or other AI-assisted result.
+/// Confidence level for a Claude-resolved unit of measure or other AI-assisted result.
 /// </summary>
 public enum ClaudeConfidence
 {
@@ -21,9 +21,9 @@ public enum ClaudeConfidence
 }
 
 /// <summary>
-/// The result of a Claude UOM resolution call for a colloquial or unmappable measure string.
+/// The result of a Claude unit of measure resolution call for a colloquial or unmappable measure string.
 /// </summary>
-public sealed class UomResolutionResult
+public sealed class UnitOfMeasureResolutionResult
 {
     /// <summary>
     /// Confidence level assigned by Claude to the resolution.
@@ -43,10 +43,10 @@ public sealed class UomResolutionResult
     public decimal ResolvedQuantity { get; init; }
 
     /// <summary>
-    /// The abbreviation of the resolved UOM (e.g., "g", "ml", "ea").
+    /// The abbreviation of the resolved unit of measure (e.g., "g", "ml", "ea").
     /// Must match an <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure"/> abbreviation in the database.
     /// </summary>
-    public string ResolvedUom { get; init; } = string.Empty;
+    public string ResolvedUnitOfMeasure { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -64,7 +64,7 @@ public interface IClaudeService
 
     /// <summary>
     /// Resolves a colloquial or unmappable measure string to a canonical quantity and unit.
-    /// Invoked only after deterministic UOM lookup fails.
+    /// Invoked only after deterministic unit of measure lookup fails.
     /// </summary>
     /// <param name="colloquialQuantity">
     /// The raw measure string that could not be resolved deterministically
@@ -74,11 +74,11 @@ public interface IClaudeService
     /// The ingredient name for context (e.g., "butter", "garlic", "vinegar").
     /// </param>
     /// <returns>
-    /// A <see cref="UomResolutionResult"/> with the resolved quantity, unit, and confidence.
-    /// If <see cref="UomResolutionResult.Confidence"/> is <see cref="ClaudeConfidence.Low"/>,
+    /// A <see cref="UnitOfMeasureResolutionResult"/> with the resolved quantity, unit, and confidence.
+    /// If <see cref="UnitOfMeasureResolutionResult.Confidence"/> is <see cref="ClaudeConfidence.Low"/>,
     /// the caller must surface a prompt to the user rather than applying the result silently.
     /// </returns>
-    Task<UomResolutionResult> ResolveUomAsync(string colloquialQuantity, string ingredientName);
+    Task<UnitOfMeasureResolutionResult> ResolveUnitOfMeasureAsync(string colloquialQuantity, string ingredientName);
 
     /// <summary>
     /// Reviews a generated meal plan and optimizes slot assignments for variety and waste reduction.
@@ -105,7 +105,7 @@ public sealed class MissingIngredient
     public decimal RequiredQuantity { get; init; }
 
     /// <summary>Abbreviation of the required unit of measure.</summary>
-    public string RequiredUom { get; init; } = string.Empty;
+    public string RequiredUnitOfMeasure { get; init; } = string.Empty;
 }
 
 /// <summary>A Claude-suggested substitution for a missing ingredient.</summary>

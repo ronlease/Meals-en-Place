@@ -164,7 +164,7 @@ public class ShoppingListControllerTests
                 Category = IngredientCategory.Produce,
                 Id = Guid.NewGuid(),
                 Quantity = 400m,
-                UomAbbreviation = "g"
+                UnitOfMeasureAbbreviation = "g"
             })
             .ToList();
 }

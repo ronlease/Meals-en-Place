@@ -4,7 +4,7 @@ namespace MealsEnPlace.Api.Common;
 /// Detects container references in ingredient quantity strings.
 /// A container reference names a packaging unit rather than a unit of measure
 /// (e.g., "1 can", "1 jar", "1 box"). Container references must be flagged before
-/// UOM parsing runs — the system never assumes a container size.
+/// unit of measure parsing runs — the system never assumes a container size.
 /// <para>
 /// The keyword list is the primary detection mechanism. Claude is a fallback
 /// for ambiguous cases that must be handled at the call site.

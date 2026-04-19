@@ -56,8 +56,8 @@ export interface RecipeIngredientDetailDto {
   isContainerResolved: boolean;
   notes: string | null;
   quantity: number;
-  uomAbbreviation: string;
-  uomId: string | null;
+  unitOfMeasureAbbreviation: string;
+  unitOfMeasureId: string | null;
 }
 
 export interface CreateRecipeRequest {
@@ -72,7 +72,7 @@ export interface CreateRecipeIngredientRequest {
   canonicalIngredientId: string;
   notes?: string | null;
   quantity: number;
-  uomId?: string | null;
+  unitOfMeasureId?: string | null;
 }
 
 // ----------------------------------------------------------------
@@ -83,17 +83,17 @@ export type MatchTier = 'FullMatch' | 'NearMatch' | 'PartialMatch';
 
 export interface MatchedIngredientDto {
   availableQuantity: number;
-  availableUom: string;
+  availableUnitOfMeasure: string;
   ingredientName: string;
   isExpiryImminent: boolean;
   requiredQuantity: number;
-  requiredUom: string;
+  requiredUnitOfMeasure: string;
 }
 
 export interface MissingIngredientDto {
   ingredientName: string;
   requiredQuantity: number;
-  requiredUom: string;
+  requiredUnitOfMeasure: string;
 }
 
 export type ClaudeConfidence = 'High' | 'Medium' | 'Low';
@@ -150,7 +150,7 @@ export interface BulkResolveGroupRequest {
   canonicalIngredientId: string;
   notes: string;
   quantity: number;
-  uomId: string;
+  unitOfMeasureId: string;
 }
 
 export interface BulkResolveGroupResponse {

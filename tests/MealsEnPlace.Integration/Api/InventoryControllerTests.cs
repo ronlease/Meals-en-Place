@@ -12,13 +12,13 @@
 //   Then the response body has a null ExpiryDate
 //
 // Scenario: Add an item with a container reference — returns 200 ContainerReferenceDetectedResponse
-//   Given a request where Notes contains "can" and no DeclaredQuantity/DeclaredUomId
+//   Given a request where Notes contains "can" and no DeclaredQuantity/DeclaredUnitOfMeasureId
 //   When POST /api/v1/inventory is called
 //   Then the response status is 200 OK
 //   And the response body contains DetectedKeyword = "can"
 //
 // Scenario: Add an item after declaring a container size — returns 201 Created
-//   Given a request where Notes contains "can" and DeclaredQuantity/DeclaredUomId are populated
+//   Given a request where Notes contains "can" and DeclaredQuantity/DeclaredUnitOfMeasureId are populated
 //   When POST /api/v1/inventory is called
 //   Then the response status is 201 Created
 //
@@ -115,7 +115,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     /// Seeds one CanonicalIngredient, one UnitOfMeasure, and one InventoryItem into
     /// a fresh in-memory database scoped to this call. Returns all three for use in tests.
     /// </summary>
-    private async Task<(CanonicalIngredient ingredient, UnitOfMeasure uom, InventoryItem item)>
+    private async Task<(CanonicalIngredient ingredient, UnitOfMeasure unitOfMeasure, InventoryItem item)>
         SeedItemAsync(
             StorageLocation location = StorageLocation.Pantry,
             decimal quantity = 500m,
@@ -125,19 +125,19 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<MealsEnPlaceDbContext>();
 
-        var uom = new UnitOfMeasure
+        var unitOfMeasure = new UnitOfMeasure
         {
             Abbreviation = "g",
             ConversionFactor = 1m,
             Id = Guid.NewGuid(),
             Name = "Gram",
-            UomType = UomType.Weight
+            UnitOfMeasureType = UnitOfMeasureType.Weight
         };
 
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Dairy,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Id = Guid.NewGuid(),
             Name = "Test Ingredient " + Guid.NewGuid()
         };
@@ -150,44 +150,44 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
             Location = location,
             Notes = notes,
             Quantity = quantity,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
-        dbContext.UnitsOfMeasure.Add(uom);
+        dbContext.UnitsOfMeasure.Add(unitOfMeasure);
         dbContext.CanonicalIngredients.Add(ingredient);
         dbContext.InventoryItems.Add(item);
         await dbContext.SaveChangesAsync();
 
-        return (ingredient, uom, item);
+        return (ingredient, unitOfMeasure, item);
     }
 
-    private async Task<(CanonicalIngredient ingredient, UnitOfMeasure uom)> SeedIngredientAndUomAsync()
+    private async Task<(CanonicalIngredient ingredient, UnitOfMeasure unitOfMeasure)> SeedIngredientAndUnitOfMeasureAsync()
     {
         await using var scope = _factory.Services.CreateAsyncScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<MealsEnPlaceDbContext>();
 
-        var uom = new UnitOfMeasure
+        var unitOfMeasure = new UnitOfMeasure
         {
             Abbreviation = "g",
             ConversionFactor = 1m,
             Id = Guid.NewGuid(),
             Name = "Gram",
-            UomType = UomType.Weight
+            UnitOfMeasureType = UnitOfMeasureType.Weight
         };
 
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Dairy,
-            DefaultUomId = uom.Id,
+            DefaultUnitOfMeasureId = unitOfMeasure.Id,
             Id = Guid.NewGuid(),
             Name = "Seed Ingredient " + Guid.NewGuid()
         };
 
-        dbContext.UnitsOfMeasure.Add(uom);
+        dbContext.UnitsOfMeasure.Add(unitOfMeasure);
         dbContext.CanonicalIngredients.Add(ingredient);
         await dbContext.SaveChangesAsync();
 
-        return (ingredient, uom);
+        return (ingredient, unitOfMeasure);
     }
 
     // ── POST /api/v1/inventory ────────────────────────────────────────────────
@@ -196,14 +196,14 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_ValidRequest_Returns201Created()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         var request = new AddInventoryItemRequest
         {
             CanonicalIngredientId = ingredient.Id,
             Location = StorageLocation.Pantry,
             Notes = "",
             Quantity = 500m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -217,14 +217,14 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_ValidRequest_ResponseBodyContainsId()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         var request = new AddInventoryItemRequest
         {
             CanonicalIngredientId = ingredient.Id,
             Location = StorageLocation.Pantry,
             Notes = "",
             Quantity = 250m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -240,7 +240,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_NullExpiryDate_ResponseExpiryDateIsNull()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         var request = new AddInventoryItemRequest
         {
             CanonicalIngredientId = ingredient.Id,
@@ -248,7 +248,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
             Location = StorageLocation.Pantry,
             Notes = "",
             Quantity = 100m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -263,14 +263,14 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_NotesContainsCan_Returns200WithContainerReferenceDetectedResponse()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         var request = new AddInventoryItemRequest
         {
             CanonicalIngredientId = ingredient.Id,
             Location = StorageLocation.Pantry,
             Notes = "1 can of diced tomatoes",
             Quantity = 1m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -287,7 +287,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_ContainerDetected_ResponseOriginalInputMatchesNotes()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         const string notes = "1 can of diced tomatoes";
         var request = new AddInventoryItemRequest
         {
@@ -295,7 +295,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
             Location = StorageLocation.Pantry,
             Notes = notes,
             Quantity = 1m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -310,16 +310,16 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task AddItem_DeclaredSizeBypassesContainerDetection_Returns201Created()
     {
         // Arrange
-        var (ingredient, uom) = await SeedIngredientAndUomAsync();
+        var (ingredient, unitOfMeasure) = await SeedIngredientAndUnitOfMeasureAsync();
         var request = new AddInventoryItemRequest
         {
             CanonicalIngredientId = ingredient.Id,
             DeclaredQuantity = 14.5m,
-            DeclaredUomId = uom.Id,
+            DeclaredUnitOfMeasureId = unitOfMeasure.Id,
             Location = StorageLocation.Pantry,
             Notes = "1 can of diced tomatoes",
             Quantity = 1m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -408,12 +408,12 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task UpdateItem_ExistingId_Returns200()
     {
         // Arrange
-        var (_, uom, item) = await SeedItemAsync(quantity: 12m);
+        var (_, unitOfMeasure, item) = await SeedItemAsync(quantity: 12m);
         var updateRequest = new UpdateInventoryItemRequest
         {
             Location = StorageLocation.Fridge,
             Quantity = 6m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -427,12 +427,12 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task UpdateItem_ExistingId_ResponseReflectsUpdatedQuantity()
     {
         // Arrange
-        var (_, uom, item) = await SeedItemAsync(quantity: 12m);
+        var (_, unitOfMeasure, item) = await SeedItemAsync(quantity: 12m);
         var updateRequest = new UpdateInventoryItemRequest
         {
             Location = StorageLocation.Fridge,
             Quantity = 6m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -441,7 +441,7 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
 
         // Assert
         // Note: Quantity in the response is display-converted (6g → fl oz/oz/etc.)
-        // We verify the UomId is unchanged and the response round-trips correctly.
+        // We verify the UnitOfMeasureId is unchanged and the response round-trips correctly.
         body.Should().NotBeNull();
         body!.Id.Should().Be(item.Id);
     }
@@ -450,12 +450,12 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     public async Task UpdateItem_ChangeLocation_ResponseLocationIsUpdated()
     {
         // Arrange
-        var (_, uom, item) = await SeedItemAsync(location: StorageLocation.Fridge);
+        var (_, unitOfMeasure, item) = await SeedItemAsync(location: StorageLocation.Fridge);
         var updateRequest = new UpdateInventoryItemRequest
         {
             Location = StorageLocation.Freezer,
             Quantity = 500m,
-            UomId = uom.Id
+            UnitOfMeasureId = unitOfMeasure.Id
         };
 
         // Act
@@ -471,12 +471,12 @@ public class InventoryControllerTests : IClassFixture<InventoryWebApplicationFac
     {
         // Arrange
         var id = Guid.NewGuid();
-        var uomId = Guid.NewGuid();
+        var unitOfMeasureId = Guid.NewGuid();
         var updateRequest = new UpdateInventoryItemRequest
         {
             Location = StorageLocation.Pantry,
             Quantity = 1m,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
 
         // Act

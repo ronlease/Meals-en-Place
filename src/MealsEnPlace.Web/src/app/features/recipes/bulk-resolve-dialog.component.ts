@@ -35,7 +35,7 @@ export interface BulkResolveDialogResult {
 
 interface BulkResolveForm {
   quantity: FormControl<number | null>;
-  uomId: FormControl<string>;
+  unitOfMeasureId: FormControl<string>;
 }
 
 @Component({
@@ -96,14 +96,14 @@ interface BulkResolveForm {
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Unit of measure</mat-label>
-            <mat-select formControlName="uomId">
+            <mat-select formControlName="unitOfMeasureId">
               @for (unit of units(); track unit.id) {
                 <mat-option [value]="unit.id">
                   {{ unit.name }} ({{ unit.abbreviation }})
                 </mat-option>
               }
             </mat-select>
-            @if (form.controls.uomId.hasError('required') && form.controls.uomId.touched) {
+            @if (form.controls.unitOfMeasureId.hasError('required') && form.controls.unitOfMeasureId.touched) {
               <mat-error>Select a unit</mat-error>
             }
           </mat-form-field>
@@ -214,7 +214,7 @@ export class BulkResolveDialogComponent implements OnInit {
       quantity: new FormControl<number | null>(null, {
         validators: [Validators.required, Validators.min(0.01)],
       }),
-      uomId: new FormControl<string>('', {
+      unitOfMeasureId: new FormControl<string>('', {
         nonNullable: true,
         validators: [Validators.required],
       }),
@@ -245,8 +245,8 @@ export class BulkResolveDialogComponent implements OnInit {
     }
 
     const quantity = this.form.controls.quantity.value;
-    const uomId = this.form.controls.uomId.value;
-    if (quantity === null || !uomId) {
+    const unitOfMeasureId = this.form.controls.unitOfMeasureId.value;
+    if (quantity === null || !unitOfMeasureId) {
       return;
     }
 
@@ -258,7 +258,7 @@ export class BulkResolveDialogComponent implements OnInit {
         canonicalIngredientId: this.data.canonicalIngredientId,
         notes: this.data.notes,
         quantity,
-        uomId,
+        unitOfMeasureId,
       })
       .subscribe({
         error: (err: HttpErrorResponse) => {

@@ -30,10 +30,10 @@ Example container diagram for this project:
 Person(user, "User", "Single local user")
 System_Boundary(app, "Meals en Place") {
     Container(web, "Angular Web App", "Angular 21", "Pantry UI, meal plan board, recipe browser, container reference resolution prompts")
-    Container(api, "API", "ASP.NET Core 10", "REST API, recipe matching, meal plan generation, UOM normalization, display conversion, Claude integration")
+    Container(api, "API", "ASP.NET Core 10", "REST API, recipe matching, meal plan generation, unit of measure normalization, display conversion, Claude integration")
     ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality data, user display preferences")
 }
-System_Ext(claude, "Claude API", "UOM normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(claude, "Claude API", "unit of measure normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
 System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 System_Ext(openfoodfacts, "Open Food Facts API", "Ingredient metadata and nutritional data")
 
@@ -62,7 +62,7 @@ component diagrams:
   not as a recipe source.
 - **Claude API** — five distinct use cases; call each out as a distinct interaction in
   sequence diagrams when relevant:
-  1. UOM normalization (colloquial unit resolution)
+  1. unit of measure normalization (colloquial unit resolution)
   2. Container reference flagging (detecting "1 can", "1 jar", etc. in imported recipe text)
   3. Dietary classification
   4. Recipe match feasibility and substitution suggestions (NearMatch candidates only)
@@ -72,7 +72,7 @@ component diagrams:
 When generating sequence or component diagrams, capture these structural decisions:
 
 - **Display conversion layer:** All quantity values stored and computed in metric base units
-  (ml, g, ea). The `UomDisplayConverter` in `Common/` runs at the API response layer and
+  (ml, g, ea). The `UnitOfMeasureDisplayConverter` in `Common/` runs at the API response layer and
   converts to Imperial by default. Document this as a distinct step between service output
   and API response serialization. Metric toggle is a future preference field already stubbed
   in the schema.

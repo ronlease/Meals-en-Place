@@ -3,7 +3,7 @@ namespace MealsEnPlace.Api.Features.Inventory;
 /// <summary>
 /// Returned by <c>POST /api/v1/inventory</c> when the entry string contains a container
 /// keyword. The client should prompt the user to declare the net weight or volume, then
-/// re-submit the POST with <c>DeclaredQuantity</c> and <c>DeclaredUomId</c> populated.
+/// re-submit the POST with <c>DeclaredQuantity</c> and <c>DeclaredUnitOfMeasureId</c> populated.
 /// </summary>
 public sealed class ContainerReferenceDetectedResponse
 {

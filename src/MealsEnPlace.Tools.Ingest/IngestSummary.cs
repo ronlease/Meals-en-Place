@@ -40,7 +40,7 @@ internal sealed class IngestSummary
 
     public int TotalIngredientsProcessed { get; set; }
 
-    public int UomDeferredToQueue { get; set; }
+    public int UnitOfMeasureDeferredToQueue { get; set; }
 
     public void RecordProseFilter(ProseFilterResult result)
     {
@@ -61,9 +61,9 @@ internal sealed class IngestSummary
         var stepsTotal = InstructionStepsRetained + InstructionStepsDropped;
         var retention = stepsTotal == 0 ? 0.0 : InstructionStepsRetained * 100.0 / stepsTotal;
 
-        var uomTotal = DeterministicallyResolvedIngredients + UomDeferredToQueue;
-        var detPercent = uomTotal == 0 ? 0.0 : DeterministicallyResolvedIngredients * 100.0 / uomTotal;
-        var deferPercent = uomTotal == 0 ? 0.0 : UomDeferredToQueue * 100.0 / uomTotal;
+        var unitOfMeasureTotal = DeterministicallyResolvedIngredients + UnitOfMeasureDeferredToQueue;
+        var detPercent = unitOfMeasureTotal == 0 ? 0.0 : DeterministicallyResolvedIngredients * 100.0 / unitOfMeasureTotal;
+        var deferPercent = unitOfMeasureTotal == 0 ? 0.0 : UnitOfMeasureDeferredToQueue * 100.0 / unitOfMeasureTotal;
 
         var containerPercent = TotalIngredientsProcessed == 0
             ? 0.0
@@ -94,8 +94,8 @@ internal sealed class IngestSummary
             Ingredients
               Total processed:             {TotalIngredientsProcessed:N0}
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
-              UOM resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
-              UOM deferred to review queue:{UomDeferredToQueue:N0} ({deferPercent:0.0}%)
+              unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
+              unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
               No NER match (unlinked):     {IngredientsWithoutNerMatch:N0}
 
             Instructions

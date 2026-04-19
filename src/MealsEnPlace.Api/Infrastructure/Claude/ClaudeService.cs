@@ -20,17 +20,17 @@ public class ClaudeService : IClaudeService
     /// <inheritdoc />
     /// <remarks>
     /// Stub: returns a <see cref="ClaudeConfidence.Low"/> result with a placeholder message.
-    /// The caller (<see cref="MealsEnPlace.Api.Common.UomNormalizationService"/>) will surface
+    /// The caller (<see cref="MealsEnPlace.Api.Common.UnitOfMeasureNormalizationService"/>) will surface
     /// this to the user rather than applying it silently.
     /// </remarks>
-    public Task<UomResolutionResult> ResolveUomAsync(string colloquialQuantity, string ingredientName)
+    public Task<UnitOfMeasureResolutionResult> ResolveUnitOfMeasureAsync(string colloquialQuantity, string ingredientName)
     {
-        var result = new UomResolutionResult
+        var result = new UnitOfMeasureResolutionResult
         {
             Confidence = ClaudeConfidence.Low,
             Notes = "Claude integration not yet configured. Please declare the quantity and unit manually.",
             ResolvedQuantity = 0m,
-            ResolvedUom = string.Empty
+            ResolvedUnitOfMeasure = string.Empty
         };
 
         return Task.FromResult(result);

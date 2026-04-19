@@ -7,7 +7,7 @@ namespace MealsEnPlace.Api.Infrastructure.Data.Configurations;
 /// <summary>
 /// Fluent API configuration for <see cref="UnitOfMeasure"/>, including conversion table seed data.
 /// ConversionFactor converts FROM the named unit TO the base unit.
-/// Base units have BaseUomId = null and ConversionFactor = 1.0.
+/// Base units have BaseUnitOfMeasureId = null and ConversionFactor = 1.0.
 /// </summary>
 public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure>
 {
@@ -46,13 +46,13 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             .IsRequired()
             .HasMaxLength(100);
 
-        builder.Property(u => u.UomType)
+        builder.Property(u => u.UnitOfMeasureType)
             .IsRequired()
             .HasConversion<string>();
 
-        builder.HasOne(u => u.BaseUom)
+        builder.HasOne(u => u.BaseUnitOfMeasure)
             .WithMany(u => u.DerivedUnits)
-            .HasForeignKey(u => u.BaseUomId)
+            .HasForeignKey(u => u.BaseUnitOfMeasureId)
             .IsRequired(false)
             .OnDelete(DeleteBehavior.Restrict);
 
@@ -65,29 +65,29 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             }
         );
 
@@ -96,65 +96,65 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             new UnitOfMeasure
             {
                 Abbreviation = "cup",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 236.588m,
                 Id = CupId,
                 Name = "Cup",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "fl oz",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 29.574m,
                 Id = FlOzId,
                 Name = "Fluid Ounce",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "L",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 1000.0m,
                 Id = LiterId,
                 Name = "Liter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "pt",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 473.176m,
                 Id = PintId,
                 Name = "Pint",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "qt",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 946.353m,
                 Id = QuartId,
                 Name = "Quart",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tbsp",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 14.787m,
                 Id = TbspId,
                 Name = "Tablespoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tsp",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 4.929m,
                 Id = TspId,
                 Name = "Teaspoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             }
         );
 
@@ -163,29 +163,29 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             new UnitOfMeasure
             {
                 Abbreviation = "kg",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 1000.0m,
                 Id = KgId,
                 Name = "Kilogram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "lb",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 453.592m,
                 Id = LbId,
                 Name = "Pound",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "oz",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 28.350m,
                 Id = OzId,
                 Name = "Ounce",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             }
         );
     }

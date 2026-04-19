@@ -22,17 +22,17 @@ public interface IContainerResolutionService
     /// tomatoes"). Matched case-insensitively against <see cref="RecipeIngredient.Notes"/>.
     /// </param>
     /// <param name="quantity">The declared net weight or volume (positive decimal).</param>
-    /// <param name="uomId">The <see cref="UnitOfMeasure"/> for the declared quantity.</param>
+    /// <param name="unitOfMeasureId">The <see cref="UnitOfMeasure"/> for the declared quantity.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// A <see cref="BulkResolveResult"/> with the number of rows updated, or a
-    /// validation error when the quantity is non-positive or the UOM does not exist.
+    /// validation error when the quantity is non-positive or the unit of measure does not exist.
     /// </returns>
     Task<BulkResolveResult> BulkResolveAsync(
         Guid canonicalIngredientId,
         string notes,
         decimal quantity,
-        Guid uomId,
+        Guid unitOfMeasureId,
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -70,18 +70,18 @@ public interface IContainerResolutionService
 
     /// <summary>
     /// Resolves a container reference on a recipe ingredient.
-    /// Sets <see cref="RecipeIngredient.Quantity"/>, <see cref="RecipeIngredient.UomId"/>,
+    /// Sets <see cref="RecipeIngredient.Quantity"/>, <see cref="RecipeIngredient.UnitOfMeasureId"/>,
     /// and <see cref="RecipeIngredient.IsContainerResolved"/> = true.
     /// <see cref="RecipeIngredient.Notes"/> is preserved unchanged.
     /// </summary>
     /// <param name="recipeId">The recipe that owns the ingredient.</param>
     /// <param name="ingredientId">The <see cref="RecipeIngredient"/> to resolve.</param>
-    /// <param name="request">The declared quantity and UOM.</param>
+    /// <param name="request">The declared quantity and unit of measure.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// The updated <see cref="RecipeIngredient"/>, or null if the recipe or
     /// ingredient does not exist. Returns a validation error string when the
-    /// UOM does not exist or the quantity is not positive.
+    /// unit of measure does not exist or the quantity is not positive.
     /// </returns>
     Task<ContainerResolutionResult> ResolveAsync(
         Guid recipeId,

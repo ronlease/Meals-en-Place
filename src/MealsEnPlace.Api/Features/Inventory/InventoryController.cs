@@ -17,10 +17,10 @@ public class InventoryController(
     /// </summary>
     /// <remarks>
     /// If the entry string in <c>Notes</c> contains a container keyword (can, jar, box, etc.)
-    /// and no <c>DeclaredQuantity</c>/<c>DeclaredUomId</c> are provided, the server returns
+    /// and no <c>DeclaredQuantity</c>/<c>DeclaredUnitOfMeasureId</c> are provided, the server returns
     /// HTTP 200 with a <see cref="ContainerReferenceDetectedResponse"/> body instead of creating
     /// an item. The client should prompt the user for the net weight or volume, then re-submit
-    /// with <c>DeclaredQuantity</c> and <c>DeclaredUomId</c> populated.
+    /// with <c>DeclaredQuantity</c> and <c>DeclaredUnitOfMeasureId</c> populated.
     /// </remarks>
     /// <param name="request">Item details including optional declared container size.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -167,8 +167,8 @@ public class InventoryController(
             Location = item.Location,
             Notes = item.Notes,
             Quantity = item.Quantity,
-            UomAbbreviation = item.Uom?.Abbreviation ?? string.Empty,
-            UomId = item.UomId
+            UnitOfMeasureAbbreviation = item.UnitOfMeasure?.Abbreviation ?? string.Empty,
+            UnitOfMeasureId = item.UnitOfMeasureId
         };
     }
 }

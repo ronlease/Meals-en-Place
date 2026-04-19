@@ -1,4 +1,4 @@
-// Feature: UOM Display Conversion
+// Feature: unit of measure Display Conversion
 //
 // Scenario: Imperial default when no UserPreferences row exists
 //   Given no UserPreferences row is in the database
@@ -9,63 +9,63 @@
 // Scenario: Weight below 454g displays as oz
 //   Given the display system is Imperial
 //   And the quantity is 453g
-//   When ConvertAsync is called with UomType.Weight
+//   When ConvertAsync is called with UnitOfMeasureType.Weight
 //   Then the abbreviation is "oz"
 //
 // Scenario: Weight at 454g displays as lb (boundary)
 //   Given the display system is Imperial
 //   And the quantity is 454g
-//   When ConvertAsync is called with UomType.Weight
+//   When ConvertAsync is called with UnitOfMeasureType.Weight
 //   Then the abbreviation is "lb"
 //
 // Scenario: Volume below 59ml displays as fl oz
 //   Given the display system is Imperial
 //   And the quantity is 58ml
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the abbreviation is "fl oz"
 //
 // Scenario: Volume at 59ml displays as cups (lower boundary)
 //   Given the display system is Imperial
 //   And the quantity is 59ml
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the abbreviation is "cups"
 //
 // Scenario: Volume at 946ml displays as cups (upper boundary)
 //   Given the display system is Imperial
 //   And the quantity is 946ml
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the abbreviation is "cups"
 //
 // Scenario: Volume above 946ml displays as quarts
 //   Given the display system is Imperial
 //   And the quantity is 947ml
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the abbreviation is "qt"
 //
 // Scenario: Count (ea) passes through unchanged in both display systems
 //   Given the display system is Imperial
-//   When ConvertAsync is called with UomType.Count
+//   When ConvertAsync is called with UnitOfMeasureType.Count
 //   Then the abbreviation is "ea" and quantity is unchanged
 //
-// Scenario: Arbitrary UomType passes through as ea
+// Scenario: Arbitrary UnitOfMeasureType passes through as ea
 //   Given the display system is Imperial
-//   When ConvertAsync is called with UomType.Arbitrary
+//   When ConvertAsync is called with UnitOfMeasureType.Arbitrary
 //   Then the abbreviation is "ea" and quantity is unchanged
 //
 // Scenario: Metric display returns ml for Volume
 //   Given the display system is Metric
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the abbreviation is "ml" and quantity is unchanged
 //
 // Scenario: Metric display returns g for Weight
 //   Given the display system is Metric
-//   When ConvertAsync is called with UomType.Weight
+//   When ConvertAsync is called with UnitOfMeasureType.Weight
 //   Then the abbreviation is "g" and quantity is unchanged
 //
 // Scenario: Imperial fl oz conversion math is correct
 //   Given the display system is Imperial
 //   And the quantity is 29.574ml
-//   When ConvertAsync is called with UomType.Volume
+//   When ConvertAsync is called with UnitOfMeasureType.Volume
 //   Then the returned quantity is approximately 1.00 fl oz
 
 using FluentAssertions;
@@ -76,7 +76,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace MealsEnPlace.Unit.Common;
 
-public class UomDisplayConverterTests
+public class UnitOfMeasureDisplayConverterTests
 {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -85,7 +85,7 @@ public class UomDisplayConverterTests
             .UseInMemoryDatabase(dbName)
             .Options);
 
-    private static UomDisplayConverter BuildConverter(MealsEnPlaceDbContext dbContext) =>
+    private static UnitOfMeasureDisplayConverter BuildConverter(MealsEnPlaceDbContext dbContext) =>
         new(dbContext);
 
     // ── Imperial default — no UserPreferences row (QA spec edge case #12) ────
@@ -98,11 +98,11 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var act = async () => await converter.ConvertAsync(500m, UomType.Weight);
+        var act = async () => await converter.ConvertAsync(500m, UnitOfMeasureType.Weight);
 
         // Assert — must not throw; result must be in Imperial (oz or lb)
         await act.Should().NotThrowAsync();
-        var (_, abbreviation) = await converter.ConvertAsync(500m, UomType.Weight);
+        var (_, abbreviation) = await converter.ConvertAsync(500m, UnitOfMeasureType.Weight);
         abbreviation.Should().BeOneOf("oz", "lb");
     }
 
@@ -114,7 +114,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act — 500g is above the 454g threshold, should return lb
-        var (_, abbreviation) = await converter.ConvertAsync(500m, UomType.Weight);
+        var (_, abbreviation) = await converter.ConvertAsync(500m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("lb");
@@ -130,7 +130,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(453m, UomType.Weight);
+        var (_, abbreviation) = await converter.ConvertAsync(453m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("oz");
@@ -144,7 +144,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(454m, UomType.Weight);
+        var (_, abbreviation) = await converter.ConvertAsync(454m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("lb");
@@ -158,7 +158,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(455m, UomType.Weight);
+        var (_, abbreviation) = await converter.ConvertAsync(455m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("lb");
@@ -174,7 +174,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(58m, UomType.Volume);
+        var (_, abbreviation) = await converter.ConvertAsync(58m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("fl oz");
@@ -188,7 +188,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(59m, UomType.Volume);
+        var (_, abbreviation) = await converter.ConvertAsync(59m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("cups");
@@ -202,7 +202,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(946m, UomType.Volume);
+        var (_, abbreviation) = await converter.ConvertAsync(946m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("cups");
@@ -216,7 +216,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (_, abbreviation) = await converter.ConvertAsync(947m, UomType.Volume);
+        var (_, abbreviation) = await converter.ConvertAsync(947m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("qt");
@@ -233,7 +233,7 @@ public class UomDisplayConverterTests
         const decimal inputQuantity = 12m;
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UomType.Count);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UnitOfMeasureType.Count);
 
         // Assert
         abbreviation.Should().Be("ea");
@@ -249,7 +249,7 @@ public class UomDisplayConverterTests
         const decimal inputQuantity = 3m;
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UomType.Arbitrary);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UnitOfMeasureType.Arbitrary);
 
         // Assert
         abbreviation.Should().Be("ea");
@@ -269,7 +269,7 @@ public class UomDisplayConverterTests
         const decimal inputQuantity = 250m;
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UomType.Volume);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("ml");
@@ -287,7 +287,7 @@ public class UomDisplayConverterTests
         const decimal inputQuantity = 500m;
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UomType.Weight);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("g");
@@ -305,7 +305,7 @@ public class UomDisplayConverterTests
         const decimal inputQuantity = 6m;
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UomType.Count);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(inputQuantity, UnitOfMeasureType.Count);
 
         // Assert
         abbreviation.Should().Be("ea");
@@ -322,7 +322,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(29.574m, UomType.Volume);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(29.574m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("fl oz");
@@ -337,7 +337,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(236.588m, UomType.Volume);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(236.588m, UnitOfMeasureType.Volume);
 
         // Assert
         abbreviation.Should().Be("cups");
@@ -352,7 +352,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(28.350m, UomType.Weight);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(28.350m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("oz");
@@ -367,7 +367,7 @@ public class UomDisplayConverterTests
         var converter = BuildConverter(dbContext);
 
         // Act
-        var (displayQuantity, abbreviation) = await converter.ConvertAsync(453.592m, UomType.Weight);
+        var (displayQuantity, abbreviation) = await converter.ConvertAsync(453.592m, UnitOfMeasureType.Weight);
 
         // Assert
         abbreviation.Should().Be("oz");

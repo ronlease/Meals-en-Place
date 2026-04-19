@@ -12,5 +12,5 @@ public sealed class MissingIngredientDto
     public decimal RequiredQuantity { get; init; }
 
     /// <summary>Display unit for required quantity.</summary>
-    public string RequiredUom { get; init; } = string.Empty;
+    public string RequiredUnitOfMeasure { get; init; } = string.Empty;
 }

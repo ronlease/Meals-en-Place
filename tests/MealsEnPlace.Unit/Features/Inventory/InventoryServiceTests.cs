@@ -12,16 +12,16 @@
 //   Then the created InventoryItem has ExpiryDate = null
 //
 // Scenario: Container reference detected — returns ContainerReferenceDetectedResponse
-//   Given a request where Notes contains "can" and no DeclaredQuantity/DeclaredUomId
+//   Given a request where Notes contains "can" and no DeclaredQuantity/DeclaredUnitOfMeasureId
 //   When AddItemAsync is called
 //   Then a ContainerReferenceDetectedResponse is returned
 //   And the repository AddAsync is never called
 //
 // Scenario: Container reference bypassed when declared size is provided
-//   Given a request where Notes contains "can" but DeclaredQuantity and DeclaredUomId are set
+//   Given a request where Notes contains "can" but DeclaredQuantity and DeclaredUnitOfMeasureId are set
 //   When AddItemAsync is called
 //   Then the repository AddAsync is called once
-//   And the InventoryItem stores the DeclaredQuantity and DeclaredUomId
+//   And the InventoryItem stores the DeclaredQuantity and DeclaredUnitOfMeasureId
 //
 // Scenario: Container reference detected — response contains OriginalInput
 //   Given a request with Notes "1 can of diced tomatoes" and no declared size
@@ -34,7 +34,7 @@
 //   Then DetectedKeyword is "jar"
 //
 // Scenario: After container declaration, Notes is preserved on the InventoryItem
-//   Given a request with Notes "1 can of diced tomatoes" and DeclaredQuantity/DeclaredUomId set
+//   Given a request with Notes "1 can of diced tomatoes" and DeclaredQuantity/DeclaredUnitOfMeasureId set
 //   When AddItemAsync is called
 //   Then the saved InventoryItem.Notes equals "1 can of diced tomatoes"
 //
@@ -89,7 +89,7 @@ public class InventoryServiceTests
     }
 
     private static readonly Guid IngredientId = Guid.NewGuid();
-    private static readonly Guid UomId = Guid.NewGuid();
+    private static readonly Guid UnitOfMeasureId = Guid.NewGuid();
 
     private static AddInventoryItemRequest BuildPlainRequest(
         StorageLocation location = StorageLocation.Pantry,
@@ -103,22 +103,22 @@ public class InventoryServiceTests
             Location = location,
             Notes = notes,
             Quantity = quantity,
-            UomId = UomId
+            UnitOfMeasureId = UnitOfMeasureId
         };
 
     private static AddInventoryItemRequest BuildDeclaredRequest(
         string notes = "1 can of diced tomatoes",
         decimal declaredQty = 14.5m,
-        Guid? declaredUomId = null) =>
+        Guid? declaredUnitOfMeasureId = null) =>
         new()
         {
             CanonicalIngredientId = IngredientId,
             DeclaredQuantity = declaredQty,
-            DeclaredUomId = declaredUomId ?? UomId,
+            DeclaredUnitOfMeasureId = declaredUnitOfMeasureId ?? UnitOfMeasureId,
             Location = StorageLocation.Pantry,
             Notes = notes,
             Quantity = 1m,
-            UomId = UomId
+            UnitOfMeasureId = UnitOfMeasureId
         };
 
     private static InventoryItem BuildSavedItem(Guid? id = null) =>
@@ -128,7 +128,7 @@ public class InventoryServiceTests
             Id = id ?? Guid.NewGuid(),
             Location = StorageLocation.Pantry,
             Quantity = 500m,
-            UomId = UomId
+            UnitOfMeasureId = UnitOfMeasureId
         };
 
     // ── AddItemAsync — plain item (no container reference) ───────────────────
@@ -277,7 +277,7 @@ public class InventoryServiceTests
     [Fact]
     public async Task AddItemAsync_DeclaredSizeProvided_ContainerDetectionSkipped_ItemCreated()
     {
-        // Arrange — Notes contains "can" but DeclaredQuantity/DeclaredUomId bypass detection
+        // Arrange — Notes contains "can" but DeclaredQuantity/DeclaredUnitOfMeasureId bypass detection
         var request = BuildDeclaredRequest(notes: "1 can of diced tomatoes", declaredQty: 14.5m);
         var savedItem = BuildSavedItem();
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
@@ -310,11 +310,11 @@ public class InventoryServiceTests
     }
 
     [Fact]
-    public async Task AddItemAsync_DeclaredSizeProvided_SavedItemUsesDeclaredUomId()
+    public async Task AddItemAsync_DeclaredSizeProvided_SavedItemUsesDeclaredUnitOfMeasureId()
     {
         // Arrange
-        var declaredUomId = Guid.NewGuid();
-        var request = BuildDeclaredRequest(notes: "1 can of diced tomatoes", declaredUomId: declaredUomId);
+        var declaredUnitOfMeasureId = Guid.NewGuid();
+        var request = BuildDeclaredRequest(notes: "1 can of diced tomatoes", declaredUnitOfMeasureId: declaredUnitOfMeasureId);
         InventoryItem? captured = null;
         _repositoryMock.Setup(r => r.AddAsync(It.IsAny<InventoryItem>(), It.IsAny<CancellationToken>()))
                        .Callback<InventoryItem, CancellationToken>((item, _) => captured = item)
@@ -324,7 +324,7 @@ public class InventoryServiceTests
         await _sut.AddItemAsync(request);
 
         // Assert
-        captured!.UomId.Should().Be(declaredUomId);
+        captured!.UnitOfMeasureId.Should().Be(declaredUnitOfMeasureId);
     }
 
     [Fact]
@@ -467,7 +467,7 @@ public class InventoryServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var request = new UpdateInventoryItemRequest { Location = StorageLocation.Freezer, Quantity = 6m, UomId = UomId };
+        var request = new UpdateInventoryItemRequest { Location = StorageLocation.Freezer, Quantity = 6m, UnitOfMeasureId = UnitOfMeasureId };
         var updated = BuildSavedItem(id);
         _repositoryMock.Setup(r => r.UpdateAsync(id, request, It.IsAny<CancellationToken>()))
                        .ReturnsAsync(updated);
@@ -485,7 +485,7 @@ public class InventoryServiceTests
     {
         // Arrange
         var id = Guid.NewGuid();
-        var request = new UpdateInventoryItemRequest { Location = StorageLocation.Fridge, Quantity = 1m, UomId = UomId };
+        var request = new UpdateInventoryItemRequest { Location = StorageLocation.Fridge, Quantity = 1m, UnitOfMeasureId = UnitOfMeasureId };
         _repositoryMock.Setup(r => r.UpdateAsync(id, request, It.IsAny<CancellationToken>()))
                        .ReturnsAsync((InventoryItem?)null);
 

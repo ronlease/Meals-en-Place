@@ -2,7 +2,7 @@ namespace MealsEnPlace.Api.Features.Recipes;
 
 /// <summary>
 /// Represents a recipe ingredient after a container reference has been successfully resolved.
-/// Quantity and UOM reflect the user-declared values, converted for display.
+/// Quantity and unit of measure reflect the user-declared values, converted for display.
 /// Notes preserves the original import string unchanged.
 /// </summary>
 public sealed class ResolvedIngredientResponse
@@ -30,9 +30,9 @@ public sealed class ResolvedIngredientResponse
     /// <summary>The id of the recipe this ingredient belongs to.</summary>
     public Guid RecipeId { get; init; }
 
-    /// <summary>Display abbreviation for the resolved UOM (e.g., "oz", "fl oz").</summary>
-    public string UomAbbreviation { get; init; } = string.Empty;
+    /// <summary>Display abbreviation for the resolved unit of measure (e.g., "oz", "fl oz").</summary>
+    public string UnitOfMeasureAbbreviation { get; init; } = string.Empty;
 
     /// <summary>The id of the resolved unit of measure.</summary>
-    public Guid UomId { get; init; }
+    public Guid UnitOfMeasureId { get; init; }
 }

@@ -50,7 +50,7 @@ import { WasteAlertService } from '../../core/services/waste-alert.service';
               </mat-icon>
               <mat-card-title>{{ alert.canonicalIngredientName }}</mat-card-title>
               <mat-card-subtitle>
-                {{ alert.quantity }} {{ alert.uomAbbreviation }} · {{ alert.location }}
+                {{ alert.quantity }} {{ alert.unitOfMeasureAbbreviation }} · {{ alert.location }}
               </mat-card-subtitle>
             </mat-card-header>
             <mat-card-content>

@@ -90,7 +90,7 @@ public class RecipeMatchingServiceTests : IDisposable
     private readonly MealsEnPlaceDbContext _dbContext;
     private readonly RecipeMatchingService _sut;
 
-    // Known stable UOM IDs from UnitOfMeasureConfiguration seed data
+    // Known stable unit of measure IDs from UnitOfMeasureConfiguration seed data
     private static readonly Guid EachId = UnitOfMeasureConfiguration.EachId;
     private static readonly Guid GramId = UnitOfMeasureConfiguration.GramId;
     private static readonly Guid MlId = UnitOfMeasureConfiguration.MlId;
@@ -115,8 +115,8 @@ public class RecipeMatchingServiceTests : IDisposable
 
         SeedUnitOfMeasures();
 
-        var conversionService = new UomConversionService(_dbContext);
-        var displayConverter = new UomDisplayConverter(_dbContext);
+        var conversionService = new UnitOfMeasureConversionService(_dbContext);
+        var displayConverter = new UnitOfMeasureDisplayConverter(_dbContext);
 
         _sut = new RecipeMatchingService(
             _claudeServiceMock.Object,
@@ -130,7 +130,7 @@ public class RecipeMatchingServiceTests : IDisposable
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Seeds the full UOM table using the same IDs and conversion factors defined in
+    /// Seeds the full unit of measure table using the same IDs and conversion factors defined in
     /// <see cref="UnitOfMeasureConfiguration"/>. The in-memory provider does not
     /// apply HasData seed; we insert manually with the same values.
     /// </summary>
@@ -141,121 +141,121 @@ public class RecipeMatchingServiceTests : IDisposable
             new UnitOfMeasure
             {
                 Abbreviation = "ea",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = EachId,
                 Name = "Each",
-                UomType = UomType.Count
+                UnitOfMeasureType = UnitOfMeasureType.Count
             },
             new UnitOfMeasure
             {
                 Abbreviation = "g",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = GramId,
                 Name = "Gram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "ml",
-                BaseUomId = null,
+                BaseUnitOfMeasureId = null,
                 ConversionFactor = 1.0m,
                 Id = MlId,
                 Name = "Milliliter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             // Weight derived
             new UnitOfMeasure
             {
                 Abbreviation = "oz",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 28.350m,
                 Id = OzId,
                 Name = "Ounce",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             new UnitOfMeasure
             {
                 Abbreviation = "lb",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 453.592m,
                 Id = UnitOfMeasureConfiguration.LbId,
                 Name = "Pound",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             },
             // Volume derived
             new UnitOfMeasure
             {
                 Abbreviation = "cup",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 236.588m,
                 Id = UnitOfMeasureConfiguration.CupId,
                 Name = "Cup",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "fl oz",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 29.574m,
                 Id = UnitOfMeasureConfiguration.FlOzId,
                 Name = "Fluid Ounce",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tbsp",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 14.787m,
                 Id = UnitOfMeasureConfiguration.TbspId,
                 Name = "Tablespoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "tsp",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 4.929m,
                 Id = UnitOfMeasureConfiguration.TspId,
                 Name = "Teaspoon",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "L",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 1000.0m,
                 Id = UnitOfMeasureConfiguration.LiterId,
                 Name = "Liter",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "pt",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 473.176m,
                 Id = UnitOfMeasureConfiguration.PintId,
                 Name = "Pint",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "qt",
-                BaseUomId = MlId,
+                BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 946.353m,
                 Id = UnitOfMeasureConfiguration.QuartId,
                 Name = "Quart",
-                UomType = UomType.Volume
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
             {
                 Abbreviation = "kg",
-                BaseUomId = GramId,
+                BaseUnitOfMeasureId = GramId,
                 ConversionFactor = 1000.0m,
                 Id = UnitOfMeasureConfiguration.KgId,
                 Name = "Kilogram",
-                UomType = UomType.Weight
+                UnitOfMeasureType = UnitOfMeasureType.Weight
             });
 
         _dbContext.SaveChanges();
@@ -266,7 +266,7 @@ public class RecipeMatchingServiceTests : IDisposable
         var ingredient = new CanonicalIngredient
         {
             Category = IngredientCategory.Other,
-            DefaultUomId = EachId,
+            DefaultUnitOfMeasureId = EachId,
             Id = id ?? Guid.NewGuid(),
             Name = name
         };
@@ -278,7 +278,7 @@ public class RecipeMatchingServiceTests : IDisposable
     private InventoryItem SeedInventoryItem(
         Guid canonicalIngredientId,
         decimal quantity,
-        Guid uomId,
+        Guid unitOfMeasureId,
         DateOnly? expiryDate = null)
     {
         var item = new InventoryItem
@@ -288,7 +288,7 @@ public class RecipeMatchingServiceTests : IDisposable
             Id = Guid.NewGuid(),
             Location = StorageLocation.Fridge,
             Quantity = quantity,
-            UomId = uomId
+            UnitOfMeasureId = unitOfMeasureId
         };
         _dbContext.InventoryItems.Add(item);
         _dbContext.SaveChanges();
@@ -297,12 +297,12 @@ public class RecipeMatchingServiceTests : IDisposable
 
     /// <summary>
     /// Seeds a fully resolved recipe where every ingredient has IsContainerResolved = true.
-    /// Each entry in <paramref name="ingredientLines"/> is (canonicalIngredientId, quantity, uomId).
+    /// Each entry in <paramref name="ingredientLines"/> is (canonicalIngredientId, quantity, unitOfMeasureId).
     /// </summary>
     private Recipe SeedFullyResolvedRecipe(
         string title,
         string cuisineType,
-        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UomId)> ingredientLines)
+        IEnumerable<(Guid IngredientId, decimal Quantity, Guid UnitOfMeasureId)> ingredientLines)
     {
         var recipe = new Recipe
         {
@@ -315,7 +315,7 @@ public class RecipeMatchingServiceTests : IDisposable
         _dbContext.Recipes.Add(recipe);
         _dbContext.SaveChanges();
 
-        foreach (var (ingredientId, qty, uomId) in ingredientLines)
+        foreach (var (ingredientId, qty, unitOfMeasureId) in ingredientLines)
         {
             _dbContext.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -324,7 +324,7 @@ public class RecipeMatchingServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = qty,
                 RecipeId = recipe.Id,
-                UomId = uomId
+                UnitOfMeasureId = unitOfMeasureId
             });
         }
         _dbContext.SaveChanges();
@@ -633,7 +633,7 @@ public class RecipeMatchingServiceTests : IDisposable
             IsContainerResolved = true,
             Quantity = 300m,
             RecipeId = recipe.Id,
-            UomId = GramId
+            UnitOfMeasureId = GramId
         });
 
         // Unresolved container reference
@@ -645,7 +645,7 @@ public class RecipeMatchingServiceTests : IDisposable
             Notes = "1 can tomato sauce",
             Quantity = 0m,
             RecipeId = recipe.Id,
-            UomId = null
+            UnitOfMeasureId = null
         });
 
         _dbContext.SaveChanges();
@@ -697,7 +697,7 @@ public class RecipeMatchingServiceTests : IDisposable
                 IsContainerResolved = true,
                 Quantity = qty,
                 RecipeId = recipe.Id,
-                UomId = GramId
+                UnitOfMeasureId = GramId
             });
         }
 
@@ -710,7 +710,7 @@ public class RecipeMatchingServiceTests : IDisposable
             Notes = "1 carton chicken stock",
             Quantity = 0m,
             RecipeId = recipe.Id,
-            UomId = null
+            UnitOfMeasureId = null
         });
 
         _dbContext.SaveChanges();
@@ -981,14 +981,14 @@ public class RecipeMatchingServiceTests : IDisposable
         response.FullMatches.Should().NotContain(m => m.RecipeId == recipe.Id);
     }
 
-    // ── UOM conversion during matching ─────────────────────────────────────────
+    // ── unit of measure conversion during matching ─────────────────────────────────────────
 
     [Fact]
     public async Task MatchRecipesAsync_InventoryInGramsRecipeInOunces_ConvertsCorrectlyForComparison()
     {
         // Arrange — inventory has 300g of butter; recipe requires 8 oz (≈ 226.8g)
         // 300g > 226.8g, so it should be a full match
-        var butter = SeedCanonicalIngredient("Butter UOM Conv");
+        var butter = SeedCanonicalIngredient("Butter unit of measure Conv");
         SeedInventoryItem(butter.Id, 300m, GramId);   // 300g
 
         var recipe = SeedFullyResolvedRecipe("Buttery Dish", "French", [
@@ -1006,7 +1006,7 @@ public class RecipeMatchingServiceTests : IDisposable
     public async Task MatchRecipesAsync_InventoryInOuncesRecipeInGrams_ConvertsCorrectlyForComparison()
     {
         // Arrange — inventory has 8 oz (≈ 226.8g); recipe requires 200g → should be full match
-        var cheddar = SeedCanonicalIngredient("Cheddar UOM Conv");
+        var cheddar = SeedCanonicalIngredient("Cheddar unit of measure Conv");
         SeedInventoryItem(cheddar.Id, 8m, OzId);   // 8 oz
 
         var recipe = SeedFullyResolvedRecipe("Cheddar Omelette", "British", [
