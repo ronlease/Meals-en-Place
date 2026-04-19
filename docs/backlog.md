@@ -1363,6 +1363,14 @@ Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
     And choosing (a) retroactively resolves every deferred ingredient that matched the same unresolved token
     And the UnresolvedUomToken row is deleted after the decision is persisted
 
+  Scenario: Alias uniqueness is enforced by the service, not the database
+    Given recipe notation uses case meaningfully (uppercase "T" = Tablespoon, lowercase "t" = Teaspoon, a 3x quantity difference)
+    And the database has no unique index on UnitOfMeasureAlias.Alias
+    When the user attempts to create an alias that already exists (case-sensitive match)
+    Then the service rejects the duplicate by default with a clear error
+    And the user may re-submit with an explicit override flag to force the insert
+    And the override path is required only for legitimate case-sensitive variants (e.g. "T" and "t", "Tbsp." and "tbsp.")
+
   Scenario: Count-with-ingredient-noun defaults to "ea"
     Given a measure string with a positive numeric quantity and no matching unit, alias, or container keyword (e.g. "4 chicken breasts")
     When UomNormalizationService.NormalizeAsync is called

@@ -30,7 +30,12 @@ public class UnitOfMeasureAliasConfiguration : IEntityTypeConfiguration<UnitOfMe
             .HasForeignKey(a => a.UnitOfMeasureId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        builder.HasIndex(a => a.Alias).IsUnique();
+        // Note: no DB-level unique index on Alias. Recipe notation uses case
+        // meaningfully ("T" = Tablespoon, "t" = Teaspoon), so neither case-
+        // sensitive nor case-insensitive uniqueness captures the domain.
+        // Uniqueness is enforced at the service / controller layer
+        // (MEP-026 Phase 2 review queue), which rejects accidental duplicates
+        // while permitting deliberate case-sensitive variants as overrides.
 
         // ── Seed data ─────────────────────────────────────────────────────────
         //
