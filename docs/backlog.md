@@ -1221,3 +1221,195 @@ Feature: PlantUML C4 Diagram PNG Generation
     Then the renderer resolves the remote C4-PlantUML includes successfully
     And the rendered PNGs accurately reflect the C4 diagram content
 ```
+
+## [MEP-025] Spike: Evaluate Expanded Recipe Data Sources
+
+**Status:** Done
+**Priority:** Medium
+
+**Recommendation:** adopt the Kaggle "Recipe Dataset (over 2M)" with `source != 'Recipes1M'` filter. Implementation details under MEP-026. Full spike output in [docs/spikes/mep-025-recommendation.md](spikes/mep-025-recommendation.md).
+
+### Business Problem
+TheMealDB, the current recipe source, carries approximately 600 meals. This catalog is functional but limiting -- it restricts recipe matching variety, meal plan diversity, and the overall usefulness of the "What can I make?" feature as my ingredient inventory grows. Before committing to a specific integration, I need a time-boxed spike to evaluate alternative recipe data sources across two categories: static datasets suitable for one-time bulk import (preferred for a single-user local deployment that should not burn API quota per query) and live APIs (as a fallback if no static dataset meets quality requirements). The spike should produce a recommendation with concrete data on import viability, ingredient matching quality, licensing constraints, and storage impact.
+
+**Leading candidate:** [wilmerarltstrmberg/recipe-dataset-over-2m on Kaggle](https://www.kaggle.com/datasets/wilmerarltstrmberg/recipe-dataset-over-2m). 2.23M rows aggregated from 28 recipe sites; filter `source != 'Recipes1M'` on ingest leaves ~1.64M usable rows (still ~2,700× TheMealDB's catalog). License is CC BY-NC-SA 4.0, compatible with single-user personal use. The dataset's NER column provides pre-extracted canonical ingredient names per recipe, which maps directly into `CanonicalIngredient` and sizeably reduces seed-curation work. Detailed analysis in [docs/spikes/mep-025-kaggle-2m-findings.md](spikes/mep-025-kaggle-2m-findings.md).
+
+**Out of scope for MVP:** live-API candidates (Spoonacular, Edamam). Per-query quota burn is architecturally incompatible with a single-user local deployment. Revisit only if the static-dataset path proves unworkable.
+
+**Rejected candidates:**
+
+- **Recipe1M+ (MIT CSAIL)** -- initial leading candidate based on its layer2+ structured ingredient data. Rejected after a dataset access request to MIT was returned with revised terms restricting access to universities and public institutions only. This project is a single-user personal tool without institutional affiliation, so Recipe1M+ is unavailable regardless of the underlying data fit. The citation references and discovery path are preserved in [docs/spikes/mep-025-recipe1m-references.md](spikes/mep-025-recipe1m-references.md) in case a future reader at an eligible institution wants to follow the same trail.
+- **RecipeNLG** -- derived from Recipe1M+. The chosen Kaggle dataset is effectively a RecipeNLG reupload; filtering `source != 'Recipes1M'` at ingest sidesteps the Recipe1M+ dependency cleanly.
+
+### Acceptance Criteria
+```gherkin
+Feature: Evaluate Expanded Recipe Data Sources
+
+  Scenario: Evaluate static dataset candidates
+    Given the following static datasets are under consideration:
+      | Dataset       | Approximate Size | License      |
+      | Recipe1M+     | ~1,000,000       | MIT          |
+      | RecipeNLG     | ~2,000,000       | Research     |
+      | Food.com (Kaggle) | ~230,000     | CC BY-NC-SA  |
+    When each dataset is reviewed
+    Then the evaluation documents format compatibility with the existing recipe import pipeline
+    And the evaluation documents licensing terms and whether redistribution or local use is permitted
+
+  Scenario: Evaluate live API candidates
+    Given the following live APIs are under consideration:
+      | API           | Approximate Catalog | Free Tier Limits     |
+      | Spoonacular   | ~400,000            | 150 requests/day     |
+      | Edamam        | ~2,000,000          | 5-10 requests/minute |
+    When each API is reviewed
+    Then the evaluation documents rate limits and whether a one-time bulk fetch is feasible within the free tier
+    And the evaluation documents data format compatibility with the existing recipe import pipeline
+
+  Scenario: Measure import success rate against the existing pipeline
+    Given a sample of at least 500 recipes from each candidate source has been obtained
+    When each sample is run through the existing recipe import and parsing pipeline
+    Then the percentage of recipes that parse cleanly without manual intervention is recorded
+    And any systematic parsing failures are categorized
+
+  Scenario: Measure match quality against the CanonicalIngredient table
+    Given the sample recipes have been parsed
+    When each recipe's ingredients are matched against the existing CanonicalIngredient table
+    Then the percentage of ingredients that match an existing canonical entry is recorded
+    And the number of new canonical entries that would need to be created is documented
+
+  Scenario: Measure container-reference flag rate
+    Given the sample recipes have been parsed
+    When each recipe's ingredients are checked for container references
+    Then the percentage of recipes that land in "Awaiting Resolution" status is recorded
+    And the total number of unresolved container references across the sample is documented
+
+  Scenario: Assess storage impact on PostgreSQL
+    Given the full dataset size for each candidate is known
+    When the estimated row count and storage footprint are calculated for recipes, recipe ingredients, and canonical ingredients
+    Then the projected database size increase is documented for each candidate
+    And any concerns about query performance at the projected scale are noted
+
+  Scenario: Verify licensing permits local single-user use
+    Given each candidate's license terms have been reviewed
+    When the license is evaluated against the project's use case (local, single-user, non-commercial)
+    Then sources with licenses that prohibit local use or require attribution not feasible in-app are flagged
+    And the recommendation clearly states which sources are safe to use
+
+  Scenario: Sanitize narrative prose from imported instructions
+    Given a sample batch from the chosen dataset has been parsed
+    When each recipe's instruction steps are run through a prose-stripping filter
+    Then sentences containing first-person pronouns, long parentheticals, or non-imperative structure are removed
+    And recipes retaining fewer than 80% of their original steps are flagged for review or exclusion
+    And the pass rate across the sample is recorded
+
+  Scenario: Dataset is obtained per-user, not redistributed
+    Given the chosen dataset's license restricts redistribution (CC BY-NC-SA, research-only, or similar non-commercial terms)
+    When setup documentation is written
+    Then the docs link to the upstream source (Kaggle dataset page, MIT project page, or equivalent) as the canonical entry point, from which users can locate the license and download instructions themselves
+    And the docs do NOT bypass any upstream signup or agreement step
+    And no source data (recipe JSON, SQL dumps, seed fixtures containing real recipe text) is committed to the repository
+    And any seed data derived from the dataset is limited to non-copyrightable elements only (canonical ingredient names, UOM mappings)
+
+  Scenario: Produce a recommendation
+    Given all evaluation criteria have been assessed for every candidate
+    When the spike is complete
+    Then a written recommendation identifies the preferred data source (or combination)
+    And the recommendation justifies the choice based on import success rate, match quality, container-reference rate, licensing, and storage impact
+    And the recommendation includes a proposed approach for integration (bulk import vs. incremental sync)
+```
+
+## [MEP-026] Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+MEP-025 selected the Kaggle "Recipe Dataset (over 2M)" as the recipe catalog source, with the `source != 'Recipes1M'` subset providing ~1.64M usable recipes -- roughly 2,700x the current TheMealDB catalog. The spike also surfaced three concrete pipeline gaps that must be closed before the data is usable: the existing UOM parser misses the dotted-abbreviation style common in the dataset (`c.`, `tsp.`, `oz.`, `Tbsp.`), count-with-ingredient-noun patterns (`"4 chicken breasts"`) fall through to Claude unnecessarily, and the prototype prose filter over-drops legitimate imperatives that start with a preposition. This story implements the dataset ingest as an offline admin tool, adds a UOM alias table with a human-in-the-loop review queue (mirroring the MEP-003 container-resolution pattern) to reduce Claude invocations and keep the user in control, and closes the identified parser gaps. Full design rationale and measurement results in [docs/spikes/mep-025-recommendation.md](spikes/mep-025-recommendation.md).
+
+### Acceptance Criteria
+```gherkin
+Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
+
+  Scenario: UnitOfMeasureAlias entity is added to the schema
+    Given the UOM model currently supports abbreviation and name lookups
+    When a new UnitOfMeasureAlias entity is introduced
+    Then the entity has columns for alias text (case-insensitive), target UnitOfMeasure foreign key, and creation timestamp
+    And the alias text column is indexed for efficient lookup
+    And an EF Core migration creates the table without modifying existing UnitOfMeasure rows
+
+  Scenario: UOM alias table is seeded with common variants
+    Given the UnitOfMeasureAlias entity exists
+    When the migration seeds common alias variants
+    Then the following mappings are present: c/c. -> cup, t/t. -> teaspoon, T/T./Tbs/Tbsp./Tbl -> tablespoon, tsp. -> teaspoon, oz./ozs/ozs. -> ounce, lb./lbs/lbs. -> pound, fl. oz/fluid oz/fl. ozs -> fluid ounce, ml./mls -> milliliter, g./gm/gms -> gram, kg./kgs -> kilogram, pt./pts -> pint, qt./qts -> quart
+    And each alias row maps to an existing UnitOfMeasure via foreign key
+
+  Scenario: UomNormalizationService consults the alias table before falling back to Claude
+    Given a measure string with a recognized alias (e.g. "1 c. flour")
+    When UomNormalizationService.NormalizeAsync is called
+    Then the service resolves the unit deterministically via the alias table
+    And the returned NormalizationResult has Confidence = High and WasClaudeResolved = false
+    And Claude is not invoked for any alias-matched token
+
+  Scenario: Unresolved UOM tokens are queued for user review
+    Given a measure string with a unit token that matches no abbreviation, name, or alias
+    When UomNormalizationService.NormalizeAsync is called in ingest mode
+    Then an UnresolvedUomToken row is written capturing the original measure string, the extracted unit token, and the ingredient context
+    And the ingestion of that ingredient is deferred until the token is resolved
+    And Claude is NOT automatically invoked for unresolved tokens during bulk ingest
+
+  Scenario: User resolves an unresolved token via the review queue
+    Given one or more UnresolvedUomToken rows exist
+    When the user reviews a token via a UI or CLI
+    Then the user may choose: (a) map to an existing UnitOfMeasure (creates a new UnitOfMeasureAlias row), (b) defer to Claude for this one occurrence, or (c) ignore this token permanently
+    And choosing (a) retroactively resolves every deferred ingredient that matched the same unresolved token
+    And the UnresolvedUomToken row is deleted after the decision is persisted
+
+  Scenario: Count-with-ingredient-noun defaults to "ea"
+    Given a measure string with a positive numeric quantity and no matching unit, alias, or container keyword (e.g. "4 chicken breasts")
+    When UomNormalizationService.NormalizeAsync is called
+    Then the service resolves to the "ea" UnitOfMeasure with the parsed quantity
+    And the returned NormalizationResult has WasClaudeResolved = false
+    And Confidence = High
+
+  Scenario: Prose filter retains legitimate imperatives
+    Given a recipe instruction step that starts with a preposition or subordinator (e.g. "In a bowl, combine..." or "When the mixture bubbles, stir...")
+    When the prose filter runs during ingest
+    Then the step is retained if it contains no first-person pronouns and is <= 40 words
+    And the step is NOT dropped solely because its first word is not an imperative verb
+
+  Scenario: NER column seeds CanonicalIngredient rows in bulk
+    Given a parsed recipe from the Kaggle 2M dataset with a populated NER array
+    When the ingest tool processes the recipe
+    Then each unique NER token creates a CanonicalIngredient row if one does not already exist (case-insensitive match)
+    And duplicates across recipes are deduplicated
+    And the resulting CanonicalIngredient count after a full ingest run is recorded and bounded (projection: 5,000 to 15,000 rows)
+
+  Scenario: Ingest runs as an offline admin tool
+    Given the user has downloaded the Kaggle dataset CSV to their local machine
+    When the user runs the ingest tool (e.g. MealsEnPlace.Tools.Ingest <csv-path>)
+    Then the tool filters rows where source = 'Recipes1M' and ignores them
+    And the tool streams the CSV without loading the full 2.31 GB into memory
+    And the tool reports a final summary including: total recipes ingested, container-flagged ingredient count, UOM tokens sent to the review queue, canonical ingredients created, and elapsed time
+    And no recipe data from the dataset is exposed via any runtime API endpoint or committed to the repository
+
+  Scenario: Setup documentation points users at Kaggle
+    Given a fresh clone of the repository
+    When a user reads the setup documentation
+    Then the docs link to the Kaggle dataset page as the canonical source
+    And the docs describe the required user action (Kaggle account, dataset download, placing the CSV at a local path)
+    And the docs do NOT bundle, mirror, or commit any dataset content
+    And a CITATION.cff at the repository root credits the dataset source per CC BY-NC-SA 4.0 attribution
+
+  Scenario: Container-resolution flow handles high-volume dataset input
+    Given an ingest run has produced a significant number of container-flagged RecipeIngredient rows (projection: ~45% of recipes, ~750k recipes flagged for the full dataset)
+    When the user opens the container-resolution UI
+    Then the UI surfaces flagged ingredients grouped by canonical ingredient so the user can resolve "1 can diced tomatoes" once and apply the decision to every occurrence
+    And progress is persisted so the user can resolve in sessions rather than all at once
+
+  Scenario: License constraints are honored in the implementation
+    Given CC BY-NC-SA 4.0 terms apply to the dataset
+    When the implementation is reviewed
+    Then no recipe JSON, SQL dump, or fixture containing real recipe text is present in the repository
+    And no test uses real dataset text as input (tests use synthetic fixtures)
+    And the application is not deployed beyond the user's local machine
+    And any future commercialization triggers a re-evaluation of the data source
+```
