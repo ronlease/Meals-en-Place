@@ -126,7 +126,66 @@ Bottom line: CC BY-NC-SA 4.0 is compatible with the stance established earlier i
 2. **Character encoding.** Sample shows `\u00b0` escape sequences for degree symbol — Unicode is present but encoded-in-text in some rows. Import needs to handle unescape.
 3. **Duplicate detection across sites.** The same recipe may exist on multiple sites (e.g., a Food Network recipe mirrored on Yummly). Worth measuring before ingest to avoid double-counting.
 
+## Measurement results (500-recipe sample)
+
+A Python harness (`mep-025-measure.py` in this folder) was run against the first 500 non-Recipes1M rows of the CSV. Methodology: mirror the existing `ContainerReferenceDetector` and `UomNormalizationService.ParseMeasureString` logic in Python, since the exact behavior is what matters for projection. Results are approximate; real numbers emerge during MEP-026 implementation against the real DbContext.
+
+**Sample concentration caveat:** the first 500 rows of this CSV all happen to come from `www.cookbooks.com` (the CSV is ordered by source site, and cookbooks.com is the largest slice at 896k rows). A stratified sample across all 28 sites would likely show different abbreviation and style patterns. Treat these as cookbooks.com-specific numbers.
+
+### Container-reference detection
+
+- **10.5%** of ingredient strings flagged (382 / 3,654)
+- **45.4%** of recipes have at least one container-flagged ingredient (227 / 500)
+- Keyword breakdown: `can` 292, `box` 34, `jar` 29, `bottle` 10, `bag` 10, `carton` 4, `tube` 2, `packet` 1
+
+Implication: on a first pass through the full 1.64M-row ingest, roughly 750k recipes will enter "Awaiting Resolution" status. This is expected and matches the dataset character (cookbooks.com recipes commonly call for "1 can cream of mushroom soup", "1 box stove top", "1 jar marinara"). Container resolution is a one-time per-ingredient user action — the existing MEP-003 flow handles it.
+
+### UOM normalization
+
+| Scenario | Deterministic resolve rate |
+|---|---|
+| **A. Current pipeline as-is** | **0.4%** (12 / 3,272) |
+| **B. With period-stripping in the unit-token match** | **30.5%** (998 / 3,272) |
+| **C. B + `pkg`/`package` added as container keywords** | 30.5% (no further lift on this sample) |
+
+**Root causes of the remaining 69.5% Claude fall-through:**
+
+1. **Dotted abbreviations** (`c.`, `tsp.`, `oz.`, `Tbsp.`, `lb.`) — the parser looks for exact UOM.Abbreviation or UOM.Name match; neither matches `c.` or `tsp.`. Scenario B's period-strip is necessary but not sufficient (it adds `tsp.`/`oz.`/`Tbsp.`/`lb.` resolution but not `c.` → `cup` since `c` is not a seeded abbreviation).
+2. **Count-with-ingredient-noun** — `"4 boned chicken breasts"` parses to quantity=4, remainder="boned chicken breasts". First token "boned" is not a unit. A "default to `ea` when quantity > 0 and no unit resolved" rule would capture this, at the risk of false positives (e.g. `"4 oz cream cheese"` — though `oz` would be resolved already).
+
+The gap is too wide to close with a single heuristic. See the sister recommendation doc for the proposed MEP-026 fix: an alias table plus a human-in-the-loop review queue.
+
+### NER → CanonicalIngredient
+
+- **700 unique NER tokens** across the 500-recipe sample
+- Top tokens are exactly what you'd expect: `salt`, `sugar`, `flour`, `eggs`, `butter`, `onion`, `milk`, `vanilla`, `water`, `margarine`, `pepper`, `cream cheese`, `cinnamon`, `brown sugar`
+- Extrapolation: unique canonical tokens grow sub-linearly with sample size. A rough projection for the full 1.64M rows lands in the 5,000–15,000 range (well-known long-tail curve on ingredient vocabularies). Very manageable as seed data.
+
+### Prose filter on directions
+
+Filter rules tested: drop step if it contains a first-person pronoun, exceeds 40 words after parenthetical removal, or its first word is not a recognized imperative verb.
+
+- Mean step retention: **77.9%**
+- Median step retention: **83.3%**
+- Recipes below 80% retention: **41.4%** (207 / 500)
+
+This is **too aggressive** and shouldn't ship as-written. Inspection of dropped steps showed many legitimate imperatives failing the first-word check because they start with a preposition or conjunction (`"In a bowl, combine..."`, `"When mixture bubbles, stir..."`, `"Using 2 teaspoons, drop..."`). The MEP-026 implementation should either loosen the first-word rule to accept common sentence-lead prepositions / conjunctions, or drop the first-word check entirely and rely on the first-person-pronoun and word-count guards alone.
+
+### Storage projection
+
+Per-recipe text averages (UTF-8 bytes): title 18.5, ingredients 152.0, directions 231.5 — **~402 bytes per recipe**.
+
+Structural: 7.3 ingredients × 1.64M recipes ≈ **12M `RecipeIngredient` rows**.
+
+Full-dataset projection:
+- Raw text payload: **~0.62 GB**
+- Postgres footprint (with row headers, TOAST, GIN index on ingredients, B-tree on common lookups): **~1.2–2.2 GB**
+
+Rounds to "trivial" on any modern dev machine. No concerns.
+
 ## Related
 
 - Backlog: [MEP-025](../backlog.md)
 - Sister research doc: [mep-025-recipe1m-references.md](./mep-025-recipe1m-references.md)
+- Recommendation: [mep-025-recommendation.md](./mep-025-recommendation.md)
+- Reproducible measurement script: [mep-025-measure.py](./mep-025-measure.py)

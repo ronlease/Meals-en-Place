@@ -1224,18 +1224,22 @@ Feature: PlantUML C4 Diagram PNG Generation
 
 ## [MEP-025] Spike: Evaluate Expanded Recipe Data Sources
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
+
+**Recommendation:** adopt the Kaggle "Recipe Dataset (over 2M)" with `source != 'Recipes1M'` filter. Implementation details under MEP-026. Full spike output in [docs/spikes/mep-025-recommendation.md](spikes/mep-025-recommendation.md).
 
 ### Business Problem
 TheMealDB, the current recipe source, carries approximately 600 meals. This catalog is functional but limiting -- it restricts recipe matching variety, meal plan diversity, and the overall usefulness of the "What can I make?" feature as my ingredient inventory grows. Before committing to a specific integration, I need a time-boxed spike to evaluate alternative recipe data sources across two categories: static datasets suitable for one-time bulk import (preferred for a single-user local deployment that should not burn API quota per query) and live APIs (as a fallback if no static dataset meets quality requirements). The spike should produce a recommendation with concrete data on import viability, ingredient matching quality, licensing constraints, and storage impact.
 
-**Leading candidate:** Food.com on Kaggle. ~230,000 recipes, CC BY-NC-SA licensed by the uploader, accessible to any Kaggle account (no institutional affiliation required). Smaller and less pre-structured than Recipe1M+ would have been, but the existing UOM parser and container-reference detector already handle raw ingredient strings, so the capability gap is manageable. The other live-API candidates (Spoonacular, Edamam) remain in the comparison as fallbacks.
+**Leading candidate:** [wilmerarltstrmberg/recipe-dataset-over-2m on Kaggle](https://www.kaggle.com/datasets/wilmerarltstrmberg/recipe-dataset-over-2m). 2.23M rows aggregated from 28 recipe sites; filter `source != 'Recipes1M'` on ingest leaves ~1.64M usable rows (still ~2,700× TheMealDB's catalog). License is CC BY-NC-SA 4.0, compatible with single-user personal use. The dataset's NER column provides pre-extracted canonical ingredient names per recipe, which maps directly into `CanonicalIngredient` and sizeably reduces seed-curation work. Detailed analysis in [docs/spikes/mep-025-kaggle-2m-findings.md](spikes/mep-025-kaggle-2m-findings.md).
+
+**Out of scope for MVP:** live-API candidates (Spoonacular, Edamam). Per-query quota burn is architecturally incompatible with a single-user local deployment. Revisit only if the static-dataset path proves unworkable.
 
 **Rejected candidates:**
 
 - **Recipe1M+ (MIT CSAIL)** -- initial leading candidate based on its layer2+ structured ingredient data. Rejected after a dataset access request to MIT was returned with revised terms restricting access to universities and public institutions only. This project is a single-user personal tool without institutional affiliation, so Recipe1M+ is unavailable regardless of the underlying data fit. The citation references and discovery path are preserved in [docs/spikes/mep-025-recipe1m-references.md](spikes/mep-025-recipe1m-references.md) in case a future reader at an eligible institution wants to follow the same trail.
-- **RecipeNLG** -- derived from Recipe1M+ with additional scraping. Likely subject to similar research-institution-only access, and inherits the same upstream licensing dependency. Keep in the comparison only if Food.com Kaggle and the live APIs fall through; otherwise deprioritize.
+- **RecipeNLG** -- derived from Recipe1M+. The chosen Kaggle dataset is effectively a RecipeNLG reupload; filtering `source != 'Recipes1M'` at ingest sidesteps the Recipe1M+ dependency cleanly.
 
 ### Acceptance Criteria
 ```gherkin
