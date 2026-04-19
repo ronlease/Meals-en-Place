@@ -103,6 +103,7 @@
 
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.Data.Configurations;
@@ -231,13 +232,22 @@ public class UnitOfMeasureNormalizationServiceTests
         return dbContext;
     }
 
+    private static IClaudeAvailability CreateAvailability(bool isConfigured = true)
+    {
+        var mock = new Mock<IClaudeAvailability>(MockBehavior.Loose);
+        mock.Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(isConfigured);
+        return mock.Object;
+    }
+
     private static Mock<IClaudeService> CreateStrictClaudeMock() =>
         new(MockBehavior.Strict);
 
     private static UnitOfMeasureNormalizationService BuildService(
         MealsEnPlaceDbContext dbContext,
-        IClaudeService claudeService) =>
-        new(claudeService, dbContext);
+        IClaudeService claudeService,
+        bool claudeConfigured = true) =>
+        new(CreateAvailability(claudeConfigured), claudeService, dbContext);
 
     // ── Standard unit — deterministic path, Claude never called ──────────────
 
@@ -864,5 +874,36 @@ public class UnitOfMeasureNormalizationServiceTests
         // Assert — no token to queue
         var queueCount = await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueCount.Should().Be(0);
+    }
+
+    // ── MEP-032: graceful degradation without a Claude API key ───────────────
+    //
+    // Scenario: NormalizeAsync routes to the review queue when no Claude key is configured
+    //   Given no Claude API key is available (IsConfiguredAsync returns false)
+    //   And the measure string is colloquial and does not resolve deterministically
+    //   When NormalizeAsync is called
+    //   Then the service writes the unresolved token to the review queue
+    //   And the result's WasDeferredToQueue flag is true
+    //   And Claude.ResolveUnitOfMeasureAsync is never invoked
+
+    [Fact]
+    public async Task NormalizeAsync_WithoutClaudeKey_DefersToReviewQueueInsteadOfCallingClaude()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_WithoutClaudeKey_DefersToReviewQueueInsteadOfCallingClaude));
+        var claudeMock = CreateStrictClaudeMock(); // Strict: any Claude call would fail the test
+        var service = BuildService(dbContext, claudeMock.Object, claudeConfigured: false);
+
+        // Act — colloquial measure with no deterministic match
+        var result = await service.NormalizeAsync("a sprinkle", "paprika");
+
+        // Assert — deferred rather than Claude-resolved
+        result.WasDeferredToQueue.Should().BeTrue();
+        result.WasClaudeResolved.Should().BeFalse();
+
+        var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
+        queued.UnitToken.Should().Be("a sprinkle");
+
+        // Strict mock fails the test if ResolveUnitOfMeasureAsync was ever invoked
     }
 }

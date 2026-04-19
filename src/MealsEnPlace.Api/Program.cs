@@ -4,11 +4,13 @@ using MealsEnPlace.Api.Features.Inventory;
 using MealsEnPlace.Api.Features.MealPlan;
 using MealsEnPlace.Api.Features.Recipes;
 using MealsEnPlace.Api.Features.SeasonalProduce;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Features.ShoppingList;
 using MealsEnPlace.Api.Features.WasteReduction;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 
@@ -56,12 +58,41 @@ builder.Services.AddCors(options =>
     });
 });
 
+// -- BYO Claude API key storage -----------------------------------------------
+// Encrypt the user-supplied Anthropic token at rest via ASP.NET DataProtection.
+// Keys and token file live under LocalApplicationData so they never land in the
+// repo and persist across app restarts.
+var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+var settingsDirectory = Path.Combine(localAppData, "MealsEnPlace");
+var keyRingDirectory = Path.Combine(settingsDirectory, "keys");
+var tokenFilePath = Path.Combine(settingsDirectory, "claude-token.dat");
+Directory.CreateDirectory(keyRingDirectory);
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("MealsEnPlace")
+    .PersistKeysToFileSystem(new DirectoryInfo(keyRingDirectory));
+
+builder.Services.AddSingleton(new ClaudeTokenStoreOptions
+{
+    KeyRingDirectory = keyRingDirectory,
+    TokenFilePath = tokenFilePath
+});
+builder.Services.AddSingleton<IClaudeTokenStore, ClaudeTokenStore>();
+builder.Services.AddScoped<IClaudeAvailability, ClaudeAvailability>();
+
 // -- Application services -----------------------------------------------------
 builder.Services.AddHttpClient("TheMealDb", client =>
 {
     client.BaseAddress = new Uri("https://www.themealdb.com");
     client.DefaultRequestHeaders.Add("Accept", "application/json");
 });
+builder.Services.AddHttpClient("Anthropic", client =>
+{
+    client.BaseAddress = new Uri("https://api.anthropic.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<IAnthropicTestClient, AnthropicTestClient>();
 builder.Services.AddScoped<IClaudeService, ClaudeService>();
 builder.Services.AddScoped<IContainerResolutionService, ContainerResolutionService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();

@@ -33,6 +33,15 @@ import {
         <span>No matches found. Try adding more items to your inventory.</span>
       </div>
     } @else {
+      @if (!results()!.claudeFeasibilityApplied) {
+        <div class="ai-disabled-note" role="status" aria-live="polite">
+          <mat-icon fontIcon="info" inline></mat-icon>
+          <span>
+            AI-suggested substitutions are unavailable — add a Claude API key in
+            Settings to enable them. Deterministic matching is unchanged.
+          </span>
+        </div>
+      }
       @if (results()!.fullMatches.length > 0) {
         <section class="match-section">
           <h2 class="section-heading full-match-heading">
@@ -156,6 +165,19 @@ import {
       .error-message {
         color: #b91c1c;
         mat-icon { opacity: 1; color: #b91c1c; }
+      }
+
+      .ai-disabled-note {
+        align-items: center;
+        background: rgba(230, 150, 60, 0.08);
+        border-left: 3px solid rgba(230, 150, 60, 0.6);
+        border-radius: 4px;
+        color: #8a5a14;
+        display: flex;
+        font-size: 13px;
+        gap: 8px;
+        margin-bottom: 16px;
+        padding: 10px 12px;
       }
 
       .match-section {

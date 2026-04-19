@@ -554,6 +554,12 @@ Feature: Metric Display
 **Status:** Backlog
 **Priority:** Medium
 
+> **Dependency on MEP-032:** When this story is implemented, the flyer ingest
+> endpoint must consult `IClaudeAvailability.IsConfiguredAsync` before issuing
+> any Claude Vision call. When the result is false, return a clear error
+> linking to the AI section of the Settings page and do not persist any
+> partial `StoreSale` rows (per MEP-032 AC scenario 11).
+
 ### Business Problem
 Knowing which ingredients are on sale at my local grocery store would help me plan meals and shop around current deals. Earlier framing of this feature stalled because most major grocery chains prohibit scraping of their circular and pricing data. The revised approach is simpler and legally clean: I already download the weekly flyer as a PDF from the store's own website (they distribute it for consumer viewing), and the app parses *my own local copy* to extract sale items and match them to my `CanonicalIngredient` library. Factual pricing data (item name, sale price, unit pricing) is not copyrightable under 17 USC §102(b), so extracting facts from a legitimately-obtained PDF for personal single-user use is on firm ground. The legal-review blocker from the previous framing is removed.
 
@@ -1363,7 +1369,7 @@ Feature: Evaluate Expanded Recipe Data Sources
 
 ## [MEP-026] Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 
 ### Business Problem
@@ -1715,8 +1721,23 @@ Feature: Auto-Restore Inventory When a Consumed Meal is Unmarked
 
 ## [MEP-032] Settings Page with Bring-Your-Own Claude API Key and Graceful AI Degradation
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
+
+### Implementation Notes
+Shipped on branch `feature/mep-032-settings-page-and-byo-claude-api-key`. Scope covered:
+
+- `Features/Settings/` with `SettingsController` exposing `GET /status`, `POST /token`, `POST /test`, `DELETE /token`. `IClaudeTokenStore` encrypts the Anthropic API key via ASP.NET DataProtection and writes to `%LOCALAPPDATA%/MealsEnPlace/settings/claude-token.dat` (key ring under `%LOCALAPPDATA%/MealsEnPlace/keys`). Responses only ever surface `{ configured: bool }` — the raw key never appears in any body or log line.
+- `IClaudeAvailability` availability gate wired into `UnitOfMeasureNormalizationService` (defers unresolved tokens to the MEP-026 review queue), `RecipeImportService` (skips dietary classification; persists empty `RecipeDietaryTag` collection), `RecipeMatchingService` (skips the Claude feasibility / substitution pass and sets `ClaudeFeasibilityApplied = false` on the response), and `MealPlanService` (skips the Claude optimization pass).
+- `AnthropicTestClient` issues a one-token `messages` request against `https://api.anthropic.com` for the Test Connection endpoint only. Failure surfaces the Anthropic error message without overwriting the persisted key.
+- Angular `/settings` route with four sections (Display, AI, External Integrations stub, Inventory Behavior stub). AI section supports paste/save/test/remove with a confirmation dialog before deletion. `SettingsService` (HTTP) and `AiAvailabilityService` (app-wide signal) drive the state.
+- Persistent `AiDisabledBannerComponent` renders above the app content when no key is configured. Session-dismissible; reappears on next app load until a key is saved.
+- `RecipeMatchResultsComponent` shows a subtle in-page note when the match response's `claudeFeasibilityApplied` flag is false.
+- **MEP-012 scenario** (flyer refusal): MEP-012 is not implemented yet; it must honor `IClaudeAvailability` when built (see the MEP-012 note below).
+
+### Scope decisions
+- **No API version bump.** Single-user local deployment; only in-repo Angular consumes the API. JSON shapes gained `claudeFeasibilityApplied` on `RecipeMatchResponse` in place.
+- **Real Anthropic call for Test Connection only.** The other Claude-backed methods on `IClaudeService` remain stubs (they always have been). Converting them to real Claude calls is scheduled for future stories; MEP-032 lands the availability gate so those paths are skipped rather than invoked when no key is present.
 
 ### Business Problem
 The app currently assumes a Claude API token is available at all times (configured via `dotnet user-secrets` during development). If the app is distributed to anyone beyond the original developer -- or if the developer ever runs without a token configured -- every AI-backed path breaks in unclear ways. Two related needs:

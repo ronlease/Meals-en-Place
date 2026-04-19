@@ -1,4 +1,5 @@
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
@@ -11,6 +12,7 @@ namespace MealsEnPlace.Api.Features.Recipes;
 /// Implements TheMealDB search and recipe import pipeline.
 /// </summary>
 public sealed class RecipeImportService(
+    IClaudeAvailability claudeAvailability,
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
     ILogger<RecipeImportService> logger,
@@ -51,23 +53,29 @@ public sealed class RecipeImportService(
         dbContext.Recipes.Add(recipe);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        try
+        // MEP-032: skip dietary classification entirely when no Claude key is
+        // configured. The recipe is persisted with an empty RecipeDietaryTag
+        // collection; the user can tag manually via the recipe edit UI.
+        if (await claudeAvailability.IsConfiguredAsync(cancellationToken))
         {
-            var dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
-            foreach (var tag in dietaryTags)
+            try
             {
-                dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
+                var dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
+                foreach (var tag in dietaryTags)
                 {
-                    Id = Guid.NewGuid(),
-                    RecipeId = recipe.Id,
-                    Tag = tag
-                });
+                    dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
+                    {
+                        Id = Guid.NewGuid(),
+                        RecipeId = recipe.Id,
+                        Tag = tag
+                    });
+                }
+                if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
             }
-            if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
+            }
         }
 
         return (await GetRecipeDetailAsync(recipe.Id, cancellationToken))!;
@@ -187,25 +195,28 @@ public sealed class RecipeImportService(
         dbContext.Recipes.Add(recipe);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        IReadOnlyList<DietaryTag> dietaryTags;
-        try
+        IReadOnlyList<DietaryTag> dietaryTags = [];
+        if (await claudeAvailability.IsConfiguredAsync(cancellationToken))
         {
-            dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
-            foreach (var tag in dietaryTags)
+            try
             {
-                dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
+                dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
+                foreach (var tag in dietaryTags)
                 {
-                    Id = Guid.NewGuid(),
-                    RecipeId = recipe.Id,
-                    Tag = tag
-                });
+                    dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
+                    {
+                        Id = Guid.NewGuid(),
+                        RecipeId = recipe.Id,
+                        Tag = tag
+                    });
+                }
+                if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
             }
-            if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
-        }
-        catch (Exception ex)
-        {
-            logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
-            dietaryTags = [];
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
+                dietaryTags = [];
+            }
         }
 
         return new RecipeImportResultDto

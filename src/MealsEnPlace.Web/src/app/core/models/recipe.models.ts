@@ -118,6 +118,7 @@ export interface RecipeMatchDto {
 }
 
 export interface RecipeMatchResponse {
+  claudeFeasibilityApplied: boolean;
   fullMatches: RecipeMatchDto[];
   nearMatches: RecipeMatchDto[];
   partialMatches: RecipeMatchDto[];

@@ -40,6 +40,7 @@
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.MealPlan;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.Data.Configurations;
@@ -53,6 +54,7 @@ public class MealPlanServiceTests : IDisposable
 {
     // ── Fixtures ──────────────────────────────────────────────────────────────
 
+    private readonly Mock<IClaudeAvailability> _claudeAvailabilityMock = new(MockBehavior.Loose);
     private readonly Mock<IClaudeService> _claudeServiceMock = new(MockBehavior.Loose);
     private readonly MealsEnPlaceDbContext _dbContext;
     private readonly MealPlanService _sut;
@@ -80,7 +82,12 @@ public class MealPlanServiceTests : IDisposable
 
         var conversionService = new UnitOfMeasureConversionService(_dbContext);
 
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+
         _sut = new MealPlanService(
+            _claudeAvailabilityMock.Object,
             _claudeServiceMock.Object,
             _dbContext,
             conversionService);
@@ -419,5 +426,42 @@ public class MealPlanServiceTests : IDisposable
     {
         var result = await _sut.GetActiveMealPlanAsync();
         result.Should().BeNull();
+    }
+
+    // ── MEP-032: graceful degradation without a Claude API key ────────────────
+    //
+    // Scenario: Meal plan optimization Claude review is skipped without a key
+    //   Given IClaudeAvailability.IsConfiguredAsync returns false
+    //   And the deterministic pipeline assigns one or more slots
+    //   When GenerateMealPlanAsync is called
+    //   Then Claude.OptimizeMealPlanAsync is never invoked
+    //   And the plan is still persisted
+
+    [Fact]
+    public async Task GenerateMealPlanAsync_WithoutClaudeKey_SkipsOptimizeAndPersistsPlan()
+    {
+        // Arrange
+        var chicken = SeedCanonicalIngredient("Chicken");
+        SeedInventoryItem(chicken.Id, 500m, GramId);
+        SeedFullyResolvedRecipe("Grilled Chicken", "American", [(chicken.Id, 200m, GramId)]);
+
+        _claudeAvailabilityMock
+            .Setup(a => a.IsConfiguredAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+
+        // Act
+        var response = await _sut.GenerateMealPlanAsync(new GenerateMealPlanRequest());
+
+        // Assert — Claude optimize never invoked
+        _claudeServiceMock.Verify(
+            c => c.OptimizeMealPlanAsync(
+                It.IsAny<IReadOnlyList<MealPlanSlotCandidate>>(),
+                It.IsAny<IReadOnlyList<InventoryItem>>(),
+                It.IsAny<CancellationToken>()),
+            Times.Never);
+
+        // And the plan persists normally
+        response.Should().NotBeNull();
+        response!.Slots.Should().NotBeEmpty();
     }
 }

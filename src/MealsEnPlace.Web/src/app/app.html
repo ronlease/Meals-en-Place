@@ -83,11 +83,21 @@
         <mat-icon matListItemIcon>compost</mat-icon>
         <span matListItemTitle>Waste Alerts</span>
       </a>
+      <a
+        mat-list-item
+        routerLink="/settings"
+        routerLinkActive="active-link"
+        (click)="onNavClick()"
+      >
+        <mat-icon matListItemIcon>settings</mat-icon>
+        <span matListItemTitle>Settings</span>
+      </a>
     </mat-nav-list>
   </mat-sidenav>
 
   <mat-sidenav-content class="app-content">
     <app-offline-banner />
+    <app-ai-disabled-banner />
 
     <mat-toolbar color="primary" class="app-toolbar">
       @if (isMobile()) {

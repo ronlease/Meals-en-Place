@@ -1,4 +1,5 @@
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
@@ -11,6 +12,7 @@ namespace MealsEnPlace.Api.Features.MealPlan;
 /// waste-reduction priority, seasonal affinity, and variety constraints.
 /// </summary>
 public class MealPlanService(
+    IClaudeAvailability claudeAvailability,
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
     IUnitOfMeasureConversionService unitOfMeasureConversionService) : IMealPlanService
@@ -98,9 +100,19 @@ public class MealPlanService(
         var expiringItems = inventory.Where(i =>
             i.ExpiryDate.HasValue && i.ExpiryDate.Value <= today.AddDays(ExpiryBonusDays)).ToList();
 
+        // MEP-032: skip the Claude variety-and-waste-optimization pass when no
+        // API key is configured. The deterministic ranking above drives
+        // selection; the plan persists normally.
         IReadOnlyList<MealPlanSlotCandidate> optimized;
-        try { optimized = await claudeService.OptimizeMealPlanAsync(slotCandidates, expiringItems, cancellationToken); }
-        catch { optimized = slotCandidates; }
+        if (await claudeAvailability.IsConfiguredAsync(cancellationToken))
+        {
+            try { optimized = await claudeService.OptimizeMealPlanAsync(slotCandidates, expiringItems, cancellationToken); }
+            catch { optimized = slotCandidates; }
+        }
+        else
+        {
+            optimized = slotCandidates;
+        }
 
         // Apply Claude's reordering if it changed anything
         var optimizedSlots = optimized.Select(c => new MealPlanSlot

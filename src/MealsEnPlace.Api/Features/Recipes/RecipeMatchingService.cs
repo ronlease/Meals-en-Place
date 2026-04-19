@@ -1,4 +1,5 @@
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Models.Entities;
@@ -10,6 +11,7 @@ namespace MealsEnPlace.Api.Features.Recipes;
 /// Implements the recipe matching pipeline.
 /// </summary>
 public class RecipeMatchingService(
+    IClaudeAvailability claudeAvailability,
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
     IUnitOfMeasureConversionService unitOfMeasureConversionService,
@@ -44,10 +46,17 @@ public class RecipeMatchingService(
             }
         }
 
-        var enrichedNear = await EnrichNearMatchesAsync(nearMatches, inventory, cancellationToken);
+        // MEP-032: skip the Claude feasibility / substitution pass entirely when
+        // no API key is configured. The deterministic ranking above is still the
+        // product of record; the response flag lets the UI show a subtle note.
+        var claudeConfigured = await claudeAvailability.IsConfiguredAsync(cancellationToken);
+        var enrichedNear = claudeConfigured
+            ? await EnrichNearMatchesAsync(nearMatches, inventory, cancellationToken)
+            : nearMatches;
 
         return new RecipeMatchResponse
         {
+            ClaudeFeasibilityApplied = claudeConfigured,
             FullMatches = fullMatches.OrderByDescending(r => r.FinalScore).ToList(),
             NearMatches = enrichedNear.OrderByDescending(r => r.FinalScore).ToList(),
             PartialMatches = partialMatches.OrderByDescending(r => r.FinalScore).ToList()
