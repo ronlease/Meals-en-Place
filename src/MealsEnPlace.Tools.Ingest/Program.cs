@@ -1,6 +1,6 @@
 using MealsEnPlace.Api.Common;
-using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
+using MealsEnPlace.Api.Models.Entities;
 using MealsEnPlace.Tools.Ingest;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -17,19 +17,19 @@ catch (ArgumentException ex)
     Console.Error.WriteLine($"ERROR: {ex.Message}");
     Console.Error.WriteLine();
     Console.Error.WriteLine(IngestOptions.UsageText);
-    return 1;
+    return IngestConstants.ExitCodeInvalidArguments;
 }
 
 if (options is null)
 {
     Console.WriteLine(IngestOptions.UsageText);
-    return 0;
+    return IngestConstants.ExitCodeSuccess;
 }
 
 if (!File.Exists(options.CsvPath))
 {
     Console.Error.WriteLine($"ERROR: CSV file not found: {options.CsvPath}");
-    return 1;
+    return IngestConstants.ExitCodeInvalidArguments;
 }
 
 // ── DI + config ───────────────────────────────────────────────────────────
@@ -45,17 +45,14 @@ if (string.IsNullOrWhiteSpace(connectionString))
     Console.Error.WriteLine(
         "ERROR: ConnectionStrings:DefaultConnection is not configured. " +
         "Set it in appsettings.json or via the ConnectionStrings__DefaultConnection environment variable.");
-    return 2;
+    return IngestConstants.ExitCodeFatalError;
 }
 
 var services = new ServiceCollection();
 services.AddDbContext<MealsEnPlaceDbContext>(opts => opts.UseNpgsql(connectionString));
-services.AddScoped<IClaudeService, ClaudeService>();
-services.AddScoped<IUomNormalizationService, UomNormalizationService>();
-
 await using var serviceProvider = services.BuildServiceProvider();
 
-// ── Ingest run ───────────────────────────────────────────────────────────
+// ── Ingest run ────────────────────────────────────────────────────────────
 Console.WriteLine(options.DryRun
     ? "Starting DRY RUN -- no database writes will occur."
     : "Starting LIVE ingest -- database writes enabled.");
@@ -69,67 +66,155 @@ Console.WriteLine();
 var summary = new IngestSummary();
 var streamResult = KaggleRowReader.Stream(options.CsvPath);
 
-using (var scope = serviceProvider.CreateScope())
+using var scope = serviceProvider.CreateScope();
+var dbContext = scope.ServiceProvider.GetRequiredService<MealsEnPlaceDbContext>();
+
+// Ingest-mode EF tuning: we manage batching and change tracking manually,
+// so let the context skip per-change detection overhead.
+dbContext.ChangeTracker.AutoDetectChangesEnabled = false;
+
+var uomResolver = await InMemoryUomResolver.LoadAsync(dbContext);
+var canonicalRegistry = await CanonicalIngredientRegistry.LoadAsync(dbContext);
+
+var lastProgressAt = 0;
+var batchRecipeCount = 0;
+
+foreach (var row in streamResult.Rows)
 {
-    var uomService = scope.ServiceProvider.GetRequiredService<IUomNormalizationService>();
-
-    var progressInterval = 1000;
-    var lastProgressAt = 0;
-
-    foreach (var row in streamResult.Rows)
+    if (options.MaxRows is { } cap && summary.RecipesIngested >= cap)
     {
-        if (options.MaxRows is { } cap && summary.RecipesIngested >= cap)
+        // Cap reached -- stop iterating. The remaining eligible rows are
+        // left uncounted; the summary's "Rows read" reflects only the
+        // portion we actually consumed from the stream.
+        summary.StreamTerminatedByMaxRowsCap = true;
+        break;
+    }
+
+    // ── Canonical ingredients from NER ────────────────────────────────────
+    // Upsert a canonical row per unique NER token. Order matters for later
+    // "longest match wins" linkage.
+    foreach (var nerToken in row.Ner)
+    {
+        _ = canonicalRegistry.GetOrCreate(nerToken);
+    }
+
+    // ── Build the Recipe entity ───────────────────────────────────────────
+    var retainedSteps = new List<string>();
+    foreach (var step in row.Directions)
+    {
+        var proseResult = InstructionProseFilter.Evaluate(step);
+        summary.RecordProseFilter(proseResult);
+        if (proseResult.Retained)
         {
-            summary.RecipesSkippedByMaxRows++;
+            retainedSteps.Add(step);
+        }
+    }
+
+    var recipe = new Recipe
+    {
+        CuisineType = IngestConstants.DefaultCuisineType,
+        Id = Guid.NewGuid(),
+        Instructions = string.Join(IngestConstants.InstructionStepSeparator, retainedSteps),
+        ServingCount = IngestConstants.DefaultServingCount,
+        SourceUrl = string.IsNullOrWhiteSpace(row.Link) ? null : row.Link,
+        TheMealDbId = null,
+        Title = row.Title
+    };
+
+    // ── RecipeIngredients per raw ingredient ──────────────────────────────
+    foreach (var rawIngredient in row.Ingredients)
+    {
+        summary.TotalIngredientsProcessed++;
+
+        var bestNer = CanonicalIngredientRegistry.PickBestNerMatch(rawIngredient, row.Ner);
+        if (bestNer is null)
+        {
+            summary.IngredientsWithoutNerMatch++;
+            // No canonical linkage, no RecipeIngredient. The recipe still
+            // imports; the ingredient is simply unrepresented in the
+            // structured ingredient list.
             continue;
         }
 
-        summary.RecipesIngested++;
+        var canonicalId = canonicalRegistry.GetOrCreate(bestNer);
 
-        // Ingredients: container detection + deterministic UOM preview.
-        foreach (var ingredient in row.Ingredients)
+        var container = ContainerReferenceDetector.Detect(rawIngredient);
+        if (container.IsContainerReference)
         {
-            summary.TotalIngredientsProcessed++;
-
-            var container = ContainerReferenceDetector.Detect(ingredient);
-            if (container.IsContainerReference)
+            summary.ContainerFlaggedIngredients++;
+            recipe.RecipeIngredients.Add(new RecipeIngredient
             {
-                summary.ContainerFlaggedIngredients++;
-                continue;
-            }
+                CanonicalIngredientId = canonicalId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = false,
+                Notes = rawIngredient,
+                Quantity = 0m,
+                RecipeId = recipe.Id,
+                UomId = null
+            });
+            continue;
+        }
 
-            var deterministic = await uomService.TryResolveDeterministicallyAsync(ingredient);
-            if (deterministic is not null)
+        var resolution = uomResolver.NormalizeOrDefer(rawIngredient, bestNer);
+        if (resolution.WasDeferred)
+        {
+            summary.UomDeferredToQueue++;
+            recipe.RecipeIngredients.Add(new RecipeIngredient
             {
-                summary.DeterministicallyResolvedIngredients++;
-            }
-            else
+                CanonicalIngredientId = canonicalId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = false,
+                Notes = rawIngredient,
+                Quantity = resolution.Quantity,
+                RecipeId = recipe.Id,
+                UomId = null
+            });
+        }
+        else
+        {
+            summary.DeterministicallyResolvedIngredients++;
+            recipe.RecipeIngredients.Add(new RecipeIngredient
             {
-                summary.UomDeferredToQueue++;
-            }
+                CanonicalIngredientId = canonicalId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Notes = null,
+                Quantity = resolution.Quantity,
+                RecipeId = recipe.Id,
+                UomId = resolution.UomId
+            });
         }
+    }
 
-        // Directions: prose-filter retention counts.
-        foreach (var step in row.Directions)
-        {
-            summary.RecordProseFilter(InstructionProseFilter.Evaluate(step));
-        }
+    if (!options.DryRun)
+    {
+        dbContext.Recipes.Add(recipe);
+    }
 
-        // CanonicalIngredient upserts happen in the live path (Phase 4b).
-        // For dry run, approximate the unique-token count by counting NER entries.
-        if (options.DryRun)
-        {
-            summary.CanonicalIngredientsCreated += row.Ner.Count;
-        }
+    summary.RecipesIngested++;
+    batchRecipeCount++;
 
-        if (summary.RecipesIngested - lastProgressAt >= progressInterval)
-        {
-            Console.Write($"\rProcessed {summary.RecipesIngested:N0} recipes...");
-            lastProgressAt = summary.RecipesIngested;
-        }
+    // ── Batch flush ───────────────────────────────────────────────────────
+    if (batchRecipeCount >= IngestConstants.RecipeBatchSize)
+    {
+        await FlushBatchAsync(dbContext, uomResolver, summary, options.DryRun);
+        batchRecipeCount = 0;
+    }
+
+    if (summary.RecipesIngested - lastProgressAt >= IngestConstants.ProgressLoggingIntervalRecipes)
+    {
+        Console.Write($"\rProcessed {summary.RecipesIngested:N0} recipes...");
+        lastProgressAt = summary.RecipesIngested;
     }
 }
 
+// Flush any trailing partial batch.
+if (batchRecipeCount > 0)
+{
+    await FlushBatchAsync(dbContext, uomResolver, summary, options.DryRun);
+}
+
+summary.CanonicalIngredientsCreated = canonicalRegistry.NewRowsCreated;
 summary.StopTimer();
 
 Console.WriteLine();
@@ -137,9 +222,28 @@ Console.WriteLine(summary.Format(options, streamResult.Counters));
 
 if (options.DryRun)
 {
-    Console.WriteLine(
-        "NOTE: dry-run output. CanonicalIngredientsCreated is an UPPER-BOUND estimate " +
-        "(sum of NER entries across recipes, without deduplication).");
+    Console.WriteLine("NOTE: dry-run output. No Recipe, RecipeIngredient, or UnresolvedUomToken rows were persisted.");
 }
 
-return 0;
+return IngestConstants.ExitCodeSuccess;
+
+// ── Local functions ─────────────────────────────────────────────────────────
+
+static async Task FlushBatchAsync(
+    MealsEnPlaceDbContext dbContext,
+    InMemoryUomResolver resolver,
+    IngestSummary summary,
+    bool dryRun)
+{
+    if (!dryRun)
+    {
+        dbContext.ChangeTracker.DetectChanges();
+        await dbContext.SaveChangesAsync();
+    }
+
+    // Clear the tracker regardless of dry-run so memory does not grow across
+    // batches. In dry-run mode this simply drops the in-memory entity graph.
+    dbContext.ChangeTracker.Clear();
+    resolver.ResetPerBatchState();
+    summary.BatchesFlushed++;
+}

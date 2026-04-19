@@ -11,6 +11,15 @@ internal sealed class IngestSummary
 {
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
+    /// <summary>
+    /// True once the ingest loop is short-circuited by the <c>--max-rows</c>
+    /// cap. Used only by the summary formatter to adjust stream-counter
+    /// interpretation so callers don't misread partial counts as a full pass.
+    /// </summary>
+    public bool StreamTerminatedByMaxRowsCap { get; set; }
+
+    public int BatchesFlushed { get; set; }
+
     public int CanonicalIngredientsCreated { get; set; }
 
     public int ContainerFlaggedIngredients { get; set; }
@@ -18,6 +27,8 @@ internal sealed class IngestSummary
     public int DeterministicallyResolvedIngredients { get; set; }
 
     public TimeSpan Elapsed => _stopwatch.Elapsed;
+
+    public int IngredientsWithoutNerMatch { get; set; }
 
     public int InstructionStepsDropped { get; set; }
 
@@ -58,6 +69,10 @@ internal sealed class IngestSummary
             ? 0.0
             : ContainerFlaggedIngredients * 100.0 / TotalIngredientsProcessed;
 
+        var capNote = StreamTerminatedByMaxRowsCap
+            ? " (stream terminated early by --max-rows cap)"
+            : string.Empty;
+
         return $"""
 
             MealsEnPlace.Tools.Ingest summary
@@ -67,13 +82,13 @@ internal sealed class IngestSummary
             {(options.MaxRows is { } max ? $"Max rows cap:                  {max:N0}" : "Max rows cap:                  (none)")}
 
             Stream
-              Rows read:                   {streamCounters.TotalRowsRead:N0}
+              Rows read:                   {streamCounters.TotalRowsRead:N0}{capNote}
               Skipped (source=Recipes1M):  {streamCounters.SkippedRecipes1M:N0}
               Skipped (malformed JSON):    {streamCounters.MalformedRowsSkipped:N0}
-              Skipped (--max-rows cap):    {RecipesSkippedByMaxRows:N0}
 
             Recipes
               Ingested:                    {RecipesIngested:N0}
+              Batches flushed:             {BatchesFlushed:N0}
               CanonicalIngredients created:{CanonicalIngredientsCreated:N0}
 
             Ingredients
@@ -81,6 +96,7 @@ internal sealed class IngestSummary
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
               UOM resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
               UOM deferred to review queue:{UomDeferredToQueue:N0} ({deferPercent:0.0}%)
+              No NER match (unlinked):     {IngredientsWithoutNerMatch:N0}
 
             Instructions
               Steps retained:              {InstructionStepsRetained:N0}

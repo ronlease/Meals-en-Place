@@ -355,57 +355,9 @@ public class UomNormalizationService(
     }
 
     /// <summary>
-    /// Splits a raw measure string into a numeric quantity and a unit token.
-    /// Handles common formats: "2 cups", "500g", "1.5 tbsp", "a knob".
-    /// Returns (0, remainingText) when no leading number is found so Claude can handle it.
+    /// Back-compat delegate to <see cref="UomTokenParser.Parse"/> so existing
+    /// call sites in this class do not need refactoring.
     /// </summary>
-    private static (decimal Quantity, string UnitToken) ParseMeasureString(string measureString)
-    {
-        var trimmed = measureString.Trim();
-
-        // Find the end of a leading numeric portion (digits, dot, slash for fractions).
-        var numericEnd = 0;
-        while (numericEnd < trimmed.Length
-               && (char.IsDigit(trimmed[numericEnd])
-                   || trimmed[numericEnd] == '.'
-                   || trimmed[numericEnd] == '/'))
-        {
-            numericEnd++;
-        }
-
-        if (numericEnd == 0)
-        {
-            // No leading number — pass the whole string as the unit token for Claude.
-            return (0m, trimmed);
-        }
-
-        var numericPart = trimmed[..numericEnd];
-        var remainder = trimmed[numericEnd..].Trim();
-
-        var quantity = ParseFractionOrDecimal(numericPart);
-        return (quantity, remainder);
-    }
-
-    /// <summary>
-    /// Parses a numeric string that may be a simple decimal ("1.5") or a fraction ("1/2").
-    /// Returns 0 on parse failure.
-    /// </summary>
-    private static decimal ParseFractionOrDecimal(string numericPart)
-    {
-        if (numericPart.Contains('/'))
-        {
-            var parts = numericPart.Split('/');
-            if (parts.Length == 2
-                && decimal.TryParse(parts[0], out var numerator)
-                && decimal.TryParse(parts[1], out var denominator)
-                && denominator != 0)
-            {
-                return numerator / denominator;
-            }
-
-            return 0m;
-        }
-
-        return decimal.TryParse(numericPart, out var value) ? value : 0m;
-    }
+    private static (decimal Quantity, string UnitToken) ParseMeasureString(string measureString) =>
+        UomTokenParser.Parse(measureString);
 }
