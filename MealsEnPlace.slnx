@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/MealsEnPlace.Api/MealsEnPlace.Api.csproj" />
+    <Project Path="src/MealsEnPlace.Tools.Ingest/MealsEnPlace.Tools.Ingest.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/MealsEnPlace.Integration/MealsEnPlace.Integration.csproj" />

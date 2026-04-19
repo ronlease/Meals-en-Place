@@ -117,6 +117,24 @@ public interface IUomNormalizationService
         string measureString,
         string ingredientName,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Read-only preview that runs the deterministic resolution steps only
+    /// (abbreviation / name / alias / count-noun) and reports whether a
+    /// deterministic match exists. Never invokes Claude and never writes to
+    /// the review queue. Intended for dry-run tooling that wants to measure
+    /// how many ingredients would resolve vs. be deferred before committing
+    /// to a full ingest.
+    /// </summary>
+    /// <param name="measureString">The raw measure string to preview.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// A <see cref="NormalizationResult"/> on a deterministic match; null
+    /// otherwise.
+    /// </returns>
+    Task<NormalizationResult?> TryResolveDeterministicallyAsync(
+        string measureString,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -134,7 +152,7 @@ public class UomNormalizationService(
     {
         var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
 
-        var deterministic = await TryResolveDeterministicallyAsync(
+        var deterministic = await TryResolveDeterministicallyCoreAsync(
             parsedQuantity, unitToken, cancellationToken);
 
         if (deterministic is not null)
@@ -173,7 +191,7 @@ public class UomNormalizationService(
     {
         var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
 
-        var deterministic = await TryResolveDeterministicallyAsync(
+        var deterministic = await TryResolveDeterministicallyCoreAsync(
             parsedQuantity, unitToken, cancellationToken);
 
         if (deterministic is not null)
@@ -197,6 +215,16 @@ public class UomNormalizationService(
         };
     }
 
+    /// <inheritdoc />
+    public async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
+        string measureString,
+        CancellationToken cancellationToken = default)
+    {
+        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
+        return await TryResolveDeterministicallyCoreAsync(
+            parsedQuantity, unitToken, cancellationToken);
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     /// <summary>
@@ -205,7 +233,7 @@ public class UomNormalizationService(
     /// on success or null if no step matched. Shared by <see cref="NormalizeAsync"/>
     /// and <see cref="NormalizeOrDeferAsync"/> so both expose identical determinism.
     /// </summary>
-    private async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
+    private async Task<NormalizationResult?> TryResolveDeterministicallyCoreAsync(
         decimal parsedQuantity,
         string unitToken,
         CancellationToken cancellationToken)
