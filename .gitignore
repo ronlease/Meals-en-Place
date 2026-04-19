@@ -52,3 +52,10 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# MEP-026: local recipe dataset (CC BY-NC-SA 4.0, not for redistribution)
+# Each user downloads their own copy from Kaggle into this folder.
+src/MealsEnPlace.Tools.Ingest/data/
+src/MealsEnPlace.Tools.Ingest/data/*
+*.csv
+!docs/**/*.csv

@@ -18,6 +18,69 @@ public class ContainerResolutionController(
     UomDisplayConverter displayConverter) : ControllerBase
 {
     /// <summary>
+    /// Returns unresolved container references grouped by canonical ingredient
+    /// and notes phrase, ordered by occurrence count descending. Primary review
+    /// surface after a bulk ingest (MEP-026) when the same phrase may appear
+    /// across hundreds of recipes.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the list of groups (may be empty).</returns>
+    [HttpGet("unresolved-groups")]
+    [ProducesResponseType(typeof(IReadOnlyList<UnresolvedGroupResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<UnresolvedGroupResponse>>> GetUnresolvedGroups(
+        CancellationToken cancellationToken)
+    {
+        var groups = await containerResolutionService.GetUnresolvedGroupsAsync(cancellationToken);
+        var response = groups.Select(g => new UnresolvedGroupResponse
+        {
+            CanonicalIngredientId = g.CanonicalIngredientId,
+            CanonicalIngredientName = g.CanonicalIngredientName,
+            Notes = g.Notes,
+            OccurrenceCount = g.OccurrenceCount
+        }).ToList();
+
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Resolves every unresolved container reference in a group (identified by
+    /// canonical ingredient id and notes phrase) in a single transaction.
+    /// Applies the declared net weight or volume to every matching row.
+    /// </summary>
+    /// <param name="request">Group key, declared quantity, and UOM.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// 200 with the count of rows updated; 400 when the request fails validation
+    /// (non-positive quantity, unknown UOM, or empty notes).
+    /// </returns>
+    [HttpPost("unresolved-groups/resolve")]
+    [ProducesResponseType(typeof(BulkResolveGroupResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<BulkResolveGroupResponse>> BulkResolveGroup(
+        [FromBody] BulkResolveGroupRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await containerResolutionService.BulkResolveAsync(
+            request.CanonicalIngredientId,
+            request.Notes,
+            request.Quantity,
+            request.UomId,
+            cancellationToken);
+
+        if (result.IsValidationError)
+        {
+            return BadRequest(new ProblemDetails
+            {
+                Detail = result.ErrorMessage,
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Validation Error"
+            });
+        }
+
+        return Ok(new BulkResolveGroupResponse { AffectedCount = result.AffectedCount });
+    }
+
+    /// <summary>
     /// Returns all recipes that have at least one unresolved container reference,
     /// ordered alphabetically by title.
     /// </summary>

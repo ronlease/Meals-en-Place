@@ -79,9 +79,39 @@ tests/
   MealsEnPlace.Unit/          # Unit tests (219 tests)
   MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-024)
+  backlog.md                  # Product backlog (MEP-001 through MEP-033)
   c4/                         # PlantUML C4 architecture diagrams (L1–L3)
+  spikes/                     # Research artifacts for spike stories (e.g., MEP-025)
 ```
+
+## Recipe catalog: bulk ingest from Kaggle
+
+For a larger recipe library, this project ships an offline ingest tool that imports from the [Kaggle "Recipe Dataset (over 2M)"](https://www.kaggle.com/datasets/wilmerarltstrmberg/recipe-dataset-over-2m). The dataset is licensed under [CC BY-NC-SA 4.0](https://creativecommons.org/licenses/by-nc-sa/4.0/) and is **never committed to this repository** — each user downloads their own copy from Kaggle under the dataset's terms.
+
+### Setup
+
+1. Create a free Kaggle account if you don't have one.
+2. Download the dataset archive from the link above and extract `recipes_data.csv`.
+3. Place it at `src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv` (or anywhere else, and pass the path to `--csv`). This directory is gitignored so accidental commits are impossible.
+
+### Run
+
+```bash
+# Smoke test with 500 rows, no database writes
+dotnet run --project src/MealsEnPlace.Tools.Ingest --configuration Release -- \
+  --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv \
+  --dry-run \
+  --max-rows 500
+
+# Full ingest (~2 hours against the local Postgres)
+dotnet run --project src/MealsEnPlace.Tools.Ingest --configuration Release -- \
+  --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv
+```
+
+Rows whose `source` column equals `Recipes1M` are skipped automatically per the [MEP-025 spike](docs/backlog.md) decision to respect MIT's access restriction on the underlying Recipe1M+ subset. The remaining ~1.64M rows are imported.
+
+See [src/MealsEnPlace.Tools.Ingest/README.md](src/MealsEnPlace.Tools.Ingest/README.md) for full tool documentation and [CITATION.cff](CITATION.cff) for dataset attribution.
+
 
 ## Architecture
 

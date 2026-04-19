@@ -10,6 +10,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!--
+      EntityFrameworkCore and EntityFrameworkCore.Relational are pinned explicitly
+      to unify the transitive dependency graph. Npgsql.EntityFrameworkCore.PostgreSQL
+      10.0.1 pulls in EF Core 10.0.4, while Microsoft.EntityFrameworkCore.Design
+      brings 10.0.6. Pinning both at 10.0.6 resolves the MSB3277 version-conflict
+      warnings at build time without losing Npgsql compatibility.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.6" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.6" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.6">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

@@ -710,4 +710,232 @@ public class ContainerResolutionServiceTests : IDisposable
         remaining.Should().NotBeNull();
         remaining!.Should().BeEmpty();
     }
+
+    // ── MEP-026 phase 5: GetUnresolvedGroupsAsync ─────────────────────────────
+    //
+    // Scenario: Groups unresolved ingredients by (canonical, notes)
+    //   Given multiple recipes with "1 can diced tomatoes" entries
+    //   When GetUnresolvedGroupsAsync is called
+    //   Then one group is returned with OccurrenceCount equal to the number of such ingredients
+    //
+    // Scenario: Different canonical ingredients produce distinct groups
+    //   Given unresolved ingredients for diced tomatoes and for marinara sauce
+    //   When GetUnresolvedGroupsAsync is called
+    //   Then two separate groups are returned
+    //
+    // Scenario: Resolved ingredients are excluded from groups
+    //   Given a mix of resolved and unresolved ingredients sharing a canonical
+    //   When GetUnresolvedGroupsAsync is called
+    //   Then the resolved ones are not counted
+    //
+    // Scenario: Groups are ordered by occurrence count descending
+    //   Given group A with 5 occurrences and group B with 2 occurrences
+    //   When GetUnresolvedGroupsAsync is called
+    //   Then group A precedes group B in the result
+    //
+    // Scenario: Empty state returns an empty list, not null
+    //   Given no unresolved ingredients exist
+    //   When GetUnresolvedGroupsAsync is called
+    //   Then the result is empty (but non-null)
+
+    [Fact]
+    public async Task GetUnresolvedGroupsAsync_GroupsByCanonicalAndNotes_ReturnsAccurateCount()
+    {
+        // Arrange — three recipes all referencing "1 can diced tomatoes"
+        SeedRecipeWithIngredients("A", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+        SeedRecipeWithIngredients("B", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+        SeedRecipeWithIngredients("C", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+
+        // Act
+        var groups = await _sut.GetUnresolvedGroupsAsync();
+
+        // Assert
+        groups.Should().HaveCount(1);
+        groups[0].CanonicalIngredientId.Should().Be(CanonicalIngredientId1);
+        groups[0].Notes.Should().Be("1 can diced tomatoes");
+        groups[0].OccurrenceCount.Should().Be(3);
+    }
+
+    [Fact]
+    public async Task GetUnresolvedGroupsAsync_DifferentCanonicals_ProducesDistinctGroups()
+    {
+        SeedRecipeWithIngredients("A", [
+            BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes"),
+            BuildUnresolvedIngredient(CanonicalIngredientId2, "1 jar marinara sauce")
+        ]);
+
+        var groups = await _sut.GetUnresolvedGroupsAsync();
+
+        groups.Should().HaveCount(2);
+        groups.Select(g => g.CanonicalIngredientId)
+            .Should().BeEquivalentTo(new[] { CanonicalIngredientId1, CanonicalIngredientId2 });
+    }
+
+    [Fact]
+    public async Task GetUnresolvedGroupsAsync_ResolvedIngredientsExcluded()
+    {
+        SeedRecipeWithIngredients("A", [
+            BuildResolvedIngredient(CanonicalIngredientId1), // already resolved -- excluded
+            BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")
+        ]);
+
+        var groups = await _sut.GetUnresolvedGroupsAsync();
+
+        groups.Should().HaveCount(1);
+        groups[0].OccurrenceCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetUnresolvedGroupsAsync_OrderedByOccurrenceCountDescending()
+    {
+        // group A: 1 can beans × 5 (marinara canonical reused here for variety)
+        // group B: 1 can marinara × 2
+        for (var i = 0; i < 5; i++)
+        {
+            SeedRecipeWithIngredients($"A{i}", [
+                BuildUnresolvedIngredient(CanonicalIngredientId3, "1 can kidney beans")
+            ]);
+        }
+        for (var i = 0; i < 2; i++)
+        {
+            SeedRecipeWithIngredients($"B{i}", [
+                BuildUnresolvedIngredient(CanonicalIngredientId2, "1 jar marinara sauce")
+            ]);
+        }
+
+        var groups = await _sut.GetUnresolvedGroupsAsync();
+
+        groups.Should().HaveCount(2);
+        groups[0].OccurrenceCount.Should().Be(5);
+        groups[1].OccurrenceCount.Should().Be(2);
+    }
+
+    [Fact]
+    public async Task GetUnresolvedGroupsAsync_EmptyState_ReturnsEmptyList()
+    {
+        var groups = await _sut.GetUnresolvedGroupsAsync();
+
+        groups.Should().BeEmpty();
+    }
+
+    // ── MEP-026 phase 5: BulkResolveAsync ─────────────────────────────────────
+    //
+    // Scenario: Updates all matching unresolved rows in one call
+    //   Given 3 recipes each with "1 can diced tomatoes" for the same canonical
+    //   When BulkResolveAsync is called with that key and a valid declaration
+    //   Then all 3 rows are updated (IsContainerResolved = true, Quantity / UomId set)
+    //   And AffectedCount is 3
+    //
+    // Scenario: Does not touch rows in a different group
+    //   Given one "1 can diced tomatoes" row and one "1 jar marinara" row
+    //   When BulkResolveAsync is called with the diced-tomatoes key
+    //   Then only the diced-tomatoes row is updated
+    //
+    // Scenario: Already-resolved rows are not re-written
+    //   Given one unresolved and one resolved row sharing the same canonical + notes
+    //   When BulkResolveAsync is called
+    //   Then only the unresolved row is updated (AffectedCount = 1)
+    //
+    // Scenario: Non-positive quantity is rejected
+    //   When BulkResolveAsync is called with Quantity = 0
+    //   Then IsValidationError is true
+    //
+    // Scenario: Unknown UOM is rejected
+    //   When BulkResolveAsync is called with a UomId that does not exist
+    //   Then IsValidationError is true
+    //
+    // Scenario: Empty notes key is rejected
+    //   When BulkResolveAsync is called with an empty notes string
+    //   Then IsValidationError is true
+    //
+    // Scenario: Notes match is case-insensitive
+    //   Given a row with Notes = "1 Can Diced Tomatoes"
+    //   When BulkResolveAsync is called with notes "1 can diced tomatoes"
+    //   Then the row is updated
+
+    [Fact]
+    public async Task BulkResolveAsync_UpdatesAllMatchingRowsAcrossRecipes()
+    {
+        SeedRecipeWithIngredients("A", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+        SeedRecipeWithIngredients("B", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+        SeedRecipeWithIngredients("C", [BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes")]);
+
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+
+        result.IsValidationError.Should().BeFalse();
+        result.AffectedCount.Should().Be(3);
+
+        var rows = await _dbContext.RecipeIngredients
+            .Where(ri => ri.CanonicalIngredientId == CanonicalIngredientId1)
+            .ToListAsync();
+        rows.Should().OnlyContain(ri => ri.IsContainerResolved
+                                        && ri.Quantity == 14.5m
+                                        && ri.UomId == OzUomId);
+        rows.Should().OnlyContain(ri => ri.Notes == "1 can diced tomatoes"); // preserved
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_DoesNotTouchOtherGroups()
+    {
+        SeedRecipeWithIngredients("A", [
+            BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes"),
+            BuildUnresolvedIngredient(CanonicalIngredientId2, "1 jar marinara sauce")
+        ]);
+
+        await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+
+        var marinara = await _dbContext.RecipeIngredients
+            .FirstAsync(ri => ri.CanonicalIngredientId == CanonicalIngredientId2);
+        marinara.IsContainerResolved.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_AlreadyResolvedRowsAreSkipped()
+    {
+        SeedRecipeWithIngredients("A", [
+            BuildUnresolvedIngredient(CanonicalIngredientId1, "1 can diced tomatoes"),
+            BuildResolvedIngredient(CanonicalIngredientId1)
+        ]);
+
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+
+        result.AffectedCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_NonPositiveQuantity_IsRejected()
+    {
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 0m, OzUomId);
+
+        result.IsValidationError.Should().BeTrue();
+        result.AffectedCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_UnknownUom_IsRejected()
+    {
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, Guid.NewGuid());
+
+        result.IsValidationError.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_EmptyNotes_IsRejected()
+    {
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "   ", 14.5m, OzUomId);
+
+        result.IsValidationError.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task BulkResolveAsync_NotesMatchIsCaseInsensitive()
+    {
+        SeedRecipeWithIngredients("A", [
+            BuildUnresolvedIngredient(CanonicalIngredientId1, "1 Can Diced Tomatoes")
+        ]);
+
+        var result = await _sut.BulkResolveAsync(CanonicalIngredientId1, "1 can diced tomatoes", 14.5m, OzUomId);
+
+        result.AffectedCount.Should().Be(1);
+    }
 }

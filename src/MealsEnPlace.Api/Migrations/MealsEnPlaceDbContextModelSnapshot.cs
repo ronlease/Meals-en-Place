@@ -17,7 +17,7 @@ namespace MealsEnPlace.Api.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.5")
+                .HasAnnotation("ProductVersion", "10.0.6")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -624,6 +624,412 @@ namespace MealsEnPlace.Api.Migrations
                         });
                 });
 
+            modelBuilder.Entity("MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Alias")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UnitOfMeasureId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UnitOfMeasureId");
+
+                    b.ToTable("UnitOfMeasureAliases");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000001"),
+                            Alias = "c",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000002"),
+                            Alias = "c.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000003"),
+                            Alias = "cups",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000004")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000010"),
+                            Alias = "T",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000011"),
+                            Alias = "T.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000012"),
+                            Alias = "Tbs",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000013"),
+                            Alias = "Tbs.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000014"),
+                            Alias = "Tbl",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000015"),
+                            Alias = "Tbsp.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000016"),
+                            Alias = "tbsps",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000017"),
+                            Alias = "tablespoons",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000009")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000020"),
+                            Alias = "t",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000010")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000021"),
+                            Alias = "t.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000010")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000022"),
+                            Alias = "tsp.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000010")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000023"),
+                            Alias = "tsps",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000010")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000024"),
+                            Alias = "teaspoons",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000010")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000030"),
+                            Alias = "oz.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000031"),
+                            Alias = "ozs",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000032"),
+                            Alias = "ozs.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000033"),
+                            Alias = "ounces",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000013")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000040"),
+                            Alias = "fl. oz",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000041"),
+                            Alias = "fl. oz.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000042"),
+                            Alias = "fluid oz",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000043"),
+                            Alias = "fluid ounces",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000005")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000050"),
+                            Alias = "lb.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000051"),
+                            Alias = "lbs",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000052"),
+                            Alias = "lbs.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000053"),
+                            Alias = "pounds",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000012")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000060"),
+                            Alias = "g.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000061"),
+                            Alias = "gm",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000062"),
+                            Alias = "gms",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000063"),
+                            Alias = "grams",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000002")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000070"),
+                            Alias = "kg.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000011")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000071"),
+                            Alias = "kgs",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000011")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000072"),
+                            Alias = "kilograms",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000011")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000080"),
+                            Alias = "ml.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000081"),
+                            Alias = "mls",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000082"),
+                            Alias = "milliliters",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000090"),
+                            Alias = "l",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000006")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000091"),
+                            Alias = "l.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000006")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000092"),
+                            Alias = "liters",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000006")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000093"),
+                            Alias = "litres",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000006")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000100"),
+                            Alias = "pt.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000007")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000101"),
+                            Alias = "pts",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000007")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000102"),
+                            Alias = "pints",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000007")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000110"),
+                            Alias = "qt.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000008")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000111"),
+                            Alias = "qts",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000008")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000112"),
+                            Alias = "quarts",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000008")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000120"),
+                            Alias = "each",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        });
+                });
+
+            modelBuilder.Entity("MealsEnPlace.Api.Models.Entities.UnresolvedUomToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SampleIngredientContext")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("SampleMeasureString")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("UnitToken")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UnitToken");
+
+                    b.ToTable("UnresolvedUomTokens");
+                });
+
             modelBuilder.Entity("MealsEnPlace.Api.Models.Entities.UserPreferences", b =>
                 {
                     b.Property<Guid>("Id")
@@ -811,6 +1217,17 @@ namespace MealsEnPlace.Api.Migrations
                         .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("BaseUom");
+                });
+
+            modelBuilder.Entity("MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias", b =>
+                {
+                    b.HasOne("MealsEnPlace.Api.Models.Entities.UnitOfMeasure", "UnitOfMeasure")
+                        .WithMany()
+                        .HasForeignKey("UnitOfMeasureId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UnitOfMeasure");
                 });
 
             modelBuilder.Entity("MealsEnPlace.Api.Models.Entities.WasteAlert", b =>

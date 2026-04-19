@@ -3,12 +3,15 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  BulkResolveGroupRequest,
+  BulkResolveGroupResponse,
   CreateRecipeRequest,
   RecipeDetailDto,
   RecipeImportResultDto,
   RecipeListItemDto,
   RecipeMatchResponse,
   RecipeSearchResultDto,
+  UnresolvedGroupResponse,
 } from '../models/recipe.models';
 import { ShoppingListItemResponse } from '../models/shopping-list.models';
 
@@ -24,6 +27,13 @@ export class RecipeService {
     );
   }
 
+  bulkResolveGroup(request: BulkResolveGroupRequest): Observable<BulkResolveGroupResponse> {
+    return this.http.post<BulkResolveGroupResponse>(
+      `${this.baseUrl}/unresolved-groups/resolve`,
+      request
+    );
+  }
+
   createRecipe(request: CreateRecipeRequest): Observable<RecipeDetailDto> {
     return this.http.post<RecipeDetailDto>(this.baseUrl, request);
   }
@@ -34,6 +44,12 @@ export class RecipeService {
 
   getRecipes(): Observable<RecipeListItemDto[]> {
     return this.http.get<RecipeListItemDto[]>(this.baseUrl);
+  }
+
+  getUnresolvedGroups(): Observable<UnresolvedGroupResponse[]> {
+    return this.http.get<UnresolvedGroupResponse[]>(
+      `${this.baseUrl}/unresolved-groups`
+    );
   }
 
   importRecipe(mealDbId: string): Observable<RecipeImportResultDto> {

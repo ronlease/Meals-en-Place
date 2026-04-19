@@ -367,4 +367,115 @@ public class ContainerResolutionControllerTests : IDisposable
             UomId = uom.Id
         };
     }
+
+    // ── MEP-026 phase 5: GetUnresolvedGroups ──────────────────────────────────
+    //
+    // Scenario: Returns 200 with the groups the service produced
+    //   Given the service returns two UnresolvedGroup rows
+    //   When GetUnresolvedGroups is called
+    //   Then the controller returns 200 with matching UnresolvedGroupResponse items
+    //
+    // Scenario: Empty service result returns 200 with empty list
+    //   Given the service returns no groups
+    //   When GetUnresolvedGroups is called
+    //   Then the response is 200 with an empty list
+
+    [Fact]
+    public async Task GetUnresolvedGroups_ServiceReturnsGroups_Returns200WithMappedResponse()
+    {
+        var canonicalId = Guid.NewGuid();
+        var groups = new List<UnresolvedGroup>
+        {
+            new()
+            {
+                CanonicalIngredientId = canonicalId,
+                CanonicalIngredientName = "Diced Tomatoes",
+                Notes = "1 can diced tomatoes",
+                OccurrenceCount = 42
+            }
+        };
+        _serviceMock
+            .Setup(s => s.GetUnresolvedGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(groups);
+
+        var result = await _sut.GetUnresolvedGroups(CancellationToken.None);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var body = ok.Value.Should().BeAssignableTo<IReadOnlyList<UnresolvedGroupResponse>>().Subject;
+        body.Should().HaveCount(1);
+        body[0].CanonicalIngredientId.Should().Be(canonicalId);
+        body[0].CanonicalIngredientName.Should().Be("Diced Tomatoes");
+        body[0].Notes.Should().Be("1 can diced tomatoes");
+        body[0].OccurrenceCount.Should().Be(42);
+    }
+
+    [Fact]
+    public async Task GetUnresolvedGroups_EmptyServiceResult_Returns200WithEmptyList()
+    {
+        _serviceMock
+            .Setup(s => s.GetUnresolvedGroupsAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([]);
+
+        var result = await _sut.GetUnresolvedGroups(CancellationToken.None);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeAssignableTo<IReadOnlyList<UnresolvedGroupResponse>>()
+            .Which.Should().BeEmpty();
+    }
+
+    // ── MEP-026 phase 5: BulkResolveGroup ─────────────────────────────────────
+    //
+    // Scenario: Service reports success with an affected count
+    //   Given the service returns BulkResolveResult.Success(7)
+    //   When BulkResolveGroup is called
+    //   Then the controller returns 200 with AffectedCount = 7
+    //
+    // Scenario: Service reports validation error
+    //   Given the service returns BulkResolveResult.ValidationError(...)
+    //   When BulkResolveGroup is called
+    //   Then the controller returns 400 with the service's error detail
+
+    [Fact]
+    public async Task BulkResolveGroup_ServiceSuccess_Returns200WithAffectedCount()
+    {
+        var canonicalId = Guid.NewGuid();
+        var uomId = Guid.NewGuid();
+        _serviceMock
+            .Setup(s => s.BulkResolveAsync(
+                canonicalId, "1 can diced tomatoes", 14.5m, uomId,
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BulkResolveResult.Success(7));
+
+        var request = new BulkResolveGroupRequest
+        {
+            CanonicalIngredientId = canonicalId,
+            Notes = "1 can diced tomatoes",
+            Quantity = 14.5m,
+            UomId = uomId
+        };
+
+        var result = await _sut.BulkResolveGroup(request, CancellationToken.None);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<BulkResolveGroupResponse>()
+            .Which.AffectedCount.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task BulkResolveGroup_ServiceValidationError_Returns400WithProblemDetail()
+    {
+        _serviceMock
+            .Setup(s => s.BulkResolveAsync(
+                It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<decimal>(), It.IsAny<Guid>(),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(BulkResolveResult.ValidationError("Quantity must be greater than zero."));
+
+        var result = await _sut.BulkResolveGroup(
+            new BulkResolveGroupRequest { Notes = "x", Quantity = 0m },
+            CancellationToken.None);
+
+        var bad = result.Result.Should().BeOfType<BadRequestObjectResult>().Subject;
+        var problem = bad.Value.Should().BeOfType<ProblemDetails>().Subject;
+        problem.Detail.Should().Contain("Quantity");
+    }
 }
