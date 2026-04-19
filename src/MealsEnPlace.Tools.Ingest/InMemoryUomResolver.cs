@@ -116,14 +116,18 @@ internal sealed class InMemoryUomResolver
     {
         var (quantity, unitToken) = UomTokenParser.Parse(measureString);
 
-        // Step 1: abbreviation / name lookup.
+        // Step 1: abbreviation / name lookup. Mirror the runtime service by
+        // trying the raw token and a plural-stripped variant so "cups" matches
+        // a seeded "cup" row without requiring a dedicated alias.
         if (!string.IsNullOrWhiteSpace(unitToken)
-            && _uomByAbbreviationOrName.TryGetValue(unitToken, out var uomHit))
+            && (_uomByAbbreviationOrName.TryGetValue(unitToken, out var uomHit)
+                || _uomByAbbreviationOrName.TryGetValue(unitToken.TrimEnd('s'), out uomHit)))
         {
             return IngestUomResolution.Resolved(quantity, uomHit.Id, uomHit.Abbreviation);
         }
 
-        // Step 2: alias lookup.
+        // Step 2: alias lookup. Aliases are stored verbatim so "cups" would
+        // only match an explicitly-seeded "cups" alias.
         if (!string.IsNullOrWhiteSpace(unitToken)
             && _aliasByText.TryGetValue(unitToken, out var aliasHit))
         {

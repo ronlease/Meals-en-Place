@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\MealsEnPlace.Api\MealsEnPlace.Api.csproj" />
+    <ProjectReference Include="..\..\src\MealsEnPlace.Tools.Ingest\MealsEnPlace.Tools.Ingest.csproj" />
   </ItemGroup>
 
 </Project>

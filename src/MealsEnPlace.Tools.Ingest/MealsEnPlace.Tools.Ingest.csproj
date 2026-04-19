@@ -15,6 +15,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="MealsEnPlace.Unit" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\MealsEnPlace.Api\MealsEnPlace.Api.csproj" />
   </ItemGroup>
 
