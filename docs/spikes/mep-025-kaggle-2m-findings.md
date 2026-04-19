@@ -108,12 +108,23 @@ The remaining 1.64M is still ~2,700× the TheMealDB catalog (600 recipes).
 
 **Staleness is a non-issue for this project's scope.** The snapshot is dated 2023-06-27, but core ingredients and cooking techniques don't go stale -- spaghetti is still spaghetti, chicken is still chicken. Novelty and trending recipes are covered by the existing manual-recipe-add path (MEP-018), not by refreshing the catalog.
 
+## License
+
+**CC BY-NC-SA 4.0** — https://creativecommons.org/licenses/by-nc-sa/4.0/
+
+Implications for this project:
+
+- **Attribution (BY)** — credit the Kaggle uploader and underlying sites. A `CITATION.cff` at repo root handles this cleanly when implementation lands.
+- **NonCommercial (NC)** — personal single-user use fits; any future commercialization of the tool breaks the terms and would require a different data source.
+- **ShareAlike (SA)** — any *redistributed* adaptation of the dataset must be released under CC BY-NC-SA 4.0. The existing "no source data committed to the repo" AC already sidesteps this: if the data never leaves the local machine, SA doesn't trigger. Extracted facts (e.g. a `CanonicalIngredient` list of `["milk", "butter", ...]`) are not copyrightable and are not "adaptations" subject to SA.
+
+Bottom line: CC BY-NC-SA 4.0 is compatible with the stance established earlier in MEP-025. Proceed.
+
 ## Open questions
 
-1. **License.** Not captured from the Kaggle page. The underlying RecipeNLG dataset (Bień et al., INLG 2020) has distinct licenses for code (MIT) and data (CC BY-NC-SA 4.0). Confirm what the Kaggle uploader declared.
-2. **Redistribution posture.** Even with the Recipe1M+ filter applied, storing 1.64M recipes scraped from 28 commercial sites in a local DB is still the same "scraped-from-copyrighted-sources" shape the user already decided is workable for personal use under 17 USC §102(b). Confirm that logic holds here given the expanded site list (some, e.g. NYT Cooking, have explicit terms).
-3. **Character encoding.** Sample shows `\u00b0` escape sequences for degree symbol — Unicode is present but encoded-in-text in some rows. Import needs to handle unescape.
-4. **Duplicate detection across sites.** The same recipe may exist on multiple sites (e.g., a Food Network recipe mirrored on Yummly). Worth measuring before ingest to avoid double-counting.
+1. **Redistribution posture.** Storing 1.64M recipes scraped from 28 commercial sites in a local DB is the same "scraped-from-copyrighted-sources" shape the user already decided is workable for personal use under 17 USC §102(b). The expanded site list is consistent with that reasoning — NYT Cooking, Bon Appétit, Food Network, etc. are represented, but for local single-user non-commercial use, nothing changes.
+2. **Character encoding.** Sample shows `\u00b0` escape sequences for degree symbol — Unicode is present but encoded-in-text in some rows. Import needs to handle unescape.
+3. **Duplicate detection across sites.** The same recipe may exist on multiple sites (e.g., a Food Network recipe mirrored on Yummly). Worth measuring before ingest to avoid double-counting.
 
 ## Related
 
