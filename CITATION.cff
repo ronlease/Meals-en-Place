@@ -1,0 +1,39 @@
+cff-version: 1.2.0
+title: Meals en Place
+message: >-
+  If this project's recipe catalog is seeded from the bundled ingest tool,
+  cite the underlying Kaggle dataset (see `references` below). The Meals
+  en Place project itself is a personal / research use tool and is not
+  published for citation.
+type: software
+authors:
+  - name: Ron Lease
+    email: ronlease@duck.com
+url: https://github.com/ronlease/Meals-en-Place
+license: MIT
+references:
+  # ---------------------------------------------------------------------------
+  # Kaggle "Recipe Dataset (over 2M)" --- the source used by
+  # src/MealsEnPlace.Tools.Ingest. Each user must obtain their own copy
+  # from Kaggle under the dataset's CC BY-NC-SA 4.0 license; the dataset
+  # itself is NEVER committed to this repository.
+  #
+  # The underlying scraped sites retain their own copyrights. This project
+  # relies on 17 USC 102(b) (facts and functional procedures are not
+  # copyrightable) plus the dataset's CC BY-NC-SA 4.0 terms for the
+  # uploader's curation work.
+  # ---------------------------------------------------------------------------
+  - type: data
+    title: Recipe Dataset (over 2M) Food
+    authors:
+      - family-names: Strömberg
+        given-names: Wilmer Arlt
+    url: https://www.kaggle.com/datasets/wilmerarltstrmberg/recipe-dataset-over-2m
+    date-released: "2023-06-27"
+    license: CC-BY-NC-SA-4.0
+    notes: >-
+      Multi-site aggregate (28 recipe sites). Rows where source='Recipes1M'
+      are excluded at ingest time per MEP-025; only the remaining ~1.64M
+      rows are imported into the local MealsEnPlace database. See
+      docs/spikes/mep-025-kaggle-2m-findings.md for the complete analysis
+      of the dataset's provenance, schema, and license terms.

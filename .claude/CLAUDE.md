@@ -11,7 +11,8 @@ season. Single-user, local deployment only.
 - **Frontend:** Angular 21, standalone components, Angular Material, ApexCharts
 - **Auth:** None — single user, local deployment
 - **AI:** Claude API (recipe dietary classification, ingredient normalization, meal plan optimization, UOM resolution, container reference flagging)
-- **External APIs:** TheMealDB (free, open recipe data), Open Food Facts (ingredient metadata)
+- **External APIs:** TheMealDB (free, open recipe data — slated for removal under MEP-033), Open Food Facts (ingredient metadata)
+- **Recipe catalog (bulk):** Kaggle "Recipe Dataset (over 2M)" ingested via `MealsEnPlace.Tools.Ingest`. Each user downloads their own copy under CC BY-NC-SA 4.0; the dataset is never committed. See [CITATION.cff](../CITATION.cff) and [README.md](../README.md) for setup.
 - **Testing:** xUnit, Gherkin-style naming, FluentAssertions, Moq
 - **Documentation:** Swashbuckle (OpenAPI/Swagger), PlantUML (C4 models)
 - **Infrastructure:** Docker Compose (Windows and Fedora)
@@ -38,13 +39,16 @@ MealsEnPlace/
         Entities/                   # EF Core entity classes
       Program.cs
     MealsEnPlace.Web/               # Angular 21 frontend
+    MealsEnPlace.Tools.Ingest/      # Offline console tool for Kaggle bulk recipe ingest (MEP-026)
   tests/
     MealsEnPlace.Unit/              # xUnit unit tests, mirroring Features/ structure
     MealsEnPlace.Integration/       # xUnit integration tests (EF Core in-memory)
   docs/
     backlog.md                      # Owned by Product Owner agent
     c4/                             # PlantUML C4 model files
+    spikes/                         # Spike research artifacts (e.g., MEP-025)
   docker-compose.yml
+  CITATION.cff                      # Attribution for the bundled Kaggle dataset
   .claude/
     agents/
 ```
