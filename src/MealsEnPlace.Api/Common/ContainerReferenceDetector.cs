@@ -35,17 +35,18 @@ public static class ContainerReferenceDetector
     /// </summary>
     /// <param name="input">
     /// The raw ingredient or measure string to evaluate
-    /// (e.g., "1 can chopped tomatoes", "2 jars marinara").
+    /// (e.g., "1 can chopped tomatoes", "2 jars marinara"). May be null;
+    /// null inputs return a negative result with an empty OriginalInput.
     /// </param>
     /// <returns>
     /// A <see cref="ContainerReferenceDetectionResult"/> describing whether
     /// a container reference was found, and which keyword matched.
     /// </returns>
-    public static ContainerReferenceDetectionResult Detect(string input)
+    public static ContainerReferenceDetectionResult Detect(string? input)
     {
         if (string.IsNullOrWhiteSpace(input))
         {
-            return ContainerReferenceDetectionResult.None(input);
+            return ContainerReferenceDetectionResult.None(input ?? string.Empty);
         }
 
         foreach (var keyword in ContainerKeywords)
