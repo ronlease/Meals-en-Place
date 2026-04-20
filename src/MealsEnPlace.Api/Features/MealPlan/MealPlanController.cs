@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MealsEnPlace.Api.Features.MealPlan;
@@ -8,8 +9,12 @@ namespace MealsEnPlace.Api.Features.MealPlan;
 [ApiController]
 [Route("api/v1/meal-plans")]
 [Produces("application/json")]
-public class MealPlanController(IMealPlanService mealPlanService) : ControllerBase
+public class MealPlanController(
+    IMealPlanReorderService mealPlanReorderService,
+    IMealPlanService mealPlanService) : ControllerBase
 {
+    private const int DefaultUrgencyWindowDays = 7;
+
     /// <summary>Generates a new weekly meal plan.</summary>
     /// <param name="request">Generation parameters including optional filters and slot preferences.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
@@ -58,6 +63,50 @@ public class MealPlanController(IMealPlanService mealPlanService) : ControllerBa
         var plans = await mealPlanService.ListMealPlansAsync(cancellationToken);
         return Ok(plans);
     }
+
+    /// <summary>
+    /// Applies a previously-previewed reorder. Permutes slot day assignments
+    /// within each <see cref="MealSlot"/> so higher-urgency recipes move
+    /// earlier in the plan. Returns the refreshed plan.
+    /// </summary>
+    [HttpPost("{id:guid}/reorder-by-expiry/apply")]
+    [ProducesResponseType(typeof(MealPlanResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<MealPlanResponse>> ApplyReorderByExpiry(
+        Guid id,
+        [FromQuery] int? urgencyWindowDays = null,
+        CancellationToken cancellationToken = default)
+    {
+        var window = ResolveUrgencyWindow(urgencyWindowDays);
+        var plan = await mealPlanReorderService.ApplyAsync(id, window, cancellationToken);
+        return plan is null ? NotFound() : Ok(plan);
+    }
+
+    /// <summary>
+    /// Previews a proposed reorder of the plan so recipes that consume
+    /// expiring ingredients move to earlier days. Does not mutate; client
+    /// confirms via <c>.../apply</c>.
+    /// </summary>
+    /// <param name="id">The meal plan ID.</param>
+    /// <param name="urgencyWindowDays">
+    /// Inclusive lookahead window for "expiring soon" in days. Defaults to 7.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    [HttpPost("{id:guid}/reorder-by-expiry/preview")]
+    [ProducesResponseType(typeof(ReorderPreviewResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ReorderPreviewResponse>> PreviewReorderByExpiry(
+        Guid id,
+        [FromQuery] int? urgencyWindowDays = null,
+        CancellationToken cancellationToken = default)
+    {
+        var window = ResolveUrgencyWindow(urgencyWindowDays);
+        var preview = await mealPlanReorderService.PreviewAsync(id, window, cancellationToken);
+        return preview is null ? NotFound() : Ok(preview);
+    }
+
+    private static int ResolveUrgencyWindow(int? value) =>
+        value is null or <= 0 ? DefaultUrgencyWindowDays : value.Value;
 
     /// <summary>Swaps a meal plan slot to a different recipe.</summary>
     /// <param name="slotId">The ID of the slot to swap.</param>
