@@ -2186,3 +2186,46 @@ Feature: Strip Ad / Tracking URLs on Recipe Ingest
     Then existing Recipe rows whose SourceUrl matches a tracker pattern are rewritten in place (or nulled)
     And a summary reports how many rows were changed
 ```
+
+## [MEP-038] Canonical Ingredient Deduplication Pass
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-026 (ingest creates the CanonicalIngredient rows this story folds)
+
+### Business Problem
+The MEP-026 ingest creates one `CanonicalIngredient` per unique NER token. A 1.64M-recipe live run produced **146,584** canonical rows — roughly 10× the MEP-025 projection of 5k-15k. The variance is morphological noise in the Kaggle NER column: "onion", "chopped onion", "diced onion", "red onion", "onions" all become distinct canonicals. That breaks recipe matching in a user-visible way: an inventory entry for "1 onion" won't match a recipe calling for "2 cups chopped onion" even though the user clearly has the ingredient.
+
+Need a heuristic dedup pass that folds modifier-only duplicates to a single survivor row and updates every `RecipeIngredient.CanonicalIngredientId` FK that pointed at a loser. The goal is cheap matching-quality wins without calling Claude on 146k rows — a strong stopword list (chopped, diced, sliced, minced, fresh, dried, whole, raw, cooked, large, small, medium, etc.) plus singular/plural collapse should cover the bulk.
+
+A Claude-assisted pass for the long tail (ambiguous merges, size-dependent distinctions like "baby carrots" vs "carrots") is a separate follow-up — not scoped here.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Deduplication Pass
+
+  Scenario: Modifier-stripped duplicates fold to one survivor
+    Given CanonicalIngredient rows exist for "onion", "chopped onion", "diced onion", and "onions"
+    When the user runs the dedup tool
+    Then exactly one survivor row remains (the shortest / most generic name)
+    And every RecipeIngredient that pointed at a folded row now points at the survivor
+    And a summary reports the number of rows folded and FKs updated
+
+  Scenario: True distinct ingredients are preserved
+    Given CanonicalIngredient rows exist for "carrot" and "baby carrot"
+    When the dedup tool runs with size-preserving mode
+    Then "baby carrot" is NOT folded into "carrot"
+    And a configurable modifier allow-list controls which qualifiers are size-significant vs cosmetic
+
+  Scenario: Dry-run reports the intended merges without writing
+    Given a populated CanonicalIngredient table
+    When the user runs the dedup tool with --dry-run
+    Then the tool prints the proposed fold groups and affected FK counts
+    And no database rows are modified
+
+  Scenario: Non-destructive record of the original NER token
+    Given a CanonicalIngredient row is folded into a survivor
+    When the fold happens
+    Then the folded-away name is appended to the survivor's alias / synonym list (exact schema TBD at implementation time)
+    And the fold is auditable / reversible via that synonym list
+```
