@@ -32,6 +32,12 @@
 //   Given a CSV with 3 rows, caller breaks after the first
 //   When enumeration stops
 //   Then Counters.TotalRowsRead reflects only the consumed prefix
+//
+// Scenario: NUL bytes embedded in any string field are stripped before yielding
+//   Given a CSV row with a NUL byte (\0) in the title, a scalar field, and an array element
+//   When Stream().Rows is enumerated
+//   Then the yielded row has no NUL bytes anywhere
+//   And the rest of each string is preserved in order
 
 using FluentAssertions;
 using MealsEnPlace.Tools.Ingest;
@@ -172,6 +178,61 @@ public class KaggleRowReaderTests : IDisposable
         streamResult.Counters.TotalRowsRead.Should().Be(0);
         streamResult.Counters.SkippedRecipes1M.Should().Be(0);
         streamResult.Counters.MalformedRowsSkipped.Should().Be(0);
+    }
+
+    // ── NUL-byte scrubbing ────────────────────────────────────────────────────
+
+    [Fact]
+    public void Stream_NulBytesInScalarFields_AreStrippedBeforeYield()
+    {
+        // Raw NUL bytes in the top-level scalar columns — the case that
+        // actually triggered a Postgres 22021 deep in the Kaggle dump.
+        var csv = Header + "\n" + BuildRow(
+            "Bad\0Title",
+            ["1 cup flour"],
+            ["Mix dry"],
+            "https://example.com/\0recipe",
+            "Gathered",
+            ["flour"],
+            "exa\0mple.com") + "\n";
+
+        var path = WriteCsv(csv);
+
+        var streamResult = KaggleRowReader.Stream(path);
+        var rows = streamResult.Rows.ToList();
+
+        rows.Should().HaveCount(1);
+        var row = rows[0];
+        row.Title.Should().Be("BadTitle");
+        row.Link.Should().Be("https://example.com/recipe");
+        row.Site.Should().Be("example.com");
+    }
+
+    [Fact]
+    public void Stream_JsonEscapedNulBytesInArrayElements_AreStrippedBeforeYield()
+    {
+        // Array columns can carry NUL via the JSON \u0000 escape sequence
+        // (a raw NUL inside the JSON would fail the array parse and the row
+        // would be counted as malformed, so it can't reach the DB anyway).
+        var header = Header + "\n";
+        // ingredients = ["1 cup\u0000 flour"], directions = ["mix\u0000"], NER = ["flo\u0000ur"]
+        var row = string.Join(",",
+            "\"Title\"",
+            "\"[\"\"1 cup\\u0000 flour\"\"]\"",
+            "\"[\"\"mix\\u0000\"\"]\"",
+            "\"u1\"",
+            "\"Gathered\"",
+            "\"[\"\"flo\\u0000ur\"\"]\"",
+            "\"site1\"");
+        var path = WriteCsv(header + row + "\n");
+
+        var streamResult = KaggleRowReader.Stream(path);
+        var rows = streamResult.Rows.ToList();
+
+        rows.Should().HaveCount(1);
+        rows[0].Ingredients.Should().Equal("1 cup flour");
+        rows[0].Directions.Should().Equal("mix");
+        rows[0].Ner.Should().Equal("flour");
     }
 
     // ── Early break leaves partial counters ───────────────────────────────────

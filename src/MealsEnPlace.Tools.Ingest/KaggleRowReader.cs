@@ -78,11 +78,11 @@ internal static class KaggleRowReader
                 {
                     Directions = ParseJsonStringArray(csv.GetField("directions")),
                     Ingredients = ParseJsonStringArray(csv.GetField("ingredients")),
-                    Link = csv.GetField("link") ?? string.Empty,
+                    Link = StripNulBytes(csv.GetField("link")) ?? string.Empty,
                     Ner = ParseJsonStringArray(csv.GetField("NER")),
                     Source = source,
-                    Site = csv.GetField("site") ?? string.Empty,
-                    Title = csv.GetField("title") ?? string.Empty
+                    Site = StripNulBytes(csv.GetField("site")) ?? string.Empty,
+                    Title = StripNulBytes(csv.GetField("title")) ?? string.Empty
                 };
             }
             catch (JsonException)
@@ -111,7 +111,30 @@ internal static class KaggleRowReader
         // fields, which CsvHelper already unescapes for us. The result is a
         // JSON array of strings.
         var parsed = JsonSerializer.Deserialize<string[]>(raw);
-        return parsed ?? Array.Empty<string>();
+        if (parsed is null)
+        {
+            return Array.Empty<string>();
+        }
+
+        for (var i = 0; i < parsed.Length; i++)
+        {
+            parsed[i] = StripNulBytes(parsed[i]) ?? string.Empty;
+        }
+        return parsed;
+    }
+
+    // Postgres rejects the NUL byte (U+0000) in every text column regardless
+    // of length or encoding ("22021: invalid byte sequence for encoding
+    // 'UTF8': 0x00"). The Kaggle dump has a handful of rows deep in the file
+    // with embedded NULs (hit one ~1.06M rows in). Scrub at the reader
+    // boundary so every downstream write path sees clean strings.
+    private static string? StripNulBytes(string? value)
+    {
+        if (value is null || value.IndexOf('\0') < 0)
+        {
+            return value;
+        }
+        return value.Replace("\0", string.Empty);
     }
 }
 
