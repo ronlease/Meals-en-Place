@@ -17,6 +17,10 @@ import { MealPlanService } from '../../core/services/meal-plan.service';
 import { RecipeService } from '../../core/services/recipe.service';
 import { MealPlanGenerateDialogComponent } from './meal-plan-generate-dialog.component';
 import {
+  MealPlanReorderDialogComponent,
+  ReorderDialogData,
+} from './meal-plan-reorder-dialog.component';
+import {
   MealPlanSwapDialogComponent,
   SwapDialogData,
 } from './meal-plan-swap-dialog.component';
@@ -47,10 +51,23 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
   template: `
     <div class="page-header">
       <h1 class="page-title">Meal Plan</h1>
-      <button mat-flat-button color="primary" (click)="openGenerateDialog()">
-        <mat-icon>auto_awesome</mat-icon>
-        Generate Plan
-      </button>
+      <div class="header-actions">
+        @if (plan()) {
+          <button
+            mat-stroked-button
+            (click)="openReorderDialog()"
+            [disabled]="reordering()"
+            matTooltip="Move recipes with expiring ingredients to earlier days"
+          >
+            <mat-icon>schedule</mat-icon>
+            Reorder by expiry
+          </button>
+        }
+        <button mat-flat-button color="primary" (click)="openGenerateDialog()">
+          <mat-icon>auto_awesome</mat-icon>
+          Generate Plan
+        </button>
+      </div>
     </div>
 
     @if (loading()) {
@@ -137,6 +154,11 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
         align-items: center;
         justify-content: space-between;
         margin-bottom: 16px;
+      }
+
+      .header-actions {
+        display: flex;
+        gap: 8px;
       }
 
       .page-title {
@@ -285,6 +307,7 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 export class MealPlanBoardComponent implements OnInit {
   readonly days = DAY_ORDER;
   protected readonly consumingSlotId = signal<string | null>(null);
+  protected readonly reordering = signal(false);
   protected readonly error = signal(false);
   protected readonly loading = signal(false);
   protected readonly plan = signal<MealPlanResponse | null>(null);
@@ -401,6 +424,41 @@ export class MealPlanBoardComponent implements OnInit {
           this.plan.set(plan);
         },
       });
+    });
+  }
+
+  openReorderDialog(): void {
+    const currentPlan = this.plan();
+    if (!currentPlan) return;
+
+    this.reordering.set(true);
+    this.mealPlanService.previewReorderByExpiry(currentPlan.id).subscribe({
+      error: () => {
+        this.reordering.set(false);
+        this.snackBar.open('Could not compute reorder preview.', 'Dismiss', { duration: 5000 });
+      },
+      next: (preview) => {
+        this.reordering.set(false);
+        const data: ReorderDialogData = { preview };
+        const ref = this.dialog.open(MealPlanReorderDialogComponent, { data });
+        ref.afterClosed().subscribe((confirmed: boolean | undefined) => {
+          if (!confirmed) return;
+          this.reordering.set(true);
+          this.mealPlanService
+            .applyReorderByExpiry(currentPlan.id, preview.urgencyWindowDays)
+            .subscribe({
+              error: () => {
+                this.reordering.set(false);
+                this.snackBar.open('Could not apply reorder.', 'Dismiss', { duration: 5000 });
+              },
+              next: (refreshed) => {
+                this.reordering.set(false);
+                this.plan.set(refreshed);
+                this.snackBar.open('Meal plan reordered.', 'Dismiss', { duration: 3000 });
+              },
+            });
+        });
+      },
     });
   }
 

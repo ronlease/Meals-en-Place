@@ -630,8 +630,10 @@ Feature: Store Sale Integration from User-Provided PDF Flyer
 
 ## [MEP-013] Coupon Aggregation
 
-**Status:** Backlog
+**Status:** Post-MVP (Backlog)
 **Priority:** Low
+
+> **Scope note:** Post-MVP. Do not suggest or pick up until the initial release is shipped and a viable coupon-data source (third-party API partnership) is secured.
 
 ### Business Problem
 Digital coupons from manufacturer and retailer programs could further reduce my grocery spending. Aggregating available coupons and matching them against my shopping list would highlight savings opportunities I might otherwise miss.
@@ -658,8 +660,10 @@ Feature: Coupon Aggregation
 
 ## [MEP-014] Canning Guidance
 
-**Status:** Backlog
+**Status:** Post-MVP (Backlog)
 **Priority:** Low
+
+> **Scope note:** Post-MVP. Do not suggest or pick up until the initial release is shipped.
 
 ### Business Problem
 When seasonal produce is abundant and inexpensive, I may want to preserve it through canning. Guidance on preservation windows, estimated canning yields by produce type, and safety checklists would help me plan canning sessions confidently and safely. This feature would extend the seasonal produce guidance with actionable preservation information.
@@ -1641,8 +1645,18 @@ Feature: Push Meal Plan to External Todo Provider
 
 ## [MEP-030] Reorder Meal Plan to Prioritize Expiring Ingredients
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
+
+### Implementation Notes
+Shipped on branch `feature/mep-030-reorder-meal-plan-by-expiry`. Scope covered:
+
+- `MealPlanReorderService` computes an urgency score per slot: for each recipe ingredient, `max(0, urgencyWindow − daysUntilExpiry) / urgencyWindow`. Already-expired ingredients contribute 1.0 (max). Count-of-expiring and remaining-days both feed into the same number, satisfying the AC without two separate axes.
+- Reorder permutes `DayOfWeek` **within each `MealSlot`** — Breakfast recipes shuffle among Breakfast slots, etc. The AC flagged cross-meal-type reordering as TBD; deliberately out of scope to keep the user's meal rhythm intact.
+- Stable sort: equal-urgency recipes retain their original relative day order.
+- Two endpoints for explicit preview / commit: `POST /api/v1/meal-plans/{id}/reorder-by-expiry/preview` and `.../apply`. Both accept `?urgencyWindowDays=` with a default of 7. Non-positive values clamp to the default.
+- Angular: "Reorder by expiry" action in the meal plan board header opens a preview dialog showing per-slot before → after assignments, the urgency window, and the per-slot urgency score. Confirm commits, Cancel backs out.
+- No-op cases return a `Reason` string ("No planned recipes use ingredients expiring..." or "The current order already prioritizes...") that the dialog surfaces directly.
 
 ### Business Problem
 MEP-007's meal plan generation considers waste-reduction in its initial candidate ranking, but that ranking is only as fresh as the moment of generation. Mid-week I buy produce, forget about leftovers, or have an ingredient sneak up on its expiry date -- and the existing plan no longer reflects the updated urgency. I want an explicit "reorder my planned meals to put expiry-consuming meals first" action that shuffles the slot dates within the existing plan (without regenerating or swapping recipes), so I cook the urgent stuff first. This is different from generating a new plan; it preserves every recipe the user already picked and only rearranges their sequencing.

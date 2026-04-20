@@ -7,6 +7,7 @@ import {
   GenerateMealPlanRequest,
   MealPlanResponse,
   MealPlanSlotResponse,
+  ReorderPreviewResponse,
   SwapSlotRequest
 } from '../models/meal-plan.models';
 
@@ -43,6 +44,28 @@ export class MealPlanService {
     return this.http.put<MealPlanSlotResponse>(
       `${this.baseUrl}/slots/${slotId}`,
       request
+    );
+  }
+
+  applyReorderByExpiry(
+    mealPlanId: string,
+    urgencyWindowDays?: number
+  ): Observable<MealPlanResponse> {
+    const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
+    return this.http.post<MealPlanResponse>(
+      `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/apply${query}`,
+      {}
+    );
+  }
+
+  previewReorderByExpiry(
+    mealPlanId: string,
+    urgencyWindowDays?: number
+  ): Observable<ReorderPreviewResponse> {
+    const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
+    return this.http.post<ReorderPreviewResponse>(
+      `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/preview${query}`,
+      {}
     );
   }
 

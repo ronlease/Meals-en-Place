@@ -43,3 +43,20 @@ export interface ShortIngredientResponse {
   shortBy: number;
   unitOfMeasureAbbreviation: string;
 }
+
+export interface ReorderedSlotDto {
+  id: string;
+  mealSlot: MealSlot;
+  originalDay: string;
+  proposedDay: string;
+  recipeId: string;
+  recipeTitle: string;
+  urgencyScore: number;
+}
+
+export interface ReorderPreviewResponse {
+  changes: ReorderedSlotDto[];
+  hasChanges: boolean;
+  reason: string | null;
+  urgencyWindowDays: number;
+}

@@ -51,11 +51,12 @@ namespace MealsEnPlace.Unit.Features.MealPlan;
 public class MealPlanControllerTests
 {
     private readonly MealPlanController _controller;
+    private readonly Mock<IMealPlanReorderService> _mockReorderService = new();
     private readonly Mock<IMealPlanService> _mockService = new();
 
     public MealPlanControllerTests()
     {
-        _controller = new MealPlanController(_mockService.Object);
+        _controller = new MealPlanController(_mockReorderService.Object, _mockService.Object);
     }
 
     [Fact]
@@ -163,6 +164,98 @@ public class MealPlanControllerTests
             .ReturnsAsync((MealPlanSlotResponse?)null);
 
         var result = await _controller.SwapSlot(slotId, request);
+
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    // ── MEP-030: Reorder by expiry ────────────────────────────────────────────
+
+    [Fact]
+    public async Task PreviewReorderByExpiry_KnownPlan_Returns200WithPreview()
+    {
+        var planId = Guid.NewGuid();
+        var preview = new ReorderPreviewResponse
+        {
+            Changes = [],
+            HasChanges = false,
+            Reason = "Nothing to reorder.",
+            UrgencyWindowDays = 7
+        };
+        _mockReorderService
+            .Setup(r => r.PreviewAsync(planId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(preview);
+
+        var result = await _controller.PreviewReorderByExpiry(planId);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().BeOfType<ReorderPreviewResponse>()
+            .Which.UrgencyWindowDays.Should().Be(7);
+    }
+
+    [Fact]
+    public async Task PreviewReorderByExpiry_UnknownPlan_Returns404()
+    {
+        var planId = Guid.NewGuid();
+        _mockReorderService
+            .Setup(r => r.PreviewAsync(planId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ReorderPreviewResponse?)null);
+
+        var result = await _controller.PreviewReorderByExpiry(planId);
+
+        result.Result.Should().BeOfType<NotFoundResult>();
+    }
+
+    [Fact]
+    public async Task PreviewReorderByExpiry_NonPositiveWindow_ClampsToDefault()
+    {
+        var planId = Guid.NewGuid();
+        _mockReorderService
+            .Setup(r => r.PreviewAsync(planId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ReorderPreviewResponse
+            {
+                Changes = [],
+                HasChanges = false,
+                UrgencyWindowDays = 7
+            });
+
+        await _controller.PreviewReorderByExpiry(planId, urgencyWindowDays: 0);
+
+        _mockReorderService.Verify(
+            r => r.PreviewAsync(planId, 7, It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ApplyReorderByExpiry_KnownPlan_Returns200WithRefreshedPlan()
+    {
+        var planId = Guid.NewGuid();
+        var refreshed = new MealPlanResponse
+        {
+            CreatedAt = DateTime.UtcNow,
+            Id = planId,
+            Name = "Test",
+            Slots = [],
+            WeekStartDate = DateOnly.FromDateTime(DateTime.Today)
+        };
+        _mockReorderService
+            .Setup(r => r.ApplyAsync(planId, 7, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(refreshed);
+
+        var result = await _controller.ApplyReorderByExpiry(planId);
+
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        ok.Value.Should().Be(refreshed);
+    }
+
+    [Fact]
+    public async Task ApplyReorderByExpiry_UnknownPlan_Returns404()
+    {
+        var planId = Guid.NewGuid();
+        _mockReorderService
+            .Setup(r => r.ApplyAsync(planId, It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((MealPlanResponse?)null);
+
+        var result = await _controller.ApplyReorderByExpiry(planId);
 
         result.Result.Should().BeOfType<NotFoundResult>();
     }

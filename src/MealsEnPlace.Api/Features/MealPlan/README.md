@@ -1,11 +1,12 @@
 # Meal Plan
 
-Generates weekly meal plans by scoring recipes against current inventory, waste-reduction priority, seasonal affinity, and variety constraints. Also owns the consume / unconsume flow for individual slots (MEP-027 / MEP-031).
+Generates weekly meal plans by scoring recipes against current inventory, waste-reduction priority, seasonal affinity, and variety constraints. Also owns the consume / unconsume flow for individual slots (MEP-027 / MEP-031) and the expiry-driven reorder (MEP-030).
 
 ## Backlog
 
 - MEP-007 Meal Plan Generation
 - MEP-027 Mark Meal as Eaten with Optional Inventory Auto-Deplete
+- MEP-030 Reorder Meal Plan to Prioritize Expiring Ingredients
 - MEP-031 Auto-Restore Inventory When a Consumed Meal is Unmarked
 
 ## Endpoints
@@ -19,6 +20,8 @@ Generates weekly meal plans by scoring recipes against current inventory, waste-
 | PUT | `/api/v1/meal-plans/slots/{slotId}` | Swap a slot to a different recipe |
 | POST | `/api/v1/meal-plan-slots/{id}/consume` | Mark a slot as eaten. Deducts inventory when the user's `AutoDepleteOnConsume` preference is on. |
 | DELETE | `/api/v1/meal-plan-slots/{id}/consume` | Reverse a consume. Restores inventory when auto-deplete was on at consume time. |
+| POST | `/api/v1/meal-plans/{id}/reorder-by-expiry/preview` | Compute a proposed reorder of slot days based on expiring ingredients. Does not mutate. Accepts optional `?urgencyWindowDays=` (default 7). |
+| POST | `/api/v1/meal-plans/{id}/reorder-by-expiry/apply` | Commit the previewed reorder — permutes slot `DayOfWeek` within each `MealSlot`. |
 
 ## Key Concepts
 
@@ -35,13 +38,22 @@ Generates weekly meal plans by scoring recipes against current inventory, waste-
 - On unconsume, the service replays each `ConsumeAuditEntry`: if the original row still exists, the deducted quantity is added back to that exact row so expiry tracking is preserved; if the row has been deleted, a new row is created from the audit's location + expiry snapshot. Audit rows are deleted after restoration.
 - Insufficient inventory clamps to 0 and returns a `ShortIngredient` entry per affected ingredient — the consume still succeeds.
 
+## Reorder by Expiry (MEP-030)
+
+- `MealPlanReorderService` computes a per-slot urgency score from the current inventory snapshot: for each recipe ingredient, score = `max(0, urgencyWindow − daysUntilExpiry) / urgencyWindow`. Already-expired ingredients contribute 1.0 (maximum urgency). Ingredients outside the window contribute 0.
+- The reorder permutes `DayOfWeek` **within each `MealSlot`** — Breakfast recipes shuffle among Breakfast slots, Lunch among Lunch, etc. Cross-meal-type reordering is intentionally out of scope (the AC flagged it TBD) so the user's meal-rhythm is preserved.
+- Tie-break uses the original `DayOfWeek` ordering so equal-urgency recipes retain their relative sequence (stable sort).
+- Preview returns a `ReorderPreviewResponse` with per-slot before/after day assignments and a `Reason` string when no changes are recommended. Apply persists the new assignments and returns the refreshed plan.
+
 ## Files
 
-- `MealPlanController.cs` — Meal plan endpoints
+- `MealPlanController.cs` — Meal plan endpoints (including reorder preview / apply)
 - `MealPlanSlotsController.cs` — Slot-scoped consume / unconsume endpoints
 - `IMealPlanService.cs` / `MealPlanService.cs` — Generation and management logic
 - `IMealConsumptionService.cs` / `MealConsumptionService.cs` — Consume + inventory deduction + restore flow
+- `IMealPlanReorderService.cs` / `MealPlanReorderService.cs` — Preview + apply expiry-driven reorder
 - `MealPlanResponse.cs` — Response DTO with slots (slot response carries `ConsumedAt`)
 - `ConsumeMealResponse.cs` — Response from the consume endpoint, including any short-ingredient warnings
+- `ReorderPreviewResponse.cs` — Response from the reorder preview endpoint
 - `GenerateMealPlanRequest.cs` — Generation parameters
 - `SwapSlotRequest.cs` — Slot swap request
