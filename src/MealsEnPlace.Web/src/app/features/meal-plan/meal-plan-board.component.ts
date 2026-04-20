@@ -13,8 +13,10 @@ import {
   MealPlanSlotResponse,
 } from '../../core/models/meal-plan.models';
 import { RecipeListItemDto } from '../../core/models/recipe.models';
+import { MealPlanPushResult } from '../../core/models/todoist.models';
 import { MealPlanService } from '../../core/services/meal-plan.service';
 import { RecipeService } from '../../core/services/recipe.service';
+import { TodoistAvailabilityService } from '../../core/services/todoist-availability.service';
 import { MealPlanGenerateDialogComponent } from './meal-plan-generate-dialog.component';
 import {
   MealPlanReorderDialogComponent,
@@ -61,6 +63,15 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
           >
             <mat-icon>schedule</mat-icon>
             Reorder by expiry
+          </button>
+          <button
+            mat-stroked-button
+            (click)="pushToTodoist()"
+            [disabled]="!todoistAvailability.configured() || pushing()"
+            [matTooltip]="todoistAvailability.configured() ? 'Push each slot as a scheduled Todoist task' : 'Configure Todoist:Token user secret to enable'"
+          >
+            <mat-icon>send</mat-icon>
+            Push to Todoist
           </button>
         }
         <button mat-flat-button color="primary" (click)="openGenerateDialog()">
@@ -307,7 +318,9 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 export class MealPlanBoardComponent implements OnInit {
   readonly days = DAY_ORDER;
   protected readonly consumingSlotId = signal<string | null>(null);
+  protected readonly pushing = signal(false);
   protected readonly reordering = signal(false);
+  protected readonly todoistAvailability = inject(TodoistAvailabilityService);
   protected readonly error = signal(false);
   protected readonly loading = signal(false);
   protected readonly plan = signal<MealPlanResponse | null>(null);
@@ -425,6 +438,35 @@ export class MealPlanBoardComponent implements OnInit {
         },
       });
     });
+  }
+
+  pushToTodoist(): void {
+    const currentPlan = this.plan();
+    if (!currentPlan) return;
+
+    this.pushing.set(true);
+    this.mealPlanService.pushToTodoist(currentPlan.id).subscribe({
+      error: (err) => {
+        this.pushing.set(false);
+        const message = err?.error?.detail ?? 'Push to Todoist failed.';
+        this.snackBar.open(message, 'Dismiss', { duration: 6000 });
+      },
+      next: (result) => {
+        this.pushing.set(false);
+        this.snackBar.open(this.formatPushSummary(result), 'Dismiss', { duration: 5000 });
+      },
+    });
+  }
+
+  private formatPushSummary(result: MealPlanPushResult): string {
+    const parts: string[] = [];
+    if (result.created > 0) parts.push(`${result.created} created`);
+    if (result.updated > 0) parts.push(`${result.updated} updated`);
+    if (result.closed > 0) parts.push(`${result.closed} closed`);
+    if (result.unchanged > 0) parts.push(`${result.unchanged} unchanged`);
+    return parts.length > 0
+      ? `Todoist: ${parts.join(', ')}.`
+      : 'Todoist: nothing to push.';
   }
 
   openReorderDialog(): void {

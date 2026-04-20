@@ -9,6 +9,7 @@ using MealsEnPlace.Api.Features.ShoppingList;
 using MealsEnPlace.Api.Features.WasteReduction;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
+using MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -78,6 +79,21 @@ builder.Services.AddSingleton(new ClaudeTokenStoreOptions
 });
 builder.Services.AddSingleton<IClaudeTokenStore, ClaudeTokenStore>();
 builder.Services.AddScoped<IClaudeAvailability, ClaudeAvailability>();
+
+// -- Todoist integration (MEP-028 / MEP-029) ---------------------------------
+// Token lives in `dotnet user-secrets` under "Todoist:Token" for now. MEP-035
+// will later add a Settings-page flow that stores the token via DataProtection.
+builder.Services.Configure<TodoistOptions>(
+    builder.Configuration.GetSection(TodoistOptions.SectionName));
+builder.Services.AddHttpClient("Todoist", client =>
+{
+    client.BaseAddress = new Uri("https://api.todoist.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/json");
+    client.Timeout = TimeSpan.FromSeconds(15);
+});
+builder.Services.AddScoped<ITodoistClient, TodoistClient>();
+builder.Services.AddScoped<IShoppingListPushTarget, TodoistShoppingListPushTarget>();
+builder.Services.AddScoped<IMealPlanPushTarget, TodoistMealPlanPushTarget>();
 
 // -- Application services -----------------------------------------------------
 builder.Services.AddHttpClient("Anthropic", client =>

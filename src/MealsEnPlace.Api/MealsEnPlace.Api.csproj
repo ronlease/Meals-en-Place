@@ -10,6 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Expose internals to the unit test project so tests can exercise
+         helpers that don't make sense as public API (content hashers, date
+         formatters, etc.). -->
+    <InternalsVisibleTo Include="MealsEnPlace.Unit" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!--
       EntityFrameworkCore and EntityFrameworkCore.Relational are pinned explicitly
       to unify the transitive dependency graph. Npgsql.EntityFrameworkCore.PostgreSQL

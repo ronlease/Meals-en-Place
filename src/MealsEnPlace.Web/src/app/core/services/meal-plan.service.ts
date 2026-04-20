@@ -10,6 +10,7 @@ import {
   ReorderPreviewResponse,
   SwapSlotRequest
 } from '../models/meal-plan.models';
+import { MealPlanPushResult } from '../models/todoist.models';
 
 @Injectable({ providedIn: 'root' })
 export class MealPlanService {
@@ -65,6 +66,13 @@ export class MealPlanService {
     const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
     return this.http.post<ReorderPreviewResponse>(
       `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/preview${query}`,
+      {}
+    );
+  }
+
+  pushToTodoist(mealPlanId: string): Observable<MealPlanPushResult> {
+    return this.http.post<MealPlanPushResult>(
+      `${this.baseUrl}/${mealPlanId}/push/todoist`,
       {}
     );
   }

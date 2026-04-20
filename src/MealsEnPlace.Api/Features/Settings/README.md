@@ -1,15 +1,16 @@
 # Settings
 
-Bring-your-own Anthropic API key flow and the availability gate every Claude-backed service consults (MEP-032).
+Bring-your-own Anthropic API key flow (MEP-032) and the integration-status surface for provider-dependent UI (Claude via MEP-032, Todoist via MEP-028 / MEP-029).
 
 ## Endpoints
 
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/api/v1/settings/claude/status` | Returns `{ configured: bool }`. |
+| `GET` | `/api/v1/settings/claude/status` | Returns `{ configured: bool }` for Claude. |
 | `POST` | `/api/v1/settings/claude/token` | Persists the supplied Anthropic API key encrypted at rest. Response omits the raw key. |
 | `POST` | `/api/v1/settings/claude/test` | Issues a minimal Messages API request using either the supplied candidate token or the persisted token. Never overwrites the persisted value on failure. |
 | `DELETE` | `/api/v1/settings/claude/token` | Removes the persisted key. Claude-backed features take their deterministic-only branch until a new key is saved. |
+| `GET` | `/api/v1/settings/todoist/status` | Returns `{ configured: bool }` for Todoist, based on the `Todoist:Token` config binding. Read-only today; MEP-035 will add paste-to-save + test-connection siblings matching the Claude flow. |
 
 ## Storage
 

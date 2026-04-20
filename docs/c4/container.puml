@@ -14,9 +14,11 @@ System_Boundary(app, "Meals en Place") {
 }
 
 System_Ext(claude, "Claude API", "Unit of measure normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(todoist, "Todoist REST API v2", "Shopping list + meal plan task push target")
 Rel(user, web, "Uses", "HTTP localhost")
 Rel(web, api, "Calls", "HTTP/JSON")
 Rel(api, db, "Reads/Writes", "EF Core")
 Rel(api, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
+Rel(api, todoist, "Creates, updates, closes tasks", "HTTPS/JSON")
 
 @enduml

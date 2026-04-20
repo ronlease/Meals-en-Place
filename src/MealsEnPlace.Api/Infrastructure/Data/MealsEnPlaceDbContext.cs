@@ -18,6 +18,9 @@ public class MealsEnPlaceDbContext(DbContextOptions<MealsEnPlaceDbContext> optio
     /// <summary>Per-decrement audit rows for auto-deplete consume events (MEP-027 / MEP-031).</summary>
     public DbSet<ConsumeAuditEntry> ConsumeAuditEntries => Set<ConsumeAuditEntry>();
 
+    /// <summary>Idempotency mapping from local entities to external task providers (MEP-028 / MEP-029).</summary>
+    public DbSet<ExternalTaskLink> ExternalTaskLinks => Set<ExternalTaskLink>();
+
     /// <summary>Pantry, fridge, and freezer inventory items.</summary>
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
 

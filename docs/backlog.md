@@ -1544,8 +1544,22 @@ Feature: Mark Meal as Eaten with Optional Inventory Auto-Deplete
 
 ## [MEP-028] Push Shopping List to External Todo Provider (Todoist first)
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
+
+### Implementation Notes
+Shipped alongside MEP-029 on branch `feature/mep-028-mep-029-todoist-push`. Scope covered:
+
+- `IShoppingListPushTarget` abstraction with `TodoistShoppingListPushTarget` as the first implementation. The controller + settings flow are provider-agnostic; additional providers can slot in without touching callers.
+- New endpoints: `POST /api/v1/meal-plans/{mealPlanId}/shopping-list/push/todoist` and `POST /api/v1/shopping-list/push/todoist` (standalone list). Both return `ShoppingListPushResult { created, updated, closed, unchanged }`.
+- Infrastructure: `Infrastructure/ExternalApis/Todoist/` houses `TodoistClient` (REST v2: create/update/close tasks) and `TodoistOptions` bound from `IConfiguration` under the `Todoist` section.
+- Shared `ExternalTaskLink` table drives idempotency — one row per pushed item keyed by `(SourceType, SourceId, Provider)`, with `SourceScope` recording the meal-plan id (or `"standalone"`) so removed-item detection works without joining the (possibly deleted) source. `ContentHash` is a SHA-256 of the task title; re-push recomputes and PATCHes only when the hash differs. Removed items close the remote task (not delete) so Todoist's completed-history is preserved.
+- Angular: "Push to Todoist" button on the shopping list page, gated by `TodoistAvailabilityService` (polls `GET /api/v1/settings/todoist/status` on app init). Success snackbar reports counts; errors surface the server's `ProblemDetails.Detail`.
+- `GET /api/v1/settings/todoist/status` endpoint reflects whether `Todoist:Token` is populated.
+
+### Deferred (scope decisions)
+- **Settings-page token entry + test-connection + project picker → MEP-035.** This PR reads the token from `dotnet user-secrets` as `Todoist:Token` to match the user's existing workflow. MEP-035 lands the encrypted-at-rest DataProtection flow and the `GET /projects` dropdown described in the original AC.
+- **Associated project quick-pick → MEP-036.** The `ExternalProjectId` column on `ExternalTaskLink` is populated on every push so MEP-036 can enumerate previously-used projects without an extra Todoist round-trip.
 
 ### Business Problem
 My shopping list currently lives only in the app. When I am at the grocery store on my phone, I would rather glance at Todoist -- which I already use for life errands -- than open a separate web app. I want a one-click action that pushes the current shopping list to my Todoist account, with each shopping item becoming a Todoist task under a configurable project. Todoist is the first target because it has a clean documented REST API and apps on every platform; the design should introduce an abstraction boundary so Google Tasks, Microsoft To Do, or Apple Reminders can slot in later without a rewrite.
@@ -1600,8 +1614,26 @@ Feature: Push Shopping List to External Todo Provider
 
 ## [MEP-029] Push Meal Plan to External Todo Provider (Todoist first)
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
+
+### Implementation Notes
+Shipped alongside MEP-028 on the same branch because both consume the shared `ExternalTaskLink` idempotency table and the shared `TodoistClient`.
+
+- `IMealPlanPushTarget` / `TodoistMealPlanPushTarget` mirror the shopping list push contract. Each `MealPlanSlot` becomes one Todoist task titled `"{MealSlot}: {RecipeTitle}"` (e.g., `"Dinner: Chicken Scampi"`).
+- `due_date` is computed from `MealPlan.WeekStartDate` + the slot's `DayOfWeek` offset using the same Monday-first rotation as `MealPlanService` generation.
+- `POST /api/v1/meal-plans/{id}/push/todoist` endpoint. Returns `MealPlanPushResult { created, updated, closed, unchanged }`; 400 when Todoist isn't configured, 404 when the plan doesn't exist.
+- Hash input combines the content string and the due date so a recipe swap *or* a day shuffle trips the re-push-as-update branch.
+- Angular: "Push to Todoist" action on the meal plan board header, gated by the same `TodoistAvailabilityService` signal used by MEP-028. Success snackbar reports counts.
+
+### Shared pieces with MEP-028
+- Shared `ExternalTaskLink` schema + migration `20260420012850_AddExternalTaskLink` (smoke-tested Up/Down/Up against local Postgres).
+- Shared `TodoistClient` + `TodoistOptions` binding.
+- Shared `TodoistAvailabilityService` signal + `GET /api/v1/settings/todoist/status` endpoint.
+
+### Deferred (scope decisions)
+- Token settings UI → **MEP-035** (reads from `Todoist:Token` user secret for now).
+- Project quick-pick → **MEP-036** (`ExternalProjectId` column on `ExternalTaskLink` is populated on every push so the history is there when MEP-036 queries it).
 
 ### Business Problem
 Sister story to MEP-028. I want my weekly meal plan visible in Todoist alongside the rest of my calendar and tasks, so I can see "what's for dinner Thursday" at a glance without opening the Meals en Place app. Each `MealPlanSlot` should become a Todoist task scheduled for the slot's date, with a title like `"Dinner: Chicken Scampi"`. The same provider abstraction from MEP-028 applies.
@@ -2032,4 +2064,84 @@ Feature: Retroactive Rename UOM to UnitOfMeasure Across Codebase
     And application endpoints function identically against the renamed schema
     And rolling the migration back restores the original column names without data loss
 ```
+
+## [MEP-035] Todoist Settings UI: Token Entry, Project Picker, Test Connection
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-028 (the push surface must exist first)
+
+### Business Problem
+MEP-028 and MEP-029 ship the Todoist push flow by reading the API token from `dotnet user-secrets` (`Todoist:Token`) and a fixed project ID from `Todoist:ProjectId`. That works for single-developer local use but doesn't match the bring-your-own-credential pattern MEP-032 established: the user should be able to paste their token into the Settings page, have it verified against Todoist, and persist it via ASP.NET DataProtection the same way the Claude key is stored. This story closes that gap and brings Todoist into the standard External Integrations section of the Settings page.
+
+### Acceptance Criteria
+```gherkin
+Feature: Todoist Settings UI
+
+  Scenario: External Integrations section exposes a Todoist subsection
+    Given the Settings page already has an "External Integrations" card (stubbed)
+    When this story is implemented
+    Then the card renders a Todoist subsection with paste-to-save, test-connection, and remove-key affordances
+    And the visual language matches the AI (Claude) section (password-style input, status pill, confirm-before-remove)
+
+  Scenario: Token is stored via ASP.NET DataProtection at rest
+    Given the user pastes a Todoist API token
+    When they click Save
+    Then the backend persists the encrypted token to a local file under %LOCALAPPDATA%/MealsEnPlace/settings/
+    And the response body carries only { configured: true }
+    And no endpoint ever returns the raw token value
+
+  Scenario: Test Connection issues a GET /projects call
+    Given a candidate or persisted token
+    When the user clicks "Test connection"
+    Then the backend calls Todoist's REST API v2 `GET /projects` with the supplied token
+    And returns success or the Todoist-reported error message
+    And an invalid token does not overwrite a previously-valid stored token
+
+  Scenario: Fallback from user-secrets is preserved
+    Given a token exists in both dotnet user-secrets (legacy) and the encrypted store
+    When the Todoist push runs
+    Then the encrypted-store value takes precedence
+    And the user-secrets fallback continues to work when no encrypted value is present
+    And a future migration note documents removing the user-secrets path once the settings UI is in general use
+```
+
+## [MEP-036] Surface Associated Todoist Project IDs for Push Target Selection
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first)
+
+### Business Problem
+MEP-028 pushes to the user's Todoist Inbox by default and allows overriding the target via the `Todoist:ProjectId` user secret. That override is static — the user has to edit the user secret every time they want to aim pushes at a different project. I'd rather the app remember which Todoist projects it has already pushed to (via the `ExternalTaskLink` rows it writes) and surface that list as a quick-pick when the user initiates a new push. This is a lighter-weight pattern than the "fetch every project from Todoist and show a full dropdown" flow the original MEP-028 AC described — more relevant to the user's actual usage, avoids an extra API call on every push screen, and works without an up-to-date Todoist OAuth scope.
+
+### Acceptance Criteria
+```gherkin
+Feature: Associated Todoist Project Quick-Pick
+
+  Scenario: Push dialog offers the project IDs we have previously pushed to
+    Given at least one ExternalTaskLink row exists with Provider = "Todoist" and a non-null project ID recorded at push time
+    When the user clicks "Push to Todoist" on a shopping list or meal plan
+    Then a lightweight dialog lets the user pick from those previously-used project IDs (plus "Inbox")
+    And the selection is remembered for the next push of the same resource type
+
+  Scenario: First-ever push has no history and goes to Inbox
+    Given no ExternalTaskLink rows exist for Todoist
+    When the user pushes
+    Then the push targets Inbox without a dialog prompt
+    And the link row records the Inbox project ID (or null) so the history starts building up
+
+  Scenario: Backfill from MEP-028 rows
+    Given MEP-028 shipped before project IDs were recorded on link rows
+    When this story runs its migration
+    Then an opportunistic backfill populates any missing project IDs from the configured default (or leaves them null when unknown)
+    And no data is lost
+
+  Scenario: Relationship to MEP-035
+    Given MEP-035 eventually lands a dynamic Todoist project picker
+    When both stories are implemented
+    Then the associated-IDs quick-pick from this story remains a first-class option alongside the full Todoist project list
+    And the UI clearly distinguishes "projects you've used from this app" from "all your Todoist projects"
+```
+
 

@@ -8,6 +8,7 @@ title Component Diagram for API Container — Meals en Place
 Container_Ext(web, "Angular Web App", "Angular 21, Angular Material", "Frontend SPA")
 ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality, preferences")
 System_Ext(claude, "Claude API", "Unit of measure normalization, dietary classification, meal plan optimization, substitution suggestions")
+System_Ext(todoist, "Todoist REST API v2", "Shopping list + meal plan task push target")
 
 Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
@@ -17,8 +18,8 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
     Component(recipeImport, "Recipe Component", "RecipeImportController, RecipeImportService", "Manual recipe creation, library listing, and detail retrieval. Bulk catalog ingested offline via Tools.Ingest rather than through this component.")
     Component(recipeMatching, "Recipe Matching Component", "RecipeMatchingController, RecipeMatchingService", "Scores recipes against inventory. Classifies Full, Near, and Partial matches")
     Component(containerResolution, "Container Resolution Component", "ContainerResolutionController, ContainerResolutionService", "Resolve container references (can, jar, box) to declared weights and volumes")
-    Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanSlotsController, MealPlanService, MealConsumptionService", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality, mark slots as eaten with optional inventory auto-deplete and audit-based restore")
-    Component(shoppingList, "Shopping List Component", "ShoppingListController, StandaloneShoppingListController, ShoppingListService", "Derive shopping lists from meal plan gaps or standalone recipe additions")
+    Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanSlotsController, MealPlanPushController, MealPlanService, MealConsumptionService, MealPlanReorderService, TodoistMealPlanPushTarget", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality, mark slots as eaten with optional inventory auto-deplete and audit-based restore, reorder by expiry, push slots to Todoist")
+    Component(shoppingList, "Shopping List Component", "ShoppingListController, StandaloneShoppingListController, ShoppingListPushController, ShoppingListService, TodoistShoppingListPushTarget", "Derive shopping lists from meal plan gaps or standalone recipe additions; push list to Todoist")
     Component(wasteReduction, "Waste Reduction Component", "WasteAlertController, WasteAlertService", "Scan for expiring items, match against recipes, create alerts")
     Component(seasonalProduce, "Seasonal Produce Component", "SeasonalProduceController, SeasonalProduceService", "Query seasonality windows for current month (USDA Zone 7a)")
     Component(userPreferences, "User Preferences Component", "UserPreferencesController", "Get and update display system preference (Imperial or Metric)")
@@ -28,7 +29,8 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
     Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, unit of measure resolution, meal plan optimization, substitution suggestions (currently stub)")
     Component(anthropicTestClient, "Anthropic Test Client", "AnthropicTestClient", "Minimal HTTP client that issues a one-token Messages API call to verify user-supplied keys from the Settings page")
-    Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 13 entity configurations")
+    Component(todoistClient, "Todoist Client", "TodoistClient", "REST v2 HTTP client used by both push targets: create / update / close tasks")
+    Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 14 entity configurations (includes ExternalTaskLink)")
 
     ' === Common / Shared Components ===
 
@@ -48,7 +50,7 @@ Rel(web, shoppingList, "Derives shopping lists", "HTTP/JSON")
 Rel(web, wasteReduction, "Views waste alerts", "HTTP/JSON")
 Rel(web, seasonalProduce, "Queries seasonal produce", "HTTP/JSON")
 Rel(web, userPreferences, "Gets and updates preferences", "HTTP/JSON")
-Rel(web, settings, "Saves / tests / removes the Claude API key", "HTTP/JSON")
+Rel(web, settings, "Saves / tests / removes the Claude API key; reads Todoist configured status", "HTTP/JSON")
 
 ' === Feature → Infrastructure relationships ===
 
@@ -77,6 +79,9 @@ Rel(userPreferences, dataAccess, "Reads/Writes display preferences", "EF Core")
 
 Rel(claudeClient, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
 Rel(anthropicTestClient, claude, "One-token Messages ping for Test Connection", "HTTPS/JSON")
+Rel(shoppingList, todoistClient, "Pushes shopping list items as tasks (MEP-028)")
+Rel(mealPlan, todoistClient, "Pushes meal plan slots as scheduled tasks (MEP-029)")
+Rel(todoistClient, todoist, "Creates, updates, closes tasks", "HTTPS/JSON")
 Rel(dataAccess, db, "Reads/Writes", "EF Core / Npgsql")
 
 @enduml

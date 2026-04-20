@@ -1,19 +1,23 @@
 using MealsEnPlace.Api.Infrastructure.Claude;
+using MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 namespace MealsEnPlace.Api.Features.Settings;
 
 /// <summary>
-/// Settings endpoints covering the BYO Anthropic API key flow. Every response
-/// shape carries a boolean <c>Configured</c> indicator at most — the raw token is
-/// never returned from any endpoint and is not written to logs.
+/// Settings endpoints covering the BYO Anthropic API key flow and Todoist
+/// integration status. Every response shape carries at most a boolean
+/// <c>Configured</c> indicator — the raw token is never returned from any
+/// endpoint and is not written to logs.
 /// </summary>
 [ApiController]
 [Route("api/v1/settings")]
 [Produces("application/json")]
 public class SettingsController(
     IAnthropicTestClient anthropicTestClient,
-    IClaudeTokenStore tokenStore) : ControllerBase
+    IClaudeTokenStore tokenStore,
+    IOptions<TodoistOptions> todoistOptions) : ControllerBase
 {
     /// <summary>
     /// Deletes the persisted Anthropic API key. Subsequent Claude-backed
@@ -92,5 +96,17 @@ public class SettingsController(
             ErrorMessage = result.ErrorMessage,
             Success = result.Success
         });
+    }
+
+    /// <summary>
+    /// Returns whether the Todoist integration has a token available. MEP-028
+    /// reads the token from the <c>Todoist:Token</c> user secret; MEP-035 will
+    /// later add a Settings-page flow and shift storage to DataProtection.
+    /// </summary>
+    [HttpGet("todoist/status")]
+    [ProducesResponseType(typeof(TodoistStatusResponse), StatusCodes.Status200OK)]
+    public ActionResult<TodoistStatusResponse> GetTodoistStatus()
+    {
+        return Ok(new TodoistStatusResponse { Configured = todoistOptions.Value.IsConfigured });
     }
 }

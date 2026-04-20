@@ -10,7 +10,9 @@ Person(user, "User", "Single local user who manages pantry inventory, browses re
 System(mep, "Meals en Place", "Personal recipe and meal planning tool. Tracks pantry, fridge, and freezer inventory; matches ingredients against recipes; generates waste-minimizing meal plans; identifies seasonal produce.")
 
 System_Ext(claude, "Claude API", "AI service providing unit of measure normalization, container reference flagging, dietary classification, recipe match feasibility and substitution suggestions, and meal plan optimization.")
+System_Ext(todoist, "Todoist REST API v2", "Personal task manager. Meals en Place pushes shopping list items and meal plan slots as tasks so they show up alongside the user's other errands and schedule.")
 Rel(user, mep, "Manages inventory, browses recipes, builds meal plans", "HTTP localhost")
 Rel(mep, claude, "Normalizes units of measure, flags container references, classifies diets, evaluates substitutions, optimizes meal plans", "HTTPS/JSON")
+Rel(mep, todoist, "Pushes shopping list items and meal plan slots as tasks", "HTTPS/JSON")
 
 @enduml
