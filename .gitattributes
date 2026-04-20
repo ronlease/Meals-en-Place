@@ -1,0 +1,64 @@
+# Normalize all text files to LF in the repository and on checkout, regardless
+# of platform. This silences git's "LF will be replaced by CRLF" warnings on
+# Windows without relying on per-machine core.autocrlf settings, and keeps the
+# history byte-identical across contributors.
+#
+# The .NET and Angular toolchains all handle LF on Windows correctly. The few
+# genuinely Windows-specific files (.cmd, .bat, .ps1) are preserved as CRLF.
+
+* text=auto eol=lf
+
+# Source and configuration (explicit rules for clarity)
+*.cs            text eol=lf
+*.csproj        text eol=lf
+*.sln           text eol=lf
+*.props         text eol=lf
+*.targets       text eol=lf
+*.json          text eol=lf
+*.xml           text eol=lf
+*.yml           text eol=lf
+*.yaml          text eol=lf
+*.runsettings   text eol=lf
+*.editorconfig  text eol=lf
+
+# Angular / Web
+*.ts            text eol=lf
+*.tsx           text eol=lf
+*.js            text eol=lf
+*.jsx           text eol=lf
+*.html          text eol=lf
+*.css           text eol=lf
+*.scss          text eol=lf
+*.svg           text eol=lf
+
+# Docs
+*.md            text eol=lf
+*.puml          text eol=lf
+*.cff           text eol=lf
+*.txt           text eol=lf
+
+# Shell / cross-platform scripts → LF
+*.sh            text eol=lf
+
+# Windows-only scripts → CRLF
+*.cmd           text eol=crlf
+*.bat           text eol=crlf
+*.ps1           text eol=crlf
+
+# Binary
+*.png           binary
+*.jpg           binary
+*.jpeg          binary
+*.gif           binary
+*.ico           binary
+*.webp          binary
+*.pdf           binary
+*.zip           binary
+*.gz            binary
+*.tar           binary
+*.dll           binary
+*.exe           binary
+*.woff          binary
+*.woff2         binary
+*.ttf           binary
+*.otf           binary
