@@ -153,31 +153,41 @@ internal sealed class InMemoryUnitOfMeasureResolver
 
     // ── Private helpers ─────────────────────────────────────────────────────
 
+    // Column caps from UnresolvedUnitOfMeasureTokenConfiguration. Kaggle
+    // measure strings occasionally exceed these (long descriptive phrases,
+    // embedded instructions). Truncate before lookup and write so the dedupe
+    // key stays consistent and SaveChanges never trips a 22001.
+    private const int SampleStringMaxLength = 500;
+    private const int UnitTokenMaxLength = 100;
+
     private void UpsertDeferredToken(string unitToken, string measureString, string ingredientName)
     {
+        var safeUnitToken = Truncate(unitToken, UnitTokenMaxLength);
+        var safeMeasureString = Truncate(measureString, SampleStringMaxLength);
+        var safeIngredientName = Truncate(ingredientName, SampleStringMaxLength);
         var now = DateTime.UtcNow;
 
-        if (_pendingQueueRowByToken.TryGetValue(unitToken, out var pending))
+        if (_pendingQueueRowByToken.TryGetValue(safeUnitToken, out var pending))
         {
             pending.Count += 1;
             pending.LastSeenAt = now;
-            pending.SampleMeasureString = measureString;
-            pending.SampleIngredientContext = ingredientName;
+            pending.SampleMeasureString = safeMeasureString;
+            pending.SampleIngredientContext = safeIngredientName;
             return;
         }
 
         // Not in our per-batch cache. Check the DB for an existing row.
         var existing = _dbContext.UnresolvedUnitOfMeasureTokens
-            .Local.FirstOrDefault(t => t.UnitToken == unitToken)
-            ?? _dbContext.UnresolvedUnitOfMeasureTokens.FirstOrDefault(t => t.UnitToken == unitToken);
+            .Local.FirstOrDefault(t => t.UnitToken == safeUnitToken)
+            ?? _dbContext.UnresolvedUnitOfMeasureTokens.FirstOrDefault(t => t.UnitToken == safeUnitToken);
 
         if (existing is not null)
         {
             existing.Count += 1;
             existing.LastSeenAt = now;
-            existing.SampleMeasureString = measureString;
-            existing.SampleIngredientContext = ingredientName;
-            _pendingQueueRowByToken[unitToken] = existing;
+            existing.SampleMeasureString = safeMeasureString;
+            existing.SampleIngredientContext = safeIngredientName;
+            _pendingQueueRowByToken[safeUnitToken] = existing;
             return;
         }
 
@@ -187,14 +197,17 @@ internal sealed class InMemoryUnitOfMeasureResolver
             FirstSeenAt = now,
             Id = Guid.NewGuid(),
             LastSeenAt = now,
-            SampleIngredientContext = ingredientName,
-            SampleMeasureString = measureString,
-            UnitToken = unitToken
+            SampleIngredientContext = safeIngredientName,
+            SampleMeasureString = safeMeasureString,
+            UnitToken = safeUnitToken
         };
 
         _dbContext.UnresolvedUnitOfMeasureTokens.Add(row);
-        _pendingQueueRowByToken[unitToken] = row;
+        _pendingQueueRowByToken[safeUnitToken] = row;
     }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     private static void TryAdd(
         Dictionary<string, (Guid Id, string Abbreviation)> dict,

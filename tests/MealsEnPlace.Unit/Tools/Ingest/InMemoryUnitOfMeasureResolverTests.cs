@@ -38,6 +38,11 @@
 //   Given NormalizeOrDefer was called in batch 1, ResetPerBatchState cleared, then ChangeTracker.Clear, then a new instance
 //   When NormalizeOrDefer is called again with the same unresolved token
 //   Then the resolver re-queries the DB for the existing row and increments it
+//
+// Scenario: Over-length inputs are truncated at column caps
+//   Given an unresolved unit token longer than 100 chars and a measure / ingredient context longer than 500 chars
+//   When NormalizeOrDefer is called
+//   Then the queue row is written with UnitToken truncated to 100 chars and sample columns truncated to 500 chars
 
 using FluentAssertions;
 using MealsEnPlace.Api.Infrastructure.Data;
@@ -183,6 +188,44 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
 
         result.WasDeferred.Should().BeTrue();
         _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_OverLengthInputs_TruncatesAtColumnCaps()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        // UnitToken column is varchar(100); sample columns are varchar(500).
+        // No leading number, so the parser returns quantity 0 and the full
+        // string as the unit token, which bypasses the count-noun fallback
+        // and reaches the queue write path.
+        var longMeasure = new string('u', 700);
+        var longIngredient = new string('i', 650);
+
+        var result = resolver.NormalizeOrDefer(longMeasure, longIngredient);
+
+        result.WasDeferred.Should().BeTrue();
+        var row = _dbContext.UnresolvedUnitOfMeasureTokens.Local.Single();
+        row.UnitToken.Length.Should().Be(100);
+        row.SampleMeasureString.Length.Should().Be(500);
+        row.SampleIngredientContext.Length.Should().Be(500);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_RepeatOverLengthToken_IncrementsSameRow()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        // Two distinct strings that truncate to the same 100-char prefix.
+        var sharedPrefix = new string('u', 100);
+        var first = sharedPrefix + "-alpha";
+        var second = sharedPrefix + "-beta";
+
+        resolver.NormalizeOrDefer(first, "ctx1");
+        resolver.NormalizeOrDefer(second, "ctx2");
+
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().HaveCount(1);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Single().Count.Should().Be(2);
     }
 
     // ── Per-batch state reset ─────────────────────────────────────────────────
