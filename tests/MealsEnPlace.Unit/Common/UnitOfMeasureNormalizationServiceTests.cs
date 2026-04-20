@@ -906,4 +906,61 @@ public class UnitOfMeasureNormalizationServiceTests
 
         // Strict mock fails the test if ResolveUnitOfMeasureAsync was ever invoked
     }
+
+    // ── Ingest robustness: long Kaggle measure strings must not overflow columns
+    //
+    // Scenario: NormalizeOrDeferAsync with an over-length measure truncates before persist
+    //   Given a measure string whose parsed unit token is longer than the 100-char column cap
+    //   And an ingredient name longer than the 500-char sample-string column cap
+    //   When NormalizeOrDeferAsync routes the row to the review queue
+    //   Then the persisted UnitToken is truncated to 100 chars
+    //   And the persisted SampleMeasureString and SampleIngredientContext are truncated to 500 chars
+    //   And no 22001 "value too long" exception is thrown
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_OverLengthTokenAndContext_TruncatesAtColumnCaps()
+    {
+        // Arrange — a measure with no leading number so the whole string becomes the unit token
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_OverLengthTokenAndContext_TruncatesAtColumnCaps));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        var longMeasure = new string('a', 700);          // over both the 100-char token cap and the 500-char sample cap
+        var longIngredient = new string('b', 700);       // over the 500-char sample-ingredient-context cap
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(longMeasure, longIngredient);
+
+        // Assert
+        result.WasDeferredToQueue.Should().BeTrue();
+        var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
+        queued.UnitToken.Length.Should().Be(100);
+        queued.SampleMeasureString.Length.Should().Be(500);
+        queued.SampleIngredientContext.Length.Should().Be(500);
+    }
+
+    // Scenario: Re-queueing the same long token increments the count instead of inserting a duplicate
+    //   Given a long measure has already been queued (truncated to 100 chars)
+    //   When NormalizeOrDeferAsync is called again with the same long measure
+    //   Then the existing row's Count is incremented
+    //   And no second row is inserted
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_RequeueSameOverLengthToken_IncrementsExistingRow()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_RequeueSameOverLengthToken_IncrementsExistingRow));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        var longMeasure = new string('x', 250);
+
+        // Act
+        await service.NormalizeOrDeferAsync(longMeasure, "some ingredient");
+        await service.NormalizeOrDeferAsync(longMeasure, "another ingredient");
+
+        // Assert — one row, count=2, because truncated lookup key matches
+        var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
+        queued.Count.Should().Be(2);
+    }
 }

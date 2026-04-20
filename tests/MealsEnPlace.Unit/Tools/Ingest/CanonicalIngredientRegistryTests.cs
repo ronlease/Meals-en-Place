@@ -219,4 +219,27 @@ public class CanonicalIngredientRegistryTests : IDisposable
 
         best.Should().Be("sugar");
     }
+
+    // Scenario: GetOrCreate truncates over-length NER tokens to the 200-char column cap
+    //   Given an NER token longer than CanonicalIngredient.Name's HasMaxLength
+    //   When GetOrCreate is called twice with the same over-length token
+    //   Then exactly one row is added
+    //   And its Name is truncated to 200 chars (no overflow on SaveChanges)
+
+    [Fact]
+    public async Task GetOrCreate_OverLengthNerToken_TruncatesAndDedupes()
+    {
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+        var longToken = new string('z', 250);
+
+        var firstId = registry.GetOrCreate(longToken);
+        var secondId = registry.GetOrCreate(longToken);
+        await _dbContext.SaveChangesAsync();
+
+        firstId.Should().Be(secondId);
+        var saved = await _dbContext.CanonicalIngredients.AsNoTracking()
+            .SingleAsync(ci => ci.Id == firstId);
+        saved.Name.Length.Should().Be(200);
+        registry.NewRowsCreated.Should().Be(1);
+    }
 }

@@ -332,10 +332,18 @@ public class UnitOfMeasureNormalizationService(
         return null;
     }
 
+    // Column caps from UnresolvedUnitOfMeasureTokenConfiguration. Kept in sync
+    // here so the ingest path (which feeds noisy Kaggle measure strings into
+    // this method) never trips a 22001 on SaveChanges.
+    private const int UnitTokenMaxLength = 100;
+    private const int SampleStringMaxLength = 500;
+
     /// <summary>
     /// Upserts an <see cref="UnresolvedUnitOfMeasureToken"/> row for the given unit token.
     /// First occurrence inserts; subsequent occurrences increment the count and
     /// refresh the sample context so the review UI shows the most recent usage.
+    /// Inputs are truncated to their column caps before both lookup and insert,
+    /// so the dedupe key stays consistent and the write never overflows.
     /// </summary>
     private async Task UpsertUnresolvedTokenAsync(
         string unitToken,
@@ -351,17 +359,21 @@ public class UnitOfMeasureNormalizationService(
             return;
         }
 
+        var safeUnitToken = Truncate(unitToken, UnitTokenMaxLength);
+        var safeMeasureString = Truncate(measureString, SampleStringMaxLength);
+        var safeIngredientName = Truncate(ingredientName, SampleStringMaxLength);
+
         var now = DateTime.UtcNow;
 
         var existing = await dbContext.UnresolvedUnitOfMeasureTokens
-            .FirstOrDefaultAsync(t => t.UnitToken == unitToken, cancellationToken);
+            .FirstOrDefaultAsync(t => t.UnitToken == safeUnitToken, cancellationToken);
 
         if (existing is not null)
         {
             existing.Count += 1;
             existing.LastSeenAt = now;
-            existing.SampleMeasureString = measureString;
-            existing.SampleIngredientContext = ingredientName;
+            existing.SampleMeasureString = safeMeasureString;
+            existing.SampleIngredientContext = safeIngredientName;
         }
         else
         {
@@ -371,14 +383,17 @@ public class UnitOfMeasureNormalizationService(
                 FirstSeenAt = now,
                 Id = Guid.NewGuid(),
                 LastSeenAt = now,
-                SampleIngredientContext = ingredientName,
-                SampleMeasureString = measureString,
-                UnitToken = unitToken
+                SampleIngredientContext = safeIngredientName,
+                SampleMeasureString = safeMeasureString,
+                UnitToken = safeUnitToken
             });
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     /// <summary>
     /// Back-compat delegate to <see cref="UnitOfMeasureTokenParser.Parse"/> so existing
