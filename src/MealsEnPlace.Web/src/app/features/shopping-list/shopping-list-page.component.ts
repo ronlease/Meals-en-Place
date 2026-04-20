@@ -3,12 +3,16 @@ import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { RouterLink } from '@angular/router';
 import { MealPlanResponse } from '../../core/models/meal-plan.models';
 import { ShoppingListItemResponse } from '../../core/models/shopping-list.models';
+import { ShoppingListPushResult } from '../../core/models/todoist.models';
 import { MealPlanService } from '../../core/services/meal-plan.service';
 import { ShoppingListService } from '../../core/services/shopping-list.service';
+import { TodoistAvailabilityService } from '../../core/services/todoist-availability.service';
 
 @Component({
   selector: 'app-shopping-list-page',
@@ -19,16 +23,28 @@ import { ShoppingListService } from '../../core/services/shopping-list.service';
     MatIconModule,
     MatProgressSpinnerModule,
     MatTableModule,
+    MatTooltipModule,
     RouterLink,
   ],
   template: `
     <div class="page-header">
       <h1 class="page-title">Shopping List</h1>
       @if (activePlan()) {
-        <button mat-flat-button color="primary" (click)="regenerate()">
-          <mat-icon>refresh</mat-icon>
-          Regenerate
-        </button>
+        <div class="header-actions">
+          <button
+            mat-stroked-button
+            [disabled]="!todoistAvailability.configured() || pushing()"
+            [matTooltip]="todoistAvailability.configured() ? 'Push items to Todoist' : 'Configure Todoist:Token user secret to enable'"
+            (click)="pushToTodoist()"
+          >
+            <mat-icon>send</mat-icon>
+            Push to Todoist
+          </button>
+          <button mat-flat-button color="primary" (click)="regenerate()">
+            <mat-icon>refresh</mat-icon>
+            Regenerate
+          </button>
+        </div>
       }
     </div>
 
@@ -88,6 +104,11 @@ import { ShoppingListService } from '../../core/services/shopping-list.service';
         margin-bottom: 16px;
       }
 
+      .header-actions {
+        display: flex;
+        gap: 8px;
+      }
+
       .page-title {
         margin: 0;
         font-size: 24px;
@@ -140,9 +161,40 @@ export class ShoppingListPageComponent implements OnInit {
   ];
   protected readonly items = signal<ShoppingListItemResponse[]>([]);
   protected readonly loading = signal(false);
+  protected readonly pushing = signal(false);
+  protected readonly todoistAvailability = inject(TodoistAvailabilityService);
 
   private readonly mealPlanService = inject(MealPlanService);
   private readonly shoppingListService = inject(ShoppingListService);
+  private readonly snackBar = inject(MatSnackBar);
+
+  pushToTodoist(): void {
+    const plan = this.activePlan();
+    if (!plan) return;
+    this.pushing.set(true);
+    this.shoppingListService.pushMealPlanListToTodoist(plan.id).subscribe({
+      error: (err) => {
+        this.pushing.set(false);
+        const message = err?.error?.detail ?? 'Push to Todoist failed.';
+        this.snackBar.open(message, 'Dismiss', { duration: 6000 });
+      },
+      next: (result) => {
+        this.pushing.set(false);
+        this.snackBar.open(this.formatPushSummary(result), 'Dismiss', { duration: 5000 });
+      },
+    });
+  }
+
+  private formatPushSummary(result: ShoppingListPushResult): string {
+    const parts: string[] = [];
+    if (result.created > 0) parts.push(`${result.created} created`);
+    if (result.updated > 0) parts.push(`${result.updated} updated`);
+    if (result.closed > 0) parts.push(`${result.closed} closed`);
+    if (result.unchanged > 0) parts.push(`${result.unchanged} unchanged`);
+    return parts.length > 0
+      ? `Todoist: ${parts.join(', ')}.`
+      : 'Todoist: nothing to push.';
+  }
 
   ngOnInit(): void {
     this.loading.set(true);

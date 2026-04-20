@@ -25,13 +25,14 @@ Container_Boundary(web, "Angular Web App — Angular 21, Angular Material") {
 
     ' ── Core Services ──────────────────────────────────────────
     Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
-    Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping")
+    Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
     Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
     Component(recipeService, "RecipeService", "Angular Service, providedIn: root", "Recipe library, manual creation, matching, detail, add-to-shopping-list")
     Component(referenceDataService, "ReferenceDataService", "Angular Service, providedIn: root", "Canonical ingredients and units of measure for forms")
     Component(seasonalProduceService, "SeasonalProduceService", "Angular Service, providedIn: root", "In-season and full calendar queries")
-    Component(shoppingListService, "ShoppingListService", "Angular Service, providedIn: root", "Generate and fetch shopping lists")
+    Component(shoppingListService, "ShoppingListService", "Angular Service, providedIn: root", "Generate, fetch, and push shopping lists")
     Component(themeService, "ThemeService", "Angular Service, providedIn: root", "Dark/light mode toggle, localStorage persistence")
+    Component(todoistAvailabilityService, "TodoistAvailabilityService", "Angular Service, providedIn: root", "Signal-backed 'is Todoist configured?' gate consumed by push buttons")
     Component(wasteAlertService, "WasteAlertService", "Angular Service, providedIn: root", "Fetch and dismiss waste alerts")
 }
 
@@ -49,6 +50,7 @@ Rel(appShell, expirationPage, "Routes to")
 Rel(appShell, wasteAlertsPage, "Routes to")
 Rel(appShell, preferencesService, "Reads display system preference")
 Rel(appShell, themeService, "Toggles dark/light mode")
+Rel(appShell, todoistAvailabilityService, "Refreshes Todoist configured status on startup")
 
 ' ── Feature → Service relationships ────────────────────────
 Rel(inventoryPage, inventoryService, "Uses")
@@ -57,8 +59,10 @@ Rel(recipeCreate, recipeService, "Uses")
 Rel(recipeCreate, referenceDataService, "Uses")
 Rel(mealPlanBoard, mealPlanService, "Uses")
 Rel(mealPlanBoard, recipeService, "Uses")
+Rel(mealPlanBoard, todoistAvailabilityService, "Gates push button on Todoist configured status")
 Rel(shoppingListPage, shoppingListService, "Uses")
 Rel(shoppingListPage, mealPlanService, "Uses")
+Rel(shoppingListPage, todoistAvailabilityService, "Gates push button on Todoist configured status")
 Rel(seasonalProducePage, seasonalProduceService, "Uses")
 Rel(expirationPage, inventoryService, "Uses")
 Rel(wasteAlertsPage, wasteAlertService, "Uses")
@@ -70,6 +74,7 @@ Rel(recipeService, api, "Calls", "HTTP/JSON")
 Rel(referenceDataService, api, "Calls", "HTTP/JSON")
 Rel(seasonalProduceService, api, "Calls", "HTTP/JSON")
 Rel(shoppingListService, api, "Calls", "HTTP/JSON")
+Rel(todoistAvailabilityService, api, "Calls", "HTTP/JSON")
 Rel(wasteAlertService, api, "Calls", "HTTP/JSON")
 
 @enduml

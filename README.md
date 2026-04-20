@@ -8,7 +8,7 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 - **Frontend:** Angular 21, Angular Material, PWA (service worker, offline support)
 - **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
 - **Recipe catalog:** Bulk ingested offline from the Kaggle "Recipe Dataset (over 2M)" via `MealsEnPlace.Tools.Ingest` (see [CITATION.cff](CITATION.cff))
-- **External APIs:** Open Food Facts (ingredient metadata)
+- **External APIs:** Open Food Facts (ingredient metadata), Todoist REST v2 (shopping list + meal plan task push — MEP-028 / MEP-029)
 - **Testing:** xUnit, FluentAssertions, Moq
 
 ## Getting Started

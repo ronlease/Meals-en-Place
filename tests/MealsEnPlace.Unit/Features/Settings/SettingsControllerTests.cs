@@ -13,8 +13,10 @@
 using FluentAssertions;
 using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
+using MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using Moq;
 
 namespace MealsEnPlace.Unit.Features.Settings;
@@ -24,10 +26,14 @@ public sealed class SettingsControllerTests
     private readonly Mock<IAnthropicTestClient> _anthropicMock = new(MockBehavior.Strict);
     private readonly FakeClaudeTokenStore _store = new();
     private readonly SettingsController _sut;
+    private readonly TodoistOptions _todoistOptions = new();
 
     public SettingsControllerTests()
     {
-        _sut = new SettingsController(_anthropicMock.Object, _store);
+        _sut = new SettingsController(
+            _anthropicMock.Object,
+            _store,
+            Options.Create(_todoistOptions));
     }
 
     [Fact]
@@ -164,6 +170,29 @@ public sealed class SettingsControllerTests
         // Assert
         GetBody<ClaudeTokenStatusResponse>(action).Configured.Should().BeFalse();
         (await _store.ReadAsync()).Should().BeNull();
+    }
+
+    [Fact]
+    public void GetTodoistStatus_WhenTokenPresent_ReportsConfiguredTrue()
+    {
+        // Arrange
+        _todoistOptions.Token = "sample-token";
+
+        // Act
+        var action = _sut.GetTodoistStatus();
+
+        // Assert
+        GetBody<TodoistStatusResponse>(action).Configured.Should().BeTrue();
+    }
+
+    [Fact]
+    public void GetTodoistStatus_WhenTokenAbsent_ReportsConfiguredFalse()
+    {
+        // Act — _todoistOptions.Token stays null
+        var action = _sut.GetTodoistStatus();
+
+        // Assert
+        GetBody<TodoistStatusResponse>(action).Configured.Should().BeFalse();
     }
 
     private static T GetBody<T>(ActionResult<T> action) where T : class

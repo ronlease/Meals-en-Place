@@ -11,6 +11,7 @@ import { AiAvailabilityService } from './core/services/ai-availability.service';
 import { InstallPromptService } from './core/services/install-prompt.service';
 import { PreferencesService } from './core/services/preferences.service';
 import { ThemeService } from './core/services/theme.service';
+import { TodoistAvailabilityService } from './core/services/todoist-availability.service';
 import { AiDisabledBannerComponent } from './shared/ai-disabled-banner/ai-disabled-banner.component';
 import { OfflineBannerComponent } from './shared/offline-banner/offline-banner';
 
@@ -39,6 +40,7 @@ export class App implements OnInit {
   protected readonly isMobile = signal(false);
   protected readonly preferencesService = inject(PreferencesService);
   protected readonly themeService = inject(ThemeService);
+  protected readonly todoistAvailability = inject(TodoistAvailabilityService);
 
   private readonly breakpointObserver = inject(BreakpointObserver);
 
@@ -47,6 +49,7 @@ export class App implements OnInit {
   ngOnInit(): void {
     this.preferencesService.loadPreferences();
     this.aiAvailability.refresh();
+    this.todoistAvailability.refresh();
 
     this.breakpointObserver
       .observe(['(max-width: 768px)'])
