@@ -116,8 +116,8 @@ foreach (var row in streamResult.Rows)
         Id = Guid.NewGuid(),
         Instructions = string.Join(IngestConstants.InstructionStepSeparator, retainedSteps),
         ServingCount = IngestConstants.DefaultServingCount,
-        SourceUrl = string.IsNullOrWhiteSpace(row.Link) ? null : row.Link,
-        Title = row.Title
+        SourceUrl = string.IsNullOrWhiteSpace(row.Link) ? null : Truncate(row.Link, IngestConstants.RecipeSourceUrlMaxLength),
+        Title = Truncate(row.Title, IngestConstants.RecipeTitleMaxLength)
     };
 
     // ── RecipeIngredients per raw ingredient ──────────────────────────────
@@ -146,7 +146,7 @@ foreach (var row in streamResult.Rows)
                 CanonicalIngredientId = canonicalId,
                 Id = Guid.NewGuid(),
                 IsContainerResolved = false,
-                Notes = rawIngredient,
+                Notes = Truncate(rawIngredient, IngestConstants.RecipeIngredientNotesMaxLength),
                 Quantity = 0m,
                 RecipeId = recipe.Id,
                 UnitOfMeasureId = null
@@ -163,7 +163,7 @@ foreach (var row in streamResult.Rows)
                 CanonicalIngredientId = canonicalId,
                 Id = Guid.NewGuid(),
                 IsContainerResolved = false,
-                Notes = rawIngredient,
+                Notes = Truncate(rawIngredient, IngestConstants.RecipeIngredientNotesMaxLength),
                 Quantity = resolution.Quantity,
                 RecipeId = recipe.Id,
                 UnitOfMeasureId = null
@@ -227,6 +227,9 @@ if (options.DryRun)
 return IngestConstants.ExitCodeSuccess;
 
 // ── Local functions ─────────────────────────────────────────────────────────
+
+static string Truncate(string value, int maxLength) =>
+    value.Length <= maxLength ? value : value[..maxLength];
 
 static async Task FlushBatchAsync(
     MealsEnPlaceDbContext dbContext,
