@@ -158,8 +158,10 @@ Feature: Container Reference Resolution
 
 ## [MEP-004] Recipe Library Import
 
-**Status:** Done
+**Status:** Done (superseded by MEP-026 / MEP-033)
 **Priority:** High
+
+> **Supersession note:** The historical outcome stands — this story shipped with a TheMealDB-backed search/import flow. MEP-025 later established that TheMealDB's ~600-recipe catalog was the gating constraint on recipe matching, MEP-026 ingested the 1.64M-recipe Kaggle corpus offline to replace it, and MEP-033 then removed the TheMealDB integration surface entirely. The local recipe library outcome is still satisfied; the implementation source simply moved from a live third-party API to an offline bulk-ingest tool.
 
 ### Business Problem
 I need a way to build my local recipe library without manually entering every recipe. TheMealDB provides free, open recipe data that I can search by term, cuisine, or category. Imported recipes are stored locally so I am not dependent on the external API for day-to-day use. Recipes with unresolved container references must be flagged and excluded from matching until I have declared all container sizes, ensuring that only fully resolved recipes participate in meal planning math.
@@ -1859,9 +1861,23 @@ Feature: Settings Page with Bring-Your-Own Claude API Key and Graceful AI Degrad
 
 ## [MEP-033] Remove TheMealDB Integration
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Low
 **Depends on:** MEP-026 (Kaggle ingest) must land first so the app has a working catalog source before TheMealDB is removed.
+
+### Implementation Notes
+Shipped on branch `feature/mep-033-remove-themealdb-integration`. Scope covered:
+
+- Deleted `src/MealsEnPlace.Api/Infrastructure/ExternalApis/TheMealDb/` (4 files) and `tests/MealsEnPlace.Unit/Infrastructure/TheMealDbClientTests.cs` in full.
+- Pruned `IRecipeImportService` / `RecipeImportService` / `RecipeImportController` to the generic CRUD surface: `CreateRecipeAsync`, `GetAllLocalRecipesAsync`, `GetRecipeDetailAsync`. Removed `ImportByIdAsync`, `SearchAsync`, `SearchByCategoryAsync` and the three endpoints (`POST /import/{mealDbId}`, `GET /search`, `GET /search/category`).
+- Deleted `RecipeSearchResultDto.cs` and `RecipeImportResultDto.cs`. Removed the unused `IUnitOfMeasureNormalizationService` dependency from `RecipeImportService` (flagged by an unread-parameter warning after the prune).
+- Removed `Recipe.TheMealDbId` and its fluent filtered unique index. Migration `20260420005436_DropTheMealDbIdColumn` drops the column + index with a symmetric `Down`; smoke-tested Up + Down + Up against local Postgres. Recipe rows preserved.
+- Program.cs: dropped the `ITheMealDbClient` DI registration, the `TheMealDb` named `HttpClient`, and the `Infrastructure.ExternalApis.TheMealDb` using. `Tools.Ingest/Program.cs` no longer initializes the removed field.
+- Angular: deleted `recipe-import.component.ts`, the `/recipes/import` route, the "Import Recipes" nav link, the "Import Recipes" button on the recipe browser, the `importRecipe`/`searchByQuery` methods on `RecipeService`, and the two TypeScript DTO interfaces.
+- C4 diagrams: `context.puml` and `container.puml` drop the `TheMealDB API` external system; `component-api.puml` drops the `TheMealDB Client` component; `component-web.puml` drops the `Recipe Import` Angular component. The Recipe component description now describes the Kaggle-driven interactive surface.
+- Sweep: `README.md`, `CLAUDE.md`, and the Recipes feature READMEs (API + Web) rewritten to reference the Kaggle ingest as the catalog source. MEP-004 entry gets a supersession note below.
+- Test delta: 40 TheMealDB-specific tests removed from `RecipeImportServiceTests.cs`, 8 from `RecipeImportControllerTests.cs`. Remaining: 459 unit + 18 integration, 0 skipped.
+- Grep gate: no `TheMealDB` / `TheMealDb` / `themealdb` tokens remain in `src/` or `docs/` outside the frozen EF migration snapshots, the drop migration itself, and intentional historical-context comments on `IRecipeImportService` / `RecipeImportService` / `RecipeImportController`.
 
 ### Business Problem
 TheMealDB was chosen early as the recipe catalog source because it is free, open, and required no auth. Its ~600-recipe catalog turned out to be the gating constraint that drove MEP-025 (the spike to evaluate larger sources) and MEP-026 (the Kaggle 2M ingest). Once the Kaggle path is working, TheMealDB's catalog is superfluous and its integration code is pure maintenance burden: the HTTP client, DTOs, import service, UI import flow, tests, C4 diagram node, README copy, and the `TheMealDbId` column on the `Recipe` entity all exist for a source the user no longer plans to pull from.

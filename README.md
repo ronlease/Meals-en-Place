@@ -7,7 +7,8 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 - **API:** ASP.NET Core 10, Entity Framework Core 10, PostgreSQL
 - **Frontend:** Angular 21, Angular Material, PWA (service worker, offline support)
 - **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
-- **External APIs:** TheMealDB (recipe data), Open Food Facts (ingredient metadata)
+- **Recipe catalog:** Bulk ingested offline from the Kaggle "Recipe Dataset (over 2M)" via `MealsEnPlace.Tools.Ingest` (see [CITATION.cff](CITATION.cff))
+- **External APIs:** Open Food Facts (ingredient metadata)
 - **Testing:** xUnit, FluentAssertions, Moq
 
 ## Getting Started
@@ -62,7 +63,7 @@ src/
     Infrastructure/
       Claude/                 # Claude API client (stub) and prompt types
       Data/                   # EF Core DbContext, migrations, configurations
-      ExternalApis/           # TheMealDB and Open Food Facts clients
+      ExternalApis/           # Open Food Facts client
     Models/Entities/          # Domain entities and enums
   MealsEnPlace.Web/           # Angular 21 frontend
     src/app/features/
@@ -134,7 +135,7 @@ C4 diagrams below are rendered from [docs/c4/](docs/c4/) on every push to `main`
 - **Inventory Management** (MEP-001) -- Track items across Pantry, Fridge, and Freezer with quantity, unit of measure, and expiry dates
 - **Unit of Measure Normalization** (MEP-002) -- Convert between units; Claude resolves colloquial measures
 - **Container Reference Resolution** (MEP-003) -- Detect "1 can", "1 jar" and prompt for actual weight/volume
-- **Recipe Import** (MEP-004) -- Import from TheMealDB by name, cuisine, or category
+- **Recipe Catalog** (MEP-004 / MEP-026) -- Bulk ingested offline from the Kaggle 2M dataset via `MealsEnPlace.Tools.Ingest`; manual per-recipe creation through the Angular app. (TheMealDB import, the original MEP-004 source, was removed under MEP-033 once the Kaggle path was live.)
 - **Dietary Classification** (MEP-005) -- Rule-based dietary tagging (Vegetarian, Vegan, GlutenFree, etc.) with library filtering
 - **Recipe Matching** (MEP-006) -- "What can I make?" ranked by ingredient coverage with waste bonus and dietary tag filters
 - **Meal Plan Generation** (MEP-007) -- Weekly plans optimized for waste reduction, seasonal affinity, and variety; manual slot swapping

@@ -8,14 +8,13 @@ title Component Diagram for API Container — Meals en Place
 Container_Ext(web, "Angular Web App", "Angular 21, Angular Material", "Frontend SPA")
 ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality, preferences")
 System_Ext(claude, "Claude API", "Unit of measure normalization, dietary classification, meal plan optimization, substitution suggestions")
-System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 
 Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
     ' === Feature Components ===
 
     Component(inventory, "Inventory Component", "InventoryController, ReferenceDataController, InventoryService, InventoryRepository", "CRUD for pantry, fridge, and freezer items with container reference detection")
-    Component(recipeImport, "Recipe Import Component", "RecipeImportController, RecipeImportService", "Search TheMealDB, import recipes, create manual recipes, normalize ingredients")
+    Component(recipeImport, "Recipe Component", "RecipeImportController, RecipeImportService", "Manual recipe creation, library listing, and detail retrieval. Bulk catalog ingested offline via Tools.Ingest rather than through this component.")
     Component(recipeMatching, "Recipe Matching Component", "RecipeMatchingController, RecipeMatchingService", "Scores recipes against inventory. Classifies Full, Near, and Partial matches")
     Component(containerResolution, "Container Resolution Component", "ContainerResolutionController, ContainerResolutionService", "Resolve container references (can, jar, box) to declared weights and volumes")
     Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanSlotsController, MealPlanService, MealConsumptionService", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality, mark slots as eaten with optional inventory auto-deplete and audit-based restore")
@@ -29,7 +28,6 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 
     Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, unit of measure resolution, meal plan optimization, substitution suggestions (currently stub)")
     Component(anthropicTestClient, "Anthropic Test Client", "AnthropicTestClient", "Minimal HTTP client that issues a one-token Messages API call to verify user-supplied keys from the Settings page")
-    Component(themealdbClient, "TheMealDB Client", "TheMealDbClient", "HTTP client for external recipe API")
     Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 13 entity configurations")
 
     ' === Common / Shared Components ===
@@ -42,7 +40,7 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
 ' === External → Feature Component relationships ===
 
 Rel(web, inventory, "Manages inventory items", "HTTP/JSON")
-Rel(web, recipeImport, "Searches and imports recipes", "HTTP/JSON")
+Rel(web, recipeImport, "Creates manual recipes, reads library", "HTTP/JSON")
 Rel(web, recipeMatching, "Requests recipe matches", "HTTP/JSON")
 Rel(web, containerResolution, "Resolves container references", "HTTP/JSON")
 Rel(web, mealPlan, "Generates and edits meal plans", "HTTP/JSON")
@@ -56,9 +54,8 @@ Rel(web, settings, "Saves / tests / removes the Claude API key", "HTTP/JSON")
 
 Rel(inventory, dataAccess, "Reads/Writes inventory", "EF Core")
 Rel(inventory, containerDetector, "Detects container references in entries")
-Rel(recipeImport, themealdbClient, "Fetches recipes")
-Rel(recipeImport, unitOfMeasureServices, "Normalizes ingredient measures")
-Rel(recipeImport, containerDetector, "Detects container references in imported ingredients")
+Rel(recipeImport, dataAccess, "Reads/Writes recipes and ingredients", "EF Core")
+Rel(recipeImport, containerDetector, "Detects container references on manual entry")
 Rel(recipeImport, claudeClient, "Requests dietary classification (when key configured)")
 Rel(recipeImport, settings, "Gates Claude calls on IClaudeAvailability")
 Rel(recipeMatching, unitOfMeasureServices, "Converts quantities for comparison")
@@ -80,7 +77,6 @@ Rel(userPreferences, dataAccess, "Reads/Writes display preferences", "EF Core")
 
 Rel(claudeClient, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
 Rel(anthropicTestClient, claude, "One-token Messages ping for Test Connection", "HTTPS/JSON")
-Rel(themealdbClient, themealdb, "Imports recipes", "HTTPS/JSON")
 Rel(dataAccess, db, "Reads/Writes", "EF Core / Npgsql")
 
 @enduml

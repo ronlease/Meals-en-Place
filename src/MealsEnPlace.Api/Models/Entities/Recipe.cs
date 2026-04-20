@@ -23,9 +23,6 @@ public class Recipe
     /// <summary>URL of the original recipe source, if any.</summary>
     public string? SourceUrl { get; set; }
 
-    /// <summary>TheMealDB meal ID, if this recipe was imported from that source.</summary>
-    public string? TheMealDbId { get; set; }
-
     /// <summary>Display title of the recipe.</summary>
     public string Title { get; set; } = string.Empty;
 

@@ -11,7 +11,7 @@ season. Single-user, local deployment only.
 - **Frontend:** Angular 21, standalone components, Angular Material, ApexCharts
 - **Auth:** None — single user, local deployment
 - **AI:** Claude API (recipe dietary classification, ingredient normalization, meal plan optimization, unit of measure resolution, container reference flagging)
-- **External APIs:** TheMealDB (free, open recipe data — slated for removal under MEP-033), Open Food Facts (ingredient metadata)
+- **External APIs:** Open Food Facts (ingredient metadata)
 - **Recipe catalog (bulk):** Kaggle "Recipe Dataset (over 2M)" ingested via `MealsEnPlace.Tools.Ingest`. Each user downloads their own copy under CC BY-NC-SA 4.0; the dataset is never committed. See [CITATION.cff](../CITATION.cff) and [README.md](../README.md) for setup.
 - **Testing:** xUnit, Gherkin-style naming, FluentAssertions, Moq
 - **Documentation:** Swashbuckle (OpenAPI/Swagger), PlantUML (C4 models)
@@ -34,7 +34,7 @@ MealsEnPlace/
       Infrastructure/
         Claude/                     # Claude API client and prompt management
         Data/                       # EF Core DbContext, migrations
-        ExternalApis/               # TheMealDB client, Open Food Facts client
+        ExternalApis/               # Open Food Facts client
       Models/
         Entities/                   # EF Core entity classes
       Program.cs
@@ -113,11 +113,12 @@ ContainerReference. The add/edit dialog prompts: "What is the net weight or volu
 container?" User enters 14.5 oz. The InventoryItem stores Quantity = 14.5, UnitOfMeasureId = oz, and
 preserves the original entry string in Notes.
 
-**Recipe side:** TheMealDB returns "1 can chopped tomatoes." On import, the system detects
-"can" as a ContainerReference. The import flow flags this RecipeIngredient as unresolved.
-The user is prompted to declare the expected size before the recipe participates in matching.
-Once declared, RecipeIngredient stores Quantity = 14.5, UnitOfMeasureId = oz, Notes = "1 can chopped
-tomatoes." The recipe is marked fully resolved and enters the matching pool.
+**Recipe side:** The Kaggle bulk ingest supplies a recipe with "1 can chopped tomatoes" in
+one of its ingredient measures. On ingest, the system detects "can" as a ContainerReference
+and flags that RecipeIngredient as unresolved. The user is prompted to declare the expected
+size before the recipe participates in matching. Once declared, RecipeIngredient stores
+Quantity = 14.5, UnitOfMeasureId = oz, Notes = "1 can chopped tomatoes." The recipe is
+marked fully resolved and enters the matching pool.
 
 **Unresolved recipes do not participate in recipe matching.** A recipe with one or more
 unresolved ContainerReferences displays with an "Awaiting Resolution" badge and is excluded

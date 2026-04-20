@@ -1,7 +1,10 @@
 namespace MealsEnPlace.Api.Features.Recipes;
 
 /// <summary>
-/// Orchestrates searching TheMealDB and importing recipes into the local library.
+/// Manages the local recipe library: manual creation, lookup, and listing.
+/// (Prior to MEP-033 this interface also owned TheMealDB search and import;
+/// that surface was removed once the Kaggle ingest became the catalog source
+/// under MEP-026.)
 /// </summary>
 public interface IRecipeImportService
 {
@@ -13,13 +16,4 @@ public interface IRecipeImportService
 
     /// <summary>Returns the full detail of a single local recipe by ID, or null if not found.</summary>
     Task<RecipeDetailDto?> GetRecipeDetailAsync(Guid id, CancellationToken cancellationToken = default);
-
-    /// <summary>Imports a recipe from TheMealDB by meal ID.</summary>
-    Task<RecipeImportResultDto> ImportByIdAsync(string mealDbId, CancellationToken cancellationToken = default);
-
-    /// <summary>Searches TheMealDB by name.</summary>
-    Task<IReadOnlyList<RecipeSearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default);
-
-    /// <summary>Searches TheMealDB by category.</summary>
-    Task<IReadOnlyList<RecipeSearchResultDto>> SearchByCategoryAsync(string category, CancellationToken cancellationToken = default);
 }

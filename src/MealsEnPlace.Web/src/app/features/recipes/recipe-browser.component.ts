@@ -40,10 +40,6 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
           <mat-icon>add</mat-icon>
           Create Recipe
         </button>
-        <button mat-stroked-button routerLink="/recipes/import">
-          <mat-icon>cloud_download</mat-icon>
-          Import Recipes
-        </button>
         <button mat-stroked-button routerLink="/recipes/container-resolution">
           <mat-icon>inventory_2</mat-icon>
           Resolve Containers

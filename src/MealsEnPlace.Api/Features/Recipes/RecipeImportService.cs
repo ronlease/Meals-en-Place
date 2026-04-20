@@ -2,22 +2,23 @@ using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.Settings;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
-using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.EntityFrameworkCore;
 
 namespace MealsEnPlace.Api.Features.Recipes;
 
 /// <summary>
-/// Implements TheMealDB search and recipe import pipeline.
+/// Manages the local recipe library: manual creation (MEP-018), retrieval, and
+/// listing. The TheMealDB search and import paths that previously lived here
+/// were removed under MEP-033 once the Kaggle bulk ingest (MEP-026) became the
+/// catalog source; the <c>MealsEnPlace.Tools.Ingest</c> tool now supplies
+/// recipes in bulk, and this service covers the interactive per-recipe flow.
 /// </summary>
 public sealed class RecipeImportService(
     IClaudeAvailability claudeAvailability,
     IClaudeService claudeService,
     MealsEnPlaceDbContext dbContext,
-    ILogger<RecipeImportService> logger,
-    ITheMealDbClient theMealDbClient,
-    IUnitOfMeasureNormalizationService unitOfMeasureNormalizationService) : IRecipeImportService
+    ILogger<RecipeImportService> logger) : IRecipeImportService
 {
     /// <inheritdoc />
     public async Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default)
@@ -29,7 +30,6 @@ public sealed class RecipeImportService(
             Instructions = InputSanitizer.SanitizeForStorage(request.Instructions, 5000) ?? string.Empty,
             ServingCount = request.ServingCount,
             SourceUrl = null,
-            TheMealDbId = null,
             Title = InputSanitizer.SanitizeForStorage(request.Title, 200) ?? string.Empty
         };
 
@@ -125,124 +125,6 @@ public sealed class RecipeImportService(
         return recipe is null ? null : MapToDetailDto(recipe);
     }
 
-    /// <inheritdoc />
-    public async Task<RecipeImportResultDto> ImportByIdAsync(string mealDbId, CancellationToken cancellationToken = default)
-    {
-        var existing = await dbContext.Recipes
-            .AsNoTracking()
-            .FirstOrDefaultAsync(r => r.TheMealDbId == mealDbId, cancellationToken);
-
-        if (existing is not null)
-        {
-            throw new InvalidOperationException(
-                $"Recipe with TheMealDB ID '{mealDbId}' has already been imported (local ID: {existing.Id}).");
-        }
-
-        var meal = await theMealDbClient.GetByIdAsync(mealDbId, cancellationToken)
-            ?? throw new InvalidOperationException($"No meal found in TheMealDB for ID '{mealDbId}'.");
-
-        var recipe = new Recipe
-        {
-            CuisineType = meal.Area ?? string.Empty,
-            Id = Guid.NewGuid(),
-            Instructions = meal.Instructions ?? string.Empty,
-            ServingCount = 4,
-            SourceUrl = meal.Source,
-            TheMealDbId = meal.MealId,
-            Title = meal.MealName ?? string.Empty
-        };
-
-        foreach (var (ingredientName, measureString) in meal.GetIngredientMeasurePairs())
-        {
-            var canonicalIngredient = await FindOrCreateCanonicalIngredientAsync(ingredientName, cancellationToken);
-            var detectionResult = ContainerReferenceDetector.Detect(measureString);
-
-            RecipeIngredient recipeIngredient;
-            if (detectionResult.IsContainerReference)
-            {
-                recipeIngredient = new RecipeIngredient
-                {
-                    CanonicalIngredientId = canonicalIngredient.Id,
-                    Id = Guid.NewGuid(),
-                    IsContainerResolved = false,
-                    Notes = string.IsNullOrWhiteSpace(measureString) ? $"1 {detectionResult.DetectedKeyword} {ingredientName}" : measureString,
-                    Quantity = 0m,
-                    RecipeId = recipe.Id,
-                    UnitOfMeasureId = null
-                };
-            }
-            else
-            {
-                var normalization = await unitOfMeasureNormalizationService.NormalizeAsync(
-                    string.IsNullOrWhiteSpace(measureString) ? "1 ea" : measureString,
-                    ingredientName, cancellationToken);
-
-                recipeIngredient = new RecipeIngredient
-                {
-                    CanonicalIngredientId = canonicalIngredient.Id,
-                    Id = Guid.NewGuid(),
-                    IsContainerResolved = true,
-                    Notes = normalization.WasClaudeResolved ? normalization.Notes : null,
-                    Quantity = normalization.Quantity,
-                    RecipeId = recipe.Id,
-                    UnitOfMeasureId = normalization.UnitOfMeasureId == Guid.Empty ? canonicalIngredient.DefaultUnitOfMeasureId : normalization.UnitOfMeasureId
-                };
-            }
-
-            recipe.RecipeIngredients.Add(recipeIngredient);
-        }
-
-        dbContext.Recipes.Add(recipe);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        IReadOnlyList<DietaryTag> dietaryTags = [];
-        if (await claudeAvailability.IsConfiguredAsync(cancellationToken))
-        {
-            try
-            {
-                dietaryTags = await claudeService.ClassifyDietaryTagsAsync(recipe);
-                foreach (var tag in dietaryTags)
-                {
-                    dbContext.RecipeDietaryTags.Add(new RecipeDietaryTag
-                    {
-                        Id = Guid.NewGuid(),
-                        RecipeId = recipe.Id,
-                        Tag = tag
-                    });
-                }
-                if (dietaryTags.Count > 0) await dbContext.SaveChangesAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning(ex, "Claude dietary classification failed for '{Title}'.", InputSanitizer.SanitizeForLogging(recipe.Title));
-                dietaryTags = [];
-            }
-        }
-
-        return new RecipeImportResultDto
-        {
-            DietaryTags = dietaryTags,
-            RecipeId = recipe.Id,
-            Title = recipe.Title,
-            TotalIngredients = recipe.RecipeIngredients.Count,
-            UnresolvedCount = recipe.RecipeIngredients.Count(ri => !ri.IsContainerResolved)
-        };
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<RecipeSearchResultDto>> SearchAsync(string query, CancellationToken cancellationToken = default)
-    {
-        var meals = await theMealDbClient.SearchByNameAsync(query, cancellationToken);
-        return await MapToSearchResultsAsync(meals, cancellationToken);
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<RecipeSearchResultDto>> SearchByCategoryAsync(string category, CancellationToken cancellationToken = default)
-    {
-        var meals = await theMealDbClient.FilterByCategoryAsync(category, cancellationToken);
-        return await MapToSearchResultsAsync(meals, cancellationToken);
-    }
-
     private static RecipeDetailDto MapToDetailDto(Recipe recipe) =>
         new()
         {
@@ -269,49 +151,4 @@ public sealed class RecipeImportService(
             SourceUrl = recipe.SourceUrl,
             Title = recipe.Title
         };
-
-    private async Task<CanonicalIngredient> FindOrCreateCanonicalIngredientAsync(string ingredientName, CancellationToken cancellationToken)
-    {
-        var normalized = InputSanitizer.SanitizeForStorage(ingredientName, 200) ?? ingredientName.Trim();
-        var existing = await dbContext.CanonicalIngredients
-            .FirstOrDefaultAsync(ci => ci.Name.ToLower() == normalized.ToLower(), cancellationToken);
-
-        if (existing is not null) return existing;
-
-        var eachUnitOfMeasure = await dbContext.UnitsOfMeasure.FirstAsync(u => u.Abbreviation == "ea", cancellationToken);
-        var newIngredient = new CanonicalIngredient
-        {
-            Category = IngredientCategory.Other,
-            DefaultUnitOfMeasureId = eachUnitOfMeasure.Id,
-            Id = Guid.NewGuid(),
-            Name = normalized
-        };
-        dbContext.CanonicalIngredients.Add(newIngredient);
-        return newIngredient;
-    }
-
-    private async Task<IReadOnlyList<RecipeSearchResultDto>> MapToSearchResultsAsync(
-        IReadOnlyList<TheMealDbMeal> meals, CancellationToken cancellationToken)
-    {
-        if (meals.Count == 0) return [];
-
-        var mealDbIds = meals.Where(m => m.MealId is not null).Select(m => m.MealId!).ToList();
-        var importedIds = await dbContext.Recipes
-            .AsNoTracking()
-            .Where(r => r.TheMealDbId != null && mealDbIds.Contains(r.TheMealDbId))
-            .Select(r => r.TheMealDbId!)
-            .ToHashSetAsync(cancellationToken);
-
-        return meals
-            .Where(m => m.MealId is not null)
-            .Select(m => new RecipeSearchResultDto
-            {
-                AlreadyImported = importedIds.Contains(m.MealId!),
-                Category = m.Category ?? string.Empty,
-                Id = m.MealId!,
-                Thumbnail = m.MealThumb,
-                Title = m.MealName ?? string.Empty
-            })
-            .ToList();
-    }
 }
