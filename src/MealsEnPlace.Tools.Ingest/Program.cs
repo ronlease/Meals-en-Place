@@ -116,7 +116,7 @@ foreach (var row in streamResult.Rows)
         Id = Guid.NewGuid(),
         Instructions = string.Join(IngestConstants.InstructionStepSeparator, retainedSteps),
         ServingCount = IngestConstants.DefaultServingCount,
-        SourceUrl = string.IsNullOrWhiteSpace(row.Link) ? null : Truncate(row.Link, IngestConstants.RecipeSourceUrlMaxLength),
+        SourceUrl = NullIfBlankOrOverLength(row.Link, IngestConstants.RecipeSourceUrlMaxLength),
         Title = Truncate(row.Title, IngestConstants.RecipeTitleMaxLength)
     };
 
@@ -230,6 +230,13 @@ return IngestConstants.ExitCodeSuccess;
 
 static string Truncate(string value, int maxLength) =>
     value.Length <= maxLength ? value : value[..maxLength];
+
+// A truncated URL is unusable — broken anchor, wrong host, etc. Prefer
+// dropping the link entirely to storing a corrupted one the user might click.
+static string? NullIfBlankOrOverLength(string value, int maxLength) =>
+    string.IsNullOrWhiteSpace(value) || value.Length > maxLength
+        ? null
+        : value;
 
 static async Task FlushBatchAsync(
     MealsEnPlaceDbContext dbContext,
