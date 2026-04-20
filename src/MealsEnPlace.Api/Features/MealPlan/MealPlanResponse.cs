@@ -28,6 +28,12 @@ public record MealPlanResponse
 /// </summary>
 public record MealPlanSlotResponse
 {
+    /// <summary>
+    /// UTC timestamp when the user marked this slot as eaten. Null when the
+    /// slot is still pending (MEP-027).
+    /// </summary>
+    public DateTime? ConsumedAt { get; init; }
+
     /// <summary>Cuisine type of the assigned recipe.</summary>
     public required string CuisineType { get; init; }
 

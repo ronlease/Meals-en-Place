@@ -191,6 +191,7 @@ public class MealPlanService(
 
         return new MealPlanSlotResponse
         {
+            ConsumedAt = slot.ConsumedAt,
             CuisineType = recipe.CuisineType,
             DayOfWeek = slot.DayOfWeek,
             Id = slot.Id,
@@ -282,6 +283,7 @@ public class MealPlanService(
                 .ThenBy(s => s.MealSlot)
                 .Select(s => new MealPlanSlotResponse
                 {
+                    ConsumedAt = s.ConsumedAt,
                     CuisineType = s.Recipe.CuisineType,
                     DayOfWeek = s.DayOfWeek,
                     Id = s.Id,

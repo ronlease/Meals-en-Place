@@ -5,8 +5,10 @@ import { MatCardModule } from '@angular/material/card';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
+  ConsumeMealResponse,
   MealPlanResponse,
   MealPlanSlotResponse,
 } from '../../core/models/meal-plan.models';
@@ -78,12 +80,41 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
             @for (slot of getSlotsForDay(day); track slot.id) {
               <mat-card
                 class="slot-card"
+                [class.consumed]="slot.consumedAt"
                 (click)="openSwapDialog(slot)"
                 matTooltip="Click to swap recipe"
               >
-                <div class="slot-label">{{ slot.mealSlot }}</div>
+                <div class="slot-label-row">
+                  <span class="slot-label">{{ slot.mealSlot }}</span>
+                  @if (slot.consumedAt) {
+                    <mat-icon class="consumed-icon" aria-label="Eaten" matTooltip="Marked as eaten">check_circle</mat-icon>
+                  }
+                </div>
                 <div class="slot-recipe">{{ slot.recipeTitle }}</div>
                 <div class="slot-cuisine">{{ slot.cuisineType }}</div>
+                <div class="slot-actions">
+                  @if (slot.consumedAt) {
+                    <button
+                      mat-button
+                      class="slot-action-button"
+                      (click)="unconsumeSlot(slot); $event.stopPropagation()"
+                      [disabled]="consumingSlotId() === slot.id"
+                    >
+                      <mat-icon>undo</mat-icon>
+                      Unmark
+                    </button>
+                  } @else {
+                    <button
+                      mat-button
+                      class="slot-action-button"
+                      (click)="consumeSlot(slot); $event.stopPropagation()"
+                      [disabled]="consumingSlotId() === slot.id"
+                    >
+                      <mat-icon>restaurant</mat-icon>
+                      Mark eaten
+                    </button>
+                  }
+                </div>
               </mat-card>
             }
             @if (getSlotsForDay(day).length === 0) {
@@ -190,12 +221,31 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
+        &.consumed {
+          opacity: 0.7;
+
+          .slot-recipe { text-decoration: line-through; }
+        }
+
+        .slot-label-row {
+          align-items: center;
+          display: flex;
+          gap: 6px;
+          margin-bottom: 4px;
+        }
+
         .slot-label {
           font-size: 11px;
           text-transform: uppercase;
           font-weight: 600;
           color: var(--mat-sys-primary, #1976d2);
-          margin-bottom: 4px;
+        }
+
+        .consumed-icon {
+          color: #0a6;
+          font-size: 16px;
+          height: 16px;
+          width: 16px;
         }
 
         .slot-recipe {
@@ -207,6 +257,19 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
         .slot-cuisine {
           font-size: 12px;
           color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.54));
+        }
+
+        .slot-actions {
+          display: flex;
+          justify-content: flex-end;
+          margin-top: 6px;
+        }
+
+        .slot-action-button {
+          font-size: 11px;
+          line-height: 1.2;
+          min-width: 0;
+          padding: 0 8px;
         }
       }
 
@@ -221,6 +284,7 @@ const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 })
 export class MealPlanBoardComponent implements OnInit {
   readonly days = DAY_ORDER;
+  protected readonly consumingSlotId = signal<string | null>(null);
   protected readonly error = signal(false);
   protected readonly loading = signal(false);
   protected readonly plan = signal<MealPlanResponse | null>(null);
@@ -228,7 +292,62 @@ export class MealPlanBoardComponent implements OnInit {
   private readonly dialog = inject(MatDialog);
   private readonly mealPlanService = inject(MealPlanService);
   private readonly recipeService = inject(RecipeService);
+  private readonly snackBar = inject(MatSnackBar);
   private recipes: RecipeListItemDto[] = [];
+
+  consumeSlot(slot: MealPlanSlotResponse): void {
+    this.consumingSlotId.set(slot.id);
+    this.mealPlanService.consumeSlot(slot.id).subscribe({
+      error: () => {
+        this.consumingSlotId.set(null);
+        this.snackBar.open('Could not mark the meal as eaten.', 'Dismiss', { duration: 5000 });
+      },
+      next: (result) => {
+        this.consumingSlotId.set(null);
+        this.applyConsumedAt(slot.id, result.consumedAt);
+        this.showConsumeResultSnackbar(result);
+      },
+    });
+  }
+
+  unconsumeSlot(slot: MealPlanSlotResponse): void {
+    this.consumingSlotId.set(slot.id);
+    this.mealPlanService.unconsumeSlot(slot.id).subscribe({
+      error: () => {
+        this.consumingSlotId.set(null);
+        this.snackBar.open('Could not unmark the meal.', 'Dismiss', { duration: 5000 });
+      },
+      next: () => {
+        this.consumingSlotId.set(null);
+        this.applyConsumedAt(slot.id, null);
+      },
+    });
+  }
+
+  private applyConsumedAt(slotId: string, consumedAt: string | null): void {
+    this.plan.update((p) => {
+      if (!p) return p;
+      return {
+        ...p,
+        slots: p.slots.map((s) =>
+          s.id === slotId ? { ...s, consumedAt } : s
+        ),
+      };
+    });
+  }
+
+  private showConsumeResultSnackbar(result: ConsumeMealResponse): void {
+    if (result.shortIngredients.length > 0) {
+      const names = result.shortIngredients
+        .map((s) => `${s.ingredientName} (short by ${s.shortBy} ${s.unitOfMeasureAbbreviation})`.trim())
+        .join(', ');
+      this.snackBar.open(`Marked eaten. Inventory was short on: ${names}`, 'Dismiss', { duration: 8000 });
+    } else if (result.autoDepleteApplied) {
+      this.snackBar.open('Marked eaten. Inventory updated.', 'Dismiss', { duration: 3000 });
+    } else {
+      this.snackBar.open('Marked eaten.', 'Dismiss', { duration: 3000 });
+    }
+  }
 
   getSlotsForDay(day: string): MealPlanSlotResponse[] {
     const p = this.plan();

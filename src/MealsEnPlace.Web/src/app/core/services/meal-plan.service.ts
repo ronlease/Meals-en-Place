@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  ConsumeMealResponse,
   GenerateMealPlanRequest,
   MealPlanResponse,
   MealPlanSlotResponse,
@@ -13,6 +14,14 @@ import {
 export class MealPlanService {
   private readonly baseUrl = `${environment.apiUrl}/v1/meal-plans`;
   private readonly http = inject(HttpClient);
+  private readonly slotsUrl = `${environment.apiUrl}/v1/meal-plan-slots`;
+
+  consumeSlot(slotId: string): Observable<ConsumeMealResponse> {
+    return this.http.post<ConsumeMealResponse>(
+      `${this.slotsUrl}/${slotId}/consume`,
+      {}
+    );
+  }
 
   generatePlan(
     request: GenerateMealPlanRequest
@@ -35,5 +44,9 @@ export class MealPlanService {
       `${this.baseUrl}/slots/${slotId}`,
       request
     );
+  }
+
+  unconsumeSlot(slotId: string): Observable<void> {
+    return this.http.delete<void>(`${this.slotsUrl}/${slotId}/consume`);
   }
 }

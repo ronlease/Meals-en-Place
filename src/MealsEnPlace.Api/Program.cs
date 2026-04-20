@@ -96,6 +96,7 @@ builder.Services.AddScoped<IAnthropicTestClient, AnthropicTestClient>();
 builder.Services.AddScoped<IClaudeService, ClaudeService>();
 builder.Services.AddScoped<IContainerResolutionService, ContainerResolutionService>();
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
+builder.Services.AddScoped<IMealConsumptionService, MealConsumptionService>();
 builder.Services.AddScoped<IMealPlanService, MealPlanService>();
 builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<IRecipeMatchingService, RecipeMatchingService>();

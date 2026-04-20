@@ -9,6 +9,14 @@ namespace MealsEnPlace.Api.Models.Entities;
 public class UserPreferences
 {
     /// <summary>
+    /// MEP-027: when true, marking a <see cref="MealPlanSlot"/> as eaten
+    /// automatically deducts each recipe ingredient's quantity from current
+    /// inventory. Default false so inventory is never silently modified
+    /// without an explicit opt-in.
+    /// </summary>
+    public bool AutoDepleteOnConsume { get; set; }
+
+    /// <summary>
     /// Controls how quantities render at the API response layer.
     /// Default: <see cref="Models.Entities.DisplaySystem.Imperial"/>.
     /// </summary>

@@ -15,6 +15,9 @@ public class MealsEnPlaceDbContext(DbContextOptions<MealsEnPlaceDbContext> optio
     /// <summary>Canonical normalized ingredients.</summary>
     public DbSet<CanonicalIngredient> CanonicalIngredients => Set<CanonicalIngredient>();
 
+    /// <summary>Per-decrement audit rows for auto-deplete consume events (MEP-027 / MEP-031).</summary>
+    public DbSet<ConsumeAuditEntry> ConsumeAuditEntries => Set<ConsumeAuditEntry>();
+
     /// <summary>Pantry, fridge, and freezer inventory items.</summary>
     public DbSet<InventoryItem> InventoryItems => Set<InventoryItem>();
 
