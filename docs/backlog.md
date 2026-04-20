@@ -2144,4 +2144,88 @@ Feature: Associated Todoist Project Quick-Pick
     And the UI clearly distinguishes "projects you've used from this app" from "all your Todoist projects"
 ```
 
+## [MEP-037] Strip Ad / Tracking URLs on Recipe Ingest
 
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** MEP-026 (ingest pipeline)
+
+### Business Problem
+A subset of Kaggle recipe rows carry `link` values that are ad-tracking redirect chains (e.g., `googleads.g.doubleclick.net/pcs/click?...&adurl=...`) or affiliate-wrapper URLs rather than the canonical recipe page. Today the ingest stores the raw link (or drops it when it exceeds the 2000-char column cap — MEP-026 hotfix). Both outcomes are wrong for the user: an ad-tracking URL either clicks through to a tracker before redirecting, or is a broken promise in the UI.
+
+The ingest should detect the well-known tracker/ad host patterns, attempt to extract the nested real URL from the query string when available (e.g., the `adurl` / `url` / `q` / `destination` parameters), and fall back to null when no canonical URL can be recovered. The `IngestSummary` should report how many links were rewritten and how many were dropped as tracker-only, so the user can gauge dataset quality over time.
+
+Out of scope: fetching the URL to confirm it resolves, or unwrapping user-facing short links (bit.ly, t.co) that require a network round-trip. Those belong in a separate "link health pass" story if ever justified.
+
+### Acceptance Criteria
+```gherkin
+Feature: Strip Ad / Tracking URLs on Recipe Ingest
+
+  Scenario: Known tracker host with a nested real URL is unwrapped
+    Given a Kaggle row whose link is "https://googleads.g.doubleclick.net/pcs/click?xai=...&adurl=https%3A%2F%2Fwww.foodnetwork.com%2Frecipes%2Fchicken-pot-pie"
+    When the ingest processes the row
+    Then Recipe.SourceUrl stores the unwrapped "https://www.foodnetwork.com/recipes/chicken-pot-pie"
+    And IngestSummary.TrackingLinksUnwrapped is incremented
+
+  Scenario: Tracker URL with no recoverable destination is dropped
+    Given a Kaggle row whose link is a tracker URL with no nested destination parameter
+    When the ingest processes the row
+    Then Recipe.SourceUrl is null
+    And IngestSummary.TrackingLinksDropped is incremented
+    And the recipe itself still imports (the link is optional)
+
+  Scenario: Clean recipe URL passes through untouched
+    Given a Kaggle row whose link is a direct recipe URL on a known recipe host
+    When the ingest processes the row
+    Then Recipe.SourceUrl matches the original link byte-for-byte
+    And neither tracker counter is incremented
+
+  Scenario: Backfill pass updates previously-ingested rows
+    Given a Kaggle ingest completed before this story shipped
+    When the user runs the ingest tool with a `--rewrite-tracking-links` flag
+    Then existing Recipe rows whose SourceUrl matches a tracker pattern are rewritten in place (or nulled)
+    And a summary reports how many rows were changed
+```
+
+## [MEP-038] Canonical Ingredient Deduplication Pass
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-026 (ingest creates the CanonicalIngredient rows this story folds)
+
+### Business Problem
+The MEP-026 ingest creates one `CanonicalIngredient` per unique NER token. A 1.64M-recipe live run produced **146,584** canonical rows — roughly 10× the MEP-025 projection of 5k-15k. The variance is morphological noise in the Kaggle NER column: "onion", "chopped onion", "diced onion", "red onion", "onions" all become distinct canonicals. That breaks recipe matching in a user-visible way: an inventory entry for "1 onion" won't match a recipe calling for "2 cups chopped onion" even though the user clearly has the ingredient.
+
+Need a heuristic dedup pass that folds modifier-only duplicates to a single survivor row and updates every `RecipeIngredient.CanonicalIngredientId` FK that pointed at a loser. The goal is cheap matching-quality wins without calling Claude on 146k rows — a strong stopword list (chopped, diced, sliced, minced, fresh, dried, whole, raw, cooked, large, small, medium, etc.) plus singular/plural collapse should cover the bulk.
+
+A Claude-assisted pass for the long tail (ambiguous merges, size-dependent distinctions like "baby carrots" vs "carrots") is a separate follow-up — not scoped here.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Deduplication Pass
+
+  Scenario: Modifier-stripped duplicates fold to one survivor
+    Given CanonicalIngredient rows exist for "onion", "chopped onion", "diced onion", and "onions"
+    When the user runs the dedup tool
+    Then exactly one survivor row remains (the shortest / most generic name)
+    And every RecipeIngredient that pointed at a folded row now points at the survivor
+    And a summary reports the number of rows folded and FKs updated
+
+  Scenario: True distinct ingredients are preserved
+    Given CanonicalIngredient rows exist for "carrot" and "baby carrot"
+    When the dedup tool runs with size-preserving mode
+    Then "baby carrot" is NOT folded into "carrot"
+    And a configurable modifier allow-list controls which qualifiers are size-significant vs cosmetic
+
+  Scenario: Dry-run reports the intended merges without writing
+    Given a populated CanonicalIngredient table
+    When the user runs the dedup tool with --dry-run
+    Then the tool prints the proposed fold groups and affected FK counts
+    And no database rows are modified
+
+  Scenario: Non-destructive record of the original NER token
+    Given a CanonicalIngredient row is folded into a survivor
+    When the fold happens
+    Then the folded-away name is appended to the survivor's alias / synonym list (exact schema TBD at implementation time)
+    And the fold is auditable / reversible via that synonym list
+```

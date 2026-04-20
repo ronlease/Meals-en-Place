@@ -169,6 +169,42 @@ jobs:
       - name: Lint
         run: npx ng lint
 
+  # -- Angular: XSS sink guard -----------------------------------------------
+  # Fails the build if any frontend source introduces an XSS sink. The app
+  # relies on Angular's default HTML-escaping for every recipe field that
+  # originates from the Kaggle ingest, so any of these patterns is a
+  # regression worth a human review. If a genuine use arises, add a
+  # narrowly-scoped exception to the pattern below with a comment.
+  angular-xss-guard:
+    name: Angular XSS Sink Guard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Scan for XSS sinks
+        run: |
+          set +e
+          matches=$(grep -rEn \
+            --include='*.ts' --include='*.html' \
+            --exclude-dir=node_modules \
+            --exclude-dir=dist \
+            --exclude-dir=.angular \
+            'innerHTML|bypassSecurityTrust|\beval[[:space:]]*\(|\bnew[[:space:]]+Function[[:space:]]*\(' \
+            src/MealsEnPlace.Web/src)
+          status=$?
+          if [ $status -eq 0 ]; then
+            echo "ERROR: forbidden XSS sink pattern(s) found in the Angular source:"
+            echo "$matches"
+            echo ""
+            echo "Recipe content is ingested from an untrusted CSV and must render through"
+            echo "Angular's default HTML-escaping. If you truly need one of these patterns,"
+            echo "document the reason in a PR comment and add a narrow exception here."
+            exit 1
+          fi
+          echo "No XSS sinks detected."
+
   # -- Angular: production build ---------------------------------------------
   angular-build:
     name: Angular Build

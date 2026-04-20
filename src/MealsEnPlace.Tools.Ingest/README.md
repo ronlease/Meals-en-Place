@@ -27,40 +27,32 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 ## Behavior
 
 - **Streams the CSV** row-by-row using CsvHelper. The full 2.31 GB file is never loaded into memory.
+- **Scrubs NUL bytes** from every string as it leaves the reader so Postgres text columns never see `\0` (MEP-026 hotfix; Kaggle rows deep in the dump carry embedded NULs).
 - **Parses ingredient / directions / NER arrays** as JSON. Malformed rows are counted and skipped, not fatal.
-- **Detects container references** (can, jar, box, etc.) via `ContainerReferenceDetector`.
-- **Previews unit of measure resolution** against the database's abbreviations, names, aliases, and count-noun fallback. Tokens with no deterministic match are counted toward the review-queue deferral total (Phase 4a: count only; Phase 4b: actually persist the queue row).
+- **Detects container references** (can, jar, box, etc.) via `ContainerReferenceDetector` and persists them as unresolved `RecipeIngredient` rows with the original text in `Notes`.
+- **Resolves units of measure deterministically** through `InMemoryUnitOfMeasureResolver` — the tool preloads `UnitOfMeasure` and `UnitOfMeasureAlias` into memory so per-ingredient resolution is O(1). Unresolved tokens go to the `UnresolvedUnitOfMeasureToken` review queue instead of invoking Claude, preserving quota.
+- **Upserts canonical ingredients** from the NER column via `CanonicalIngredientRegistry`. Each unique NER token becomes a `CanonicalIngredient` row; raw ingredient strings link to the longest NER token they contain.
+- **Truncates over-length strings** at the EF-configured column caps before writing (recipe title, source URL, ingredient notes, unresolved-token sample columns). Over-length source URLs are dropped to null rather than truncated, since a truncated URL is worse than none.
 - **Applies `InstructionProseFilter`** to directions. Steps with first-person pronouns or >40 words after parenthetical stripping are dropped.
+- **Batches writes** in groups of 100 recipes (`IngestConstants.RecipeBatchSize`) with explicit `ChangeTracker.Clear()` between flushes so the working set stays bounded across the full 1.6M+ row run.
+
+## Performance
+
+A full live ingest of the 2.23M-row CSV (filtering out the 588k Recipes1M rows) produces ~1.64M recipes, ~14M recipe ingredients, and ~146k canonical ingredients in roughly 40 minutes against local Postgres 16 on a mid-range desktop. The dominant cost is `SaveChangesAsync` batching; CSV parsing and in-memory resolution are not the bottleneck.
 
 ## Connection string
 
 The tool reads `ConnectionStrings:DefaultConnection` from `appsettings.json`, with `ConnectionStrings__DefaultConnection` as the environment-variable override. The committed default targets the local Docker Compose Postgres on port 5433.
 
-## Current status (Phase 4a)
-
-Phase 4a is a **read-only dry-run skeleton**:
-
-- CSV streaming with filter ✓
-- Container detection count ✓
-- Unit of measure deterministic-resolution preview (no writes) ✓
-- Prose-filter retention count ✓
-- Summary output with timing ✓
-
-Phase 4b will add:
-
-- Recipe / RecipeIngredient persistence
-- CanonicalIngredient upserts from NER
-- `NormalizeOrDeferAsync` writes to the `UnresolvedUnitOfMeasureToken` review queue
-- Batched `SaveChangesAsync` flushing
-
-Phase 4c will add:
-
-- Synthetic CSV fixtures for unit testing
-- Integration test covering the full path with an in-memory DB
-
 ## Files
 
-- `Program.cs` — orchestration entry point
+- `Program.cs` — orchestration entry point (top-level statements, batch loop, flush logic)
 - `IngestOptions.cs` — CLI argument parsing
-- `KaggleRow.cs` / `KaggleRowReader.cs` — streaming CSV reader + row DTO
+- `IngestConstants.cs` — batch size, progress interval, column caps, default FK values
+- `KaggleRow.cs` / `KaggleRowReader.cs` — streaming CSV reader + row DTO (NUL scrubbing lives here)
 - `IngestSummary.cs` — running counters and final summary formatter
+- `CanonicalIngredientRegistry.cs` — in-memory dedup + upsert for `CanonicalIngredient` rows from NER tokens, plus longest-substring NER-to-ingredient linker
+- `InMemoryUnitOfMeasureResolver.cs` — pre-loaded unit-of-measure / alias lookup with deferred-queue upsert on miss
+- `IngestUnitOfMeasureResolution.cs` — result DTO for the resolver
+
+`ContainerReferenceDetector` and `InstructionProseFilter` are reused from `MealsEnPlace.Api.Common` rather than duplicated here.

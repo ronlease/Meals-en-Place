@@ -89,6 +89,29 @@ internal static class IngestConstants
     /// </summary>
     public const string InstructionStepSeparator = "\n\n";
 
+    // ── Entity column caps (mirror EF HasMaxLength configurations) ─────────
+
+    /// <summary>
+    /// Cap for <c>RecipeIngredient.Notes</c>, matching the
+    /// <c>HasMaxLength(500)</c> in <c>RecipeIngredientConfiguration</c>.
+    /// Kaggle ingredient strings occasionally exceed this deep in the dump
+    /// (observed at ~1.27M recipes); truncate at the write site so
+    /// SaveChanges never trips a 22001.
+    /// </summary>
+    public const int RecipeIngredientNotesMaxLength = 500;
+
+    /// <summary>
+    /// Cap for <c>Recipe.SourceUrl</c>, matching <c>HasMaxLength(2000)</c>
+    /// in <c>RecipeConfiguration</c>. Defensive: no confirmed overflow yet.
+    /// </summary>
+    public const int RecipeSourceUrlMaxLength = 2000;
+
+    /// <summary>
+    /// Cap for <c>Recipe.Title</c>, matching <c>HasMaxLength(300)</c> in
+    /// <c>RecipeConfiguration</c>. Defensive: no confirmed overflow yet.
+    /// </summary>
+    public const int RecipeTitleMaxLength = 300;
+
     // ── Ingest mode unit of measure context ─────────────────────────────────────────────
 
     /// <summary>
