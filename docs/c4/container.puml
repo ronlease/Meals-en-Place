@@ -9,16 +9,14 @@ Person(user, "User", "Single local user")
 
 System_Boundary(app, "Meals en Place") {
     Container(web, "Angular Web App", "Angular 21, Angular Material", "Inventory management, meal plan board, recipe browser with dietary tag filtering, shopping list, waste alerts, seasonal produce dashboard, expiration tracking, dark mode")
-    Container(api, "API", "ASP.NET Core 10, EF Core 10", "REST API under /api/v1/. Features: Inventory CRUD with container reference detection, recipe import and matching, dietary classification, meal plan generation with slot swapping, shopping list derivation, waste reduction alerts, seasonal produce guidance. Unit of measure normalization and conversion, Claude integration.")
+    Container(api, "API", "ASP.NET Core 10, EF Core 10", "REST API under /api/v1/. Features: Inventory CRUD with container reference detection, manual recipe entry and matching, dietary classification, meal plan generation with slot swapping and expiry-driven reorder, shopping list derivation, waste reduction alerts, seasonal produce guidance. Unit of measure normalization and conversion, Claude integration. Bulk recipe catalog loaded offline via the Tools.Ingest tool.")
     ContainerDb(db, "Database", "PostgreSQL", "Inventory items, canonical ingredients, units of measure, recipes, recipe ingredients, dietary tags, meal plans, meal plan slots, shopping list items, waste alerts, seasonality windows, user preferences")
 }
 
 System_Ext(claude, "Claude API", "Unit of measure normalization, container reference flagging, dietary classification, meal plan optimization, substitution suggestions")
-System_Ext(themealdb, "TheMealDB API", "Open recipe data source")
 Rel(user, web, "Uses", "HTTP localhost")
 Rel(web, api, "Calls", "HTTP/JSON")
 Rel(api, db, "Reads/Writes", "EF Core")
 Rel(api, claude, "Normalizes, classifies, optimizes", "HTTPS/JSON")
-Rel(api, themealdb, "Imports recipes", "HTTPS/JSON")
 
 @enduml

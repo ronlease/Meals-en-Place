@@ -9,7 +9,6 @@ using MealsEnPlace.Api.Features.ShoppingList;
 using MealsEnPlace.Api.Features.WasteReduction;
 using MealsEnPlace.Api.Infrastructure.Claude;
 using MealsEnPlace.Api.Infrastructure.Data;
-using MealsEnPlace.Api.Infrastructure.ExternalApis.TheMealDb;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
@@ -81,11 +80,6 @@ builder.Services.AddSingleton<IClaudeTokenStore, ClaudeTokenStore>();
 builder.Services.AddScoped<IClaudeAvailability, ClaudeAvailability>();
 
 // -- Application services -----------------------------------------------------
-builder.Services.AddHttpClient("TheMealDb", client =>
-{
-    client.BaseAddress = new Uri("https://www.themealdb.com");
-    client.DefaultRequestHeaders.Add("Accept", "application/json");
-});
 builder.Services.AddHttpClient("Anthropic", client =>
 {
     client.BaseAddress = new Uri("https://api.anthropic.com");
@@ -103,7 +97,6 @@ builder.Services.AddScoped<IRecipeImportService, RecipeImportService>();
 builder.Services.AddScoped<IRecipeMatchingService, RecipeMatchingService>();
 builder.Services.AddScoped<ISeasonalProduceService, SeasonalProduceService>();
 builder.Services.AddScoped<IShoppingListService, ShoppingListService>();
-builder.Services.AddScoped<ITheMealDbClient, TheMealDbClient>();
 builder.Services.AddScoped<IInventoryService, InventoryService>();
 builder.Services.AddScoped<IUnitOfMeasureConversionService, UnitOfMeasureConversionService>();
 builder.Services.AddScoped<IUnitOfMeasureNormalizationService, UnitOfMeasureNormalizationService>();

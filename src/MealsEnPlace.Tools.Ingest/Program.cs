@@ -117,7 +117,6 @@ foreach (var row in streamResult.Rows)
         Instructions = string.Join(IngestConstants.InstructionStepSeparator, retainedSteps),
         ServingCount = IngestConstants.DefaultServingCount,
         SourceUrl = string.IsNullOrWhiteSpace(row.Link) ? null : row.Link,
-        TheMealDbId = null,
         Title = row.Title
     };
 

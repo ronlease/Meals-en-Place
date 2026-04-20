@@ -7,10 +7,8 @@ import {
   BulkResolveGroupResponse,
   CreateRecipeRequest,
   RecipeDetailDto,
-  RecipeImportResultDto,
   RecipeListItemDto,
   RecipeMatchResponse,
-  RecipeSearchResultDto,
   UnresolvedGroupResponse,
 } from '../models/recipe.models';
 import { ShoppingListItemResponse } from '../models/shopping-list.models';
@@ -52,13 +50,6 @@ export class RecipeService {
     );
   }
 
-  importRecipe(mealDbId: string): Observable<RecipeImportResultDto> {
-    return this.http.post<RecipeImportResultDto>(
-      `${this.baseUrl}/import/${mealDbId}`,
-      null
-    );
-  }
-
   matchRecipes(
     cuisine?: string,
     dietaryTags?: string[],
@@ -76,12 +67,6 @@ export class RecipeService {
     }
     return this.http.get<RecipeMatchResponse>(`${this.baseUrl}/match`, {
       params,
-    });
-  }
-
-  searchByQuery(query: string): Observable<RecipeSearchResultDto[]> {
-    return this.http.get<RecipeSearchResultDto[]>(`${this.baseUrl}/search`, {
-      params: { query },
     });
   }
 }

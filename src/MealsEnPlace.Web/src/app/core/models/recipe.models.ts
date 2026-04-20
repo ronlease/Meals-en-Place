@@ -1,24 +1,4 @@
 // ----------------------------------------------------------------
-// Search / Import DTOs
-// ----------------------------------------------------------------
-
-export interface RecipeSearchResultDto {
-  alreadyImported: boolean;
-  category: string;
-  id: string;
-  thumbnail: string | null;
-  title: string;
-}
-
-export interface RecipeImportResultDto {
-  dietaryTags: DietaryTag[];
-  recipeId: string;
-  title: string;
-  totalIngredients: number;
-  unresolvedCount: number;
-}
-
-// ----------------------------------------------------------------
 // Recipe library list DTO
 // ----------------------------------------------------------------
 
