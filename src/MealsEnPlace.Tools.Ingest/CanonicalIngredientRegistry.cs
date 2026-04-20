@@ -73,10 +73,18 @@ internal sealed class CanonicalIngredientRegistry
         return new CanonicalIngredientRegistry(dbContext, defaultUnitOfMeasure.Id, byLowerName);
     }
 
+    // Matches CanonicalIngredient.Name's HasMaxLength(200). Kaggle NER tokens
+    // occasionally exceed this (e.g. long descriptive phrases); truncate before
+    // lookup and insert so the dedupe cache keys agree with what lands in the
+    // unique index.
+    private const int CanonicalIngredientNameMaxLength = 200;
+
     /// <summary>
     /// Ensures a <see cref="CanonicalIngredient"/> exists for the given
     /// NER token. Returns the existing id when cached; inserts a new row
-    /// (into the DbContext, not yet saved) when novel.
+    /// (into the DbContext, not yet saved) when novel. Over-length tokens
+    /// are truncated to <see cref="CanonicalIngredientNameMaxLength"/> so
+    /// Kaggle's long descriptive phrases don't overflow the column.
     /// </summary>
     public Guid GetOrCreate(string nerToken)
     {
@@ -87,6 +95,11 @@ internal sealed class CanonicalIngredientRegistry
             // name "unknown" to keep FKs valid. Callers should avoid
             // sending empties but we don't crash.
             trimmed = "unknown";
+        }
+
+        if (trimmed.Length > CanonicalIngredientNameMaxLength)
+        {
+            trimmed = trimmed[..CanonicalIngredientNameMaxLength];
         }
 
         if (_byLowerName.TryGetValue(trimmed, out var existingId))
