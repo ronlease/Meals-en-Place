@@ -1474,8 +1474,16 @@ Feature: Bulk Recipe Ingest from Kaggle 2M Dataset with UOM Alias Table
 
 ## [MEP-027] Mark Meal as Eaten with Optional Inventory Auto-Deplete
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
+
+### Implementation Notes
+Shipped alongside MEP-031 on branch `feature/mep-027-mep-031-meal-consumption-with-auto-deplete`. Scope covered:
+
+- Schema: `MealPlanSlot` gained nullable `ConsumedAt` and `ConsumedWithAutoDeplete`; `UserPreferences` gained `AutoDepleteOnConsume` (default false). New `ConsumeAuditEntry` table with one row per `InventoryItem` decrement captures the restore trail (`OriginalInventoryItemId`, `DeductedQuantity`, `OriginalLocation`, `OriginalExpiryDate`). Migration `20260419235648_AddMealConsumptionAndAutoDepleteAudit` smoke-tested Up + Down + Up with no data loss.
+- `MealConsumptionService` owns the consume pipeline: marks the slot, captures the current preference, and (when auto-deplete is on) deducts each recipe ingredient from inventory oldest-expiry-first (null expiry last). Cross-type rows (Volume vs Weight) are skipped rather than guessed. Short ingredients clamp inventory to 0 and surface via `ShortIngredient` entries; the consume still succeeds.
+- Endpoints: `POST /api/v1/meal-plan-slots/{id}/consume` returns `ConsumeMealResponse { consumedAt, autoDepleteApplied, shortIngredients[] }`. `UserPreferencesController` PUT accepts an optional `autoDepleteOnConsume` (omitted = leave alone).
+- Angular: meal plan board slot cards gained a "Mark eaten" / "Unmark" action, a green checkmark + muted styling on consumed slots, and a snackbar that lists any short ingredients. Settings page Inventory Behavior section now hosts the `AutoDepleteOnConsume` toggle wired through `PreferencesService`.
 
 ### Business Problem
 When a planned meal is cooked, the ingredients it used are no longer in inventory but the system still thinks they are. Manually opening each ingredient and subtracting the amount consumed is friction I would rather not accept. I want to mark a `MealPlanSlot` as "eaten" from the meal plan board, and -- if I opt in -- have the system automatically deduct the recipe's ingredient quantities from current inventory in the background. The opt-in toggle matters because some users (or some weeks) want a review-before-commit experience, while others want friction-free auto-deplete. The default is off so inventory is never silently modified without explicit consent.
@@ -1680,9 +1688,16 @@ Feature: Reorder Meal Plan to Prioritize Expiring Ingredients
 
 ## [MEP-031] Auto-Restore Inventory When a Consumed Meal is Unmarked
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-027
+
+### Implementation Notes
+Shipped alongside MEP-027 (same PR / branch) because MEP-031 consumes the `ConsumeAuditEntry` audit trail MEP-027 creates.
+
+- `DELETE /api/v1/meal-plan-slots/{id}/consume` reverses the consume. When the slot was consumed with auto-deplete true, `MealConsumptionService.UnconsumeAsync` replays each audited decrement: if `OriginalInventoryItemId` still points at an existing row, the deducted quantity is added back to that exact row so expiry tracking is preserved; if the row has been deleted, a fresh `InventoryItem` is created using the audited `OriginalLocation` and `OriginalExpiryDate`. Audit rows are deleted after restoration.
+- State-only reversal when `ConsumedWithAutoDeplete == false`: clears `ConsumedAt` + `ConsumedWithAutoDeplete`, inventory untouched.
+- Angular "Unmark" button on consumed slots calls the DELETE endpoint and updates the card in place.
 
 ### Business Problem
 Paired with MEP-027. If `AutoDepleteOnConsume` is on and the user accidentally marks a meal as eaten -- or the household plan changes and a meal actually did not happen -- the inventory depletion must be symmetrically reversible. Without this, a single mis-click permanently subtracts ingredients and the user has to re-add them by hand. Unmarking a slot should restore the same ingredient quantities that were originally deducted, to the same `CanonicalIngredient` rows where possible, preserving expiry tracking.

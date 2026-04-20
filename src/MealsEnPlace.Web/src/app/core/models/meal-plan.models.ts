@@ -19,6 +19,7 @@ export interface MealPlanResponse {
 }
 
 export interface MealPlanSlotResponse {
+  consumedAt: string | null;
   cuisineType: string;
   dayOfWeek: string;
   id: string;
@@ -29,4 +30,16 @@ export interface MealPlanSlotResponse {
 
 export interface SwapSlotRequest {
   recipeId: string;
+}
+
+export interface ConsumeMealResponse {
+  autoDepleteApplied: boolean;
+  consumedAt: string;
+  shortIngredients: ShortIngredientResponse[];
+}
+
+export interface ShortIngredientResponse {
+  ingredientName: string;
+  shortBy: number;
+  unitOfMeasureAbbreviation: string;
 }

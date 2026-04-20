@@ -207,8 +207,16 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
           <mat-card-title>Inventory Behavior</mat-card-title>
         </mat-card-header>
         <mat-card-content>
-          <p class="stub-note">
-            Auto-deplete on consume and related toggles will land here with MEP-027.
+          <mat-slide-toggle
+            [checked]="preferencesService.autoDepleteOnConsume()"
+            (change)="preferencesService.setAutoDepleteOnConsume($event.checked)"
+          >
+            Auto-deplete inventory when a meal is marked eaten
+          </mat-slide-toggle>
+          <p class="stub-note" style="margin-top: 8px;">
+            When on, marking a meal plan slot as eaten deducts the recipe's
+            ingredients from the oldest-expiry inventory rows first. Unmarking
+            the slot restores those quantities.
           </p>
         </mat-card-content>
       </mat-card>

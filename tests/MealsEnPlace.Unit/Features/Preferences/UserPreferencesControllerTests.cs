@@ -202,6 +202,71 @@ public class UserPreferencesControllerTests : IDisposable
         count.Should().Be(1);
     }
 
+    // ── MEP-027: AutoDepleteOnConsume ─────────────────────────────────────────
+    //
+    // Scenario: Get preferences defaults AutoDepleteOnConsume to false when no row exists
+    // Scenario: Update with AutoDepleteOnConsume=true persists the toggle
+    // Scenario: Update with AutoDepleteOnConsume omitted leaves the existing value alone
+
+    [Fact]
+    public async Task Get_NoRow_AutoDepleteOnConsumeDefaultsToFalse()
+    {
+        var result = await _sut.Get(CancellationToken.None);
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<UserPreferencesResponse>().Subject;
+        response.AutoDepleteOnConsume.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task Update_SetsAutoDepleteOnConsumeTrue_PersistsValue()
+    {
+        // Arrange
+        var request = new UpdateUserPreferencesRequest
+        {
+            AutoDepleteOnConsume = true,
+            DisplaySystem = "Imperial"
+        };
+
+        // Act
+        var result = await _sut.Update(request, CancellationToken.None);
+
+        // Assert
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<UserPreferencesResponse>().Subject;
+        response.AutoDepleteOnConsume.Should().BeTrue();
+
+        var row = await _dbContext.UserPreferences.FirstOrDefaultAsync();
+        row!.AutoDepleteOnConsume.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Update_AutoDepleteOmitted_LeavesExistingValueUnchanged()
+    {
+        // Arrange — row with AutoDeplete=true already persisted
+        _dbContext.UserPreferences.Add(new UserPreferences
+        {
+            AutoDepleteOnConsume = true,
+            DisplaySystem = DisplaySystem.Imperial,
+            Id = new Guid("d1000000-0000-0000-0000-000000000001")
+        });
+        await _dbContext.SaveChangesAsync();
+
+        var request = new UpdateUserPreferencesRequest
+        {
+            AutoDepleteOnConsume = null,
+            DisplaySystem = "Metric"
+        };
+
+        // Act
+        var result = await _sut.Update(request, CancellationToken.None);
+
+        // Assert — DisplaySystem updated, AutoDeplete unchanged
+        var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
+        var response = ok.Value.Should().BeOfType<UserPreferencesResponse>().Subject;
+        response.DisplaySystem.Should().Be("Metric");
+        response.AutoDepleteOnConsume.Should().BeTrue();
+    }
+
     // ── Seed helpers ──────────────────────────────────────────────────────────
 
     private async Task SeedPreferencesAsync(DisplaySystem displaySystem)

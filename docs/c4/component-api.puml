@@ -1,4 +1,4 @@
-@startuml
+@startuml component-api
 !include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
 
 LAYOUT_WITH_LEGEND()
@@ -18,7 +18,7 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
     Component(recipeImport, "Recipe Import Component", "RecipeImportController, RecipeImportService", "Search TheMealDB, import recipes, create manual recipes, normalize ingredients")
     Component(recipeMatching, "Recipe Matching Component", "RecipeMatchingController, RecipeMatchingService", "Scores recipes against inventory. Classifies Full, Near, and Partial matches")
     Component(containerResolution, "Container Resolution Component", "ContainerResolutionController, ContainerResolutionService", "Resolve container references (can, jar, box) to declared weights and volumes")
-    Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanService", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality")
+    Component(mealPlan, "Meal Plan Component", "MealPlanController, MealPlanSlotsController, MealPlanService, MealConsumptionService", "Generate weekly meal plans, swap slots, score by waste reduction and seasonality, mark slots as eaten with optional inventory auto-deplete and audit-based restore")
     Component(shoppingList, "Shopping List Component", "ShoppingListController, StandaloneShoppingListController, ShoppingListService", "Derive shopping lists from meal plan gaps or standalone recipe additions")
     Component(wasteReduction, "Waste Reduction Component", "WasteAlertController, WasteAlertService", "Scan for expiring items, match against recipes, create alerts")
     Component(seasonalProduce, "Seasonal Produce Component", "SeasonalProduceController, SeasonalProduceService", "Query seasonality windows for current month (USDA Zone 7a)")
@@ -68,6 +68,7 @@ Rel(containerResolution, dataAccess, "Reads/Writes resolved references", "EF Cor
 Rel(mealPlan, unitOfMeasureServices, "Converts quantities for scoring")
 Rel(mealPlan, claudeClient, "Optimizes meal plan for variety and waste reduction (when key configured)")
 Rel(mealPlan, settings, "Gates Claude calls on IClaudeAvailability")
+Rel(mealPlan, dataAccess, "Deducts inventory + writes audit rows on consume; restores on unconsume", "EF Core")
 Rel(unitOfMeasureServices, settings, "Gates Claude fallback on IClaudeAvailability")
 Rel(settings, anthropicTestClient, "Tests user-supplied key")
 Rel(shoppingList, unitOfMeasureServices, "Converts and formats display quantities")

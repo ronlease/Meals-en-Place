@@ -25,18 +25,17 @@ public class UserPreferencesController(MealsEnPlaceDbContext dbContext) : Contro
         var prefs = await dbContext.UserPreferences
             .FirstOrDefaultAsync(cancellationToken);
 
-        var displaySystem = prefs?.DisplaySystem ?? DisplaySystem.Imperial;
-
         return Ok(new UserPreferencesResponse
         {
-            DisplaySystem = displaySystem.ToString()
+            AutoDepleteOnConsume = prefs?.AutoDepleteOnConsume ?? false,
+            DisplaySystem = (prefs?.DisplaySystem ?? DisplaySystem.Imperial).ToString()
         });
     }
 
-    /// <summary>Updates the user's display unit system preference.</summary>
-    /// <param name="request">The desired display system value: "Imperial" or "Metric".</param>
+    /// <summary>Updates the user's preferences.</summary>
+    /// <param name="request">DisplaySystem is required; AutoDepleteOnConsume is optional.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>200 with the updated preferences; 400 if the value is not a valid DisplaySystem.</returns>
+    /// <returns>200 with the updated preferences; 400 if the DisplaySystem value is invalid.</returns>
     [HttpPut]
     [ProducesResponseType(typeof(UserPreferencesResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
@@ -59,6 +58,7 @@ public class UserPreferencesController(MealsEnPlaceDbContext dbContext) : Contro
         {
             prefs = new UserPreferences
             {
+                AutoDepleteOnConsume = request.AutoDepleteOnConsume ?? false,
                 DisplaySystem = displaySystem,
                 Id = FixedRowId
             };
@@ -67,12 +67,17 @@ public class UserPreferencesController(MealsEnPlaceDbContext dbContext) : Contro
         else
         {
             prefs.DisplaySystem = displaySystem;
+            if (request.AutoDepleteOnConsume.HasValue)
+            {
+                prefs.AutoDepleteOnConsume = request.AutoDepleteOnConsume.Value;
+            }
         }
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
         return Ok(new UserPreferencesResponse
         {
+            AutoDepleteOnConsume = prefs.AutoDepleteOnConsume,
             DisplaySystem = prefs.DisplaySystem.ToString()
         });
     }
