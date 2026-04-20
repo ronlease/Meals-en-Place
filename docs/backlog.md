@@ -2144,4 +2144,45 @@ Feature: Associated Todoist Project Quick-Pick
     And the UI clearly distinguishes "projects you've used from this app" from "all your Todoist projects"
 ```
 
+## [MEP-037] Strip Ad / Tracking URLs on Recipe Ingest
 
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** MEP-026 (ingest pipeline)
+
+### Business Problem
+A subset of Kaggle recipe rows carry `link` values that are ad-tracking redirect chains (e.g., `googleads.g.doubleclick.net/pcs/click?...&adurl=...`) or affiliate-wrapper URLs rather than the canonical recipe page. Today the ingest stores the raw link (or drops it when it exceeds the 2000-char column cap — MEP-026 hotfix). Both outcomes are wrong for the user: an ad-tracking URL either clicks through to a tracker before redirecting, or is a broken promise in the UI.
+
+The ingest should detect the well-known tracker/ad host patterns, attempt to extract the nested real URL from the query string when available (e.g., the `adurl` / `url` / `q` / `destination` parameters), and fall back to null when no canonical URL can be recovered. The `IngestSummary` should report how many links were rewritten and how many were dropped as tracker-only, so the user can gauge dataset quality over time.
+
+Out of scope: fetching the URL to confirm it resolves, or unwrapping user-facing short links (bit.ly, t.co) that require a network round-trip. Those belong in a separate "link health pass" story if ever justified.
+
+### Acceptance Criteria
+```gherkin
+Feature: Strip Ad / Tracking URLs on Recipe Ingest
+
+  Scenario: Known tracker host with a nested real URL is unwrapped
+    Given a Kaggle row whose link is "https://googleads.g.doubleclick.net/pcs/click?xai=...&adurl=https%3A%2F%2Fwww.foodnetwork.com%2Frecipes%2Fchicken-pot-pie"
+    When the ingest processes the row
+    Then Recipe.SourceUrl stores the unwrapped "https://www.foodnetwork.com/recipes/chicken-pot-pie"
+    And IngestSummary.TrackingLinksUnwrapped is incremented
+
+  Scenario: Tracker URL with no recoverable destination is dropped
+    Given a Kaggle row whose link is a tracker URL with no nested destination parameter
+    When the ingest processes the row
+    Then Recipe.SourceUrl is null
+    And IngestSummary.TrackingLinksDropped is incremented
+    And the recipe itself still imports (the link is optional)
+
+  Scenario: Clean recipe URL passes through untouched
+    Given a Kaggle row whose link is a direct recipe URL on a known recipe host
+    When the ingest processes the row
+    Then Recipe.SourceUrl matches the original link byte-for-byte
+    And neither tracker counter is incremented
+
+  Scenario: Backfill pass updates previously-ingested rows
+    Given a Kaggle ingest completed before this story shipped
+    When the user runs the ingest tool with a `--rewrite-tracking-links` flag
+    Then existing Recipe rows whose SourceUrl matches a tracker pattern are rewritten in place (or nulled)
+    And a summary reports how many rows were changed
+```
