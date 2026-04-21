@@ -20,6 +20,9 @@ public class CanonicalIngredient
 
     // Navigation properties
 
+    /// <summary>Historical names folded into this survivor by a MEP-038 dedup pass.</summary>
+    public ICollection<CanonicalIngredientAlias> Aliases { get; set; } = new List<CanonicalIngredientAlias>();
+
     /// <summary>The default unit of measure for this ingredient.</summary>
     public UnitOfMeasure DefaultUnitOfMeasure { get; set; } = null!;
 

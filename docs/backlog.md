@@ -2189,9 +2189,22 @@ Feature: Strip Ad / Tracking URLs on Recipe Ingest
 
 ## [MEP-038] Canonical Ingredient Deduplication Pass
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-026 (ingest creates the CanonicalIngredient rows this story folds)
+
+### Implementation Notes
+Shipped as a new offline CLI tool `MealsEnPlace.Tools.Dedup` mirroring the `Ingest` tool's shape. Scope covered:
+
+- `CanonicalNameNormalizer` — pure string normalizer. Lowercases, strips a narrow stopword list (cosmetic prep / state modifiers like `chopped`, `diced`, `fresh`), conservatively singularizes English plurals (`-s` / `-es` / `-oes` / `-ies` / `-ches` / `-shes` / `-sses` / `-xes`), and sorts remaining tokens. Size-significant modifiers (`baby`, `mini`, `jumbo`, `smoked`, `pickled`) are intentionally NOT stopwords so "baby carrot" stays distinct from "carrot".
+- `FoldGroupResolver` — pure function over `CanonicalIngredientFoldCandidate`s. Groups by normalized key. Survivor per group: shortest name → highest `ReferenceCount` → alphabetical. Single-member groups and empty-key candidates are skipped.
+- `CanonicalIngredientDedupRunner` — orchestrates. Loads every `CanonicalIngredient` with per-table FK counts (RecipeIngredient / InventoryItem / ShoppingListItem / SeasonalityWindow / ConsumeAuditEntry). Applies in batches of `DedupConstants.FoldGroupBatchSize` inside explicit transactions, using `ExecuteUpdateAsync` for bulk FK reassignment and `ExecuteDeleteAsync` for loser cleanup.
+- New `CanonicalIngredientAliases` table captures folded-away names (schema mirrors `UnitOfMeasureAlias`; 200-char `Alias`, FK to survivor, non-unique index on `Alias`). Migration `20260421105129_AddCanonicalIngredientAlias` is Up/Down tested.
+- `--dry-run` mode populates the full summary (fold count, alias inserts, per-table FK reassignment projection) without writing.
+- Tests: 35 total across unit tests for the normalizer and resolver plus three SQLite-backed integration-style tests for the runner (no-op, dry-run, live fold). SQLite in-memory is used because the EF InMemory provider supports neither `ExecuteUpdate` nor explicit transactions.
+
+### Deferred (scope decisions)
+- Claude-assisted merge for the long tail (ambiguous merges, size-dependent distinctions like "grape tomato" vs "tomato") — explicitly out of scope per the story text; can file as a follow-on if the heuristic pass leaves meaningful residue.
 
 ### Business Problem
 The MEP-026 ingest creates one `CanonicalIngredient` per unique NER token. A 1.64M-recipe live run produced **146,584** canonical rows — roughly 10× the MEP-025 projection of 5k-15k. The variance is morphological noise in the Kaggle NER column: "onion", "chopped onion", "diced onion", "red onion", "onions" all become distinct canonicals. That breaks recipe matching in a user-visible way: an inventory entry for "1 onion" won't match a recipe calling for "2 cups chopped onion" even though the user clearly has the ingredient.
