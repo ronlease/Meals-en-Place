@@ -17,15 +17,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj') }}
@@ -90,15 +90,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj') }}
@@ -117,15 +117,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup .NET 10
-        uses: actions/setup-dotnet@v5
+        uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
 
       - name: Cache NuGet packages
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: ~/.nuget/packages
           key: nuget-${{ hashFiles('**/*.csproj') }}
@@ -154,10 +154,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node 22
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -181,7 +181,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Scan for XSS sinks
         run: |
@@ -216,10 +216,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node 22
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -242,10 +242,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Node 22
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: "npm"
@@ -264,11 +264,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Scan for secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
