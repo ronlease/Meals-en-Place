@@ -21,7 +21,7 @@ Weekly meal plan board with generation, recipe swap, consume / unconsume (MEP-02
   - Each card has a "Mark eaten" / "Unmark" action button. Consumed slots render with a green check and muted / strikethrough styling.
   - After consume, a snackbar reports any short ingredients surfaced by the backend (`ShortIngredientResponse[]`).
   - A "Reorder by expiry" action in the page header opens the reorder preview dialog.
-  - A "Push to Todoist" action in the page header is disabled until Todoist is configured (`Todoist:Token` user secret today; MEP-035 later). On push, a snackbar reports counts of created / updated / closed / unchanged tasks.
+  - A "Push to Todoist" action in the page header is disabled until Todoist is configured — save a token on the Settings page (MEP-035); the legacy `Todoist:Token` user secret still works as a fallback. On push, a snackbar reports counts of created / updated / closed / unchanged tasks.
 - **MealPlanGenerateDialogComponent** — Form with plan name, seasonal preference checkbox.
 - **MealPlanReorderDialogComponent** — Side-by-side before/after day assignments with Confirm / Cancel. Shows the urgency score per changed slot and the urgency window used.
 - **MealPlanSwapDialogComponent** — Recipe selection list filtered to exclude current and unresolved recipes.
