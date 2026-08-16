@@ -23,4 +23,8 @@ export class TodoistAvailabilityService {
       next: (status) => this._configured.set(status.configured),
     });
   }
+
+  setConfigured(configured: boolean): void {
+    this._configured.set(configured);
+  }
 }

@@ -20,7 +20,8 @@ namespace MealsEnPlace.Api.Features.MealPlan;
 public sealed class TodoistMealPlanPushTarget(
     MealsEnPlaceDbContext dbContext,
     IOptions<TodoistOptions> options,
-    ITodoistClient todoistClient) : IMealPlanPushTarget
+    ITodoistClient todoistClient,
+    ITodoistTokenResolver tokenResolver) : IMealPlanPushTarget
 {
     public const string TodoistProviderName = "Todoist";
 
@@ -29,9 +30,9 @@ public sealed class TodoistMealPlanPushTarget(
     public async Task<MealPlanPushResult> PushAsync(
         Guid mealPlanId, CancellationToken cancellationToken = default)
     {
-        if (!options.Value.IsConfigured)
+        if (!await tokenResolver.HasTokenAsync(cancellationToken))
         {
-            throw new InvalidOperationException("Todoist integration is not configured. Set the Todoist:Token user secret.");
+            throw new InvalidOperationException("Todoist integration is not configured. Save a Todoist API token from the Settings page.");
         }
 
         var plan = await dbContext.MealPlans

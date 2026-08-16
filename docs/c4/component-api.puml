@@ -23,13 +23,14 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
     Component(wasteReduction, "Waste Reduction Component", "WasteAlertController, WasteAlertService", "Scan for expiring items, match against recipes, create alerts")
     Component(seasonalProduce, "Seasonal Produce Component", "SeasonalProduceController, SeasonalProduceService", "Query seasonality windows for current month (USDA Zone 7a)")
     Component(userPreferences, "User Preferences Component", "UserPreferencesController", "Get and update display system preference (Imperial or Metric)")
-    Component(settings, "Settings Component", "SettingsController, ClaudeTokenStore, ClaudeAvailability", "BYO Anthropic API key save/test/clear, encrypted at rest. Exposes IClaudeAvailability so Claude-backed services gate on a configured key")
+    Component(settings, "Settings Component", "SettingsController, ClaudeTokenStore, ClaudeAvailability, TodoistTokenStore", "BYO Anthropic API key and Todoist API token save/test/clear, each encrypted at rest with distinct DataProtection purposes. Exposes IClaudeAvailability and ITodoistTokenResolver so provider-backed services gate on a configured token")
 
     ' === Infrastructure Components ===
 
     Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, unit of measure resolution, meal plan optimization, substitution suggestions (currently stub)")
     Component(anthropicTestClient, "Anthropic Test Client", "AnthropicTestClient", "Minimal HTTP client that issues a one-token Messages API call to verify user-supplied keys from the Settings page")
-    Component(todoistClient, "Todoist Client", "TodoistClient", "REST v2 HTTP client used by both push targets: create / update / close tasks")
+    Component(todoistClient, "Todoist Client", "TodoistClient, TodoistTokenResolver", "REST v2 HTTP client used by both push targets: create / update / close tasks. Resolves the current token via encrypted store first, then user-secret fallback")
+    Component(todoistTestClient, "Todoist Test Client", "TodoistTestClient", "Minimal HTTP client that issues GET /rest/v2/projects to verify user-supplied Todoist tokens from the Settings page")
     Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 14 entity configurations (includes ExternalTaskLink)")
 
     ' === Common / Shared Components ===
@@ -50,7 +51,7 @@ Rel(web, shoppingList, "Derives shopping lists", "HTTP/JSON")
 Rel(web, wasteReduction, "Views waste alerts", "HTTP/JSON")
 Rel(web, seasonalProduce, "Queries seasonal produce", "HTTP/JSON")
 Rel(web, userPreferences, "Gets and updates preferences", "HTTP/JSON")
-Rel(web, settings, "Saves / tests / removes the Claude API key; reads Todoist configured status", "HTTP/JSON")
+Rel(web, settings, "Saves / tests / removes the Claude API key and Todoist API token", "HTTP/JSON")
 
 ' === Feature → Infrastructure relationships ===
 
@@ -69,7 +70,11 @@ Rel(mealPlan, claudeClient, "Optimizes meal plan for variety and waste reduction
 Rel(mealPlan, settings, "Gates Claude calls on IClaudeAvailability")
 Rel(mealPlan, dataAccess, "Deducts inventory + writes audit rows on consume; restores on unconsume", "EF Core")
 Rel(unitOfMeasureServices, settings, "Gates Claude fallback on IClaudeAvailability")
-Rel(settings, anthropicTestClient, "Tests user-supplied key")
+Rel(settings, anthropicTestClient, "Tests user-supplied Claude key")
+Rel(settings, todoistTestClient, "Tests user-supplied Todoist token")
+Rel(shoppingList, settings, "Gates Todoist push on ITodoistTokenResolver")
+Rel(mealPlan, settings, "Gates Todoist push on ITodoistTokenResolver")
+Rel(todoistClient, settings, "Resolves the current Todoist token per call")
 Rel(shoppingList, unitOfMeasureServices, "Converts and formats display quantities")
 Rel(wasteReduction, dataAccess, "Reads expiry data and recipes", "EF Core")
 Rel(seasonalProduce, dataAccess, "Reads seasonality windows", "EF Core")
@@ -82,6 +87,7 @@ Rel(anthropicTestClient, claude, "One-token Messages ping for Test Connection", 
 Rel(shoppingList, todoistClient, "Pushes shopping list items as tasks (MEP-028)")
 Rel(mealPlan, todoistClient, "Pushes meal plan slots as scheduled tasks (MEP-029)")
 Rel(todoistClient, todoist, "Creates, updates, closes tasks", "HTTPS/JSON")
+Rel(todoistTestClient, todoist, "GET /projects for Test Connection", "HTTPS/JSON")
 Rel(dataAccess, db, "Reads/Writes", "EF Core / Npgsql")
 
 @enduml

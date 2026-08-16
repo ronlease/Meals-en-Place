@@ -10,7 +10,6 @@ using System.Net;
 using System.Net.Http.Json;
 using FluentAssertions;
 using MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
-using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 
@@ -140,8 +139,7 @@ public sealed class TodoistClientTests
                 BaseAddress = new Uri("https://api.todoist.com")
             });
 
-        var options = Options.Create(new TodoistOptions { Token = token });
-        return new TodoistClient(factoryMock.Object, options);
+        return new TodoistClient(factoryMock.Object, new StaticTodoistTokenResolver(token));
     }
 
     private static HttpMessageHandler BuildHandler(
@@ -155,5 +153,14 @@ public sealed class TodoistClientTests
                 ItExpr.IsAny<CancellationToken>())
             .Returns<HttpRequestMessage, CancellationToken>((req, ct) => respond(req, ct));
         return mock.Object;
+    }
+
+    private sealed class StaticTodoistTokenResolver(string? token) : ITodoistTokenResolver
+    {
+        public Task<bool> HasTokenAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(!string.IsNullOrWhiteSpace(token));
+
+        public Task<string?> ResolveAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(token);
     }
 }

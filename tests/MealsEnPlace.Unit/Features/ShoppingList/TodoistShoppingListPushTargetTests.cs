@@ -193,7 +193,17 @@ public sealed class TodoistShoppingListPushTargetTests : IDisposable
     private TodoistShoppingListPushTarget BuildSut(string? token)
     {
         var options = Options.Create(new TodoistOptions { Token = token });
-        return new TodoistShoppingListPushTarget(_dbContext, options, _todoistMock.Object);
+        var resolver = new StaticTodoistTokenResolver(token);
+        return new TodoistShoppingListPushTarget(_dbContext, options, _todoistMock.Object, resolver);
+    }
+
+    private sealed class StaticTodoistTokenResolver(string? token) : ITodoistTokenResolver
+    {
+        public Task<bool> HasTokenAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(!string.IsNullOrWhiteSpace(token));
+
+        public Task<string?> ResolveAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(token);
     }
 
     private void SeedGramUnit()

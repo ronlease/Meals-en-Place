@@ -11,6 +11,19 @@ export interface SaveClaudeTokenRequest {
   token: string;
 }
 
+export interface SaveTodoistTokenRequest {
+  token: string;
+}
+
 export interface TestClaudeTokenRequest {
   token?: string | null;
+}
+
+export interface TestTodoistTokenRequest {
+  token?: string | null;
+}
+
+export interface TodoistTokenTestResponse {
+  errorMessage?: string | null;
+  success: boolean;
 }
