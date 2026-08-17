@@ -981,6 +981,24 @@ Feature: Codebase Over-Complication Audit
 **Status:** Done
 **Priority:** Medium
 
+### Follow-up correction
+Two acceptance criteria were not actually satisfied when this was first marked
+Done. Both were closed out later, after the gaps caused incidents on `main`:
+
+- **"The directory paths in the Dependabot config match the actual project
+  structure"** — the nuget entry watched `/src/MealsEnPlace.Api` only, leaving
+  both tools projects and both test projects unwatched. GHSA-2m69-gcr7-jv3q
+  (SQLitePCLRaw 2.1.11) therefore sat undetected in `tests/MealsEnPlace.Unit`
+  until it failed the .NET Dependency Scan and was pinned by hand in #125. The
+  config now watches all five project directories.
+- **"All workflow jobs pass on a clean checkout"** — the auto-merge workflow
+  gated on `fetch-metadata`'s `update-type`, which is inaccurate for grouped
+  PRs. It reported `semver-patch` for the `@angular/material` + `@angular/cdk`
+  21 -> 22 major in #75, which auto-merged into a repo whose `@angular/core`
+  was still on 21 and broke `npm ci` on `main` for every branch until #124.
+  Grouped PRs are no longer auto-merged, and the Angular release train is now
+  a single Dependabot group.
+
 ### Business Problem
 The project uses GitHub Actions for CI, CodeQL analysis, Dependabot, and auto-merge. As the project structure evolves -- new projects, changed dependencies, updated frameworks -- the workflow configurations can fall out of alignment with the actual codebase. Misconfigured triggers, stale cache keys, missing steps, redundant jobs, or incomplete Dependabot coverage lead to wasted CI minutes, false confidence in passing builds, or missed vulnerability scans. I need a thorough audit of all GitHub Actions workflows to ensure they are correct, efficient, and aligned with the current project structure.
 

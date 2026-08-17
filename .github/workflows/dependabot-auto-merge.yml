@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   auto-merge:
-    name: Auto-merge minor and patch updates
+    name: Auto-merge single-dependency minor and patch updates
     runs-on: ubuntu-latest
     if: github.actor == 'dependabot[bot]'
 
@@ -23,11 +23,48 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Enable auto-merge for minor and patch updates
+      # fetch-metadata collapses a grouped PR into one summary, and that
+      # summary is not reliable. On #75 it reported
+      #
+      #   update-type:      version-update:semver-patch
+      #   previous-version: 21.2.12
+      #   new-version:      21.2.13
+      #
+      # for a PR that actually took @angular/material and @angular/cdk from
+      # 21.2.12 to 22.0.0. The major passed the minor/patch gate below,
+      # auto-merged, and left `npm ci` broken on main until #124.
+      #
+      # update-type, previous-version and new-version are only trustworthy on
+      # single-dependency PRs, so grouped PRs are never auto-merged. A grouped
+      # bump is precisely where cross-package coupling hides, which makes it
+      # the case that most deserves a human read.
+      - name: Enable auto-merge
         if: |
-          steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
-          steps.metadata.outputs.update-type == 'version-update:semver-patch'
+          steps.metadata.outputs.dependency-group == '' &&
+          (steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
+           steps.metadata.outputs.update-type == 'version-update:semver-patch')
         run: gh pr merge --auto --squash "$PR_URL"
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Explain why auto-merge was skipped
+        if: |
+          steps.metadata.outputs.dependency-group != '' ||
+          (steps.metadata.outputs.update-type != 'version-update:semver-minor' &&
+           steps.metadata.outputs.update-type != 'version-update:semver-patch')
+        env:
+          DEPENDENCY_GROUP: ${{ steps.metadata.outputs.dependency-group }}
+          DEPENDENCY_NAMES: ${{ steps.metadata.outputs.dependency-names }}
+          UPDATE_TYPE: ${{ steps.metadata.outputs.update-type }}
+        run: |
+          echo "Auto-merge skipped; this PR needs a human review."
+          echo "  dependency-group: '${DEPENDENCY_GROUP}'"
+          echo "  update-type:      '${UPDATE_TYPE}'"
+          echo "  dependencies:     ${DEPENDENCY_NAMES}"
+          if [ -n "${DEPENDENCY_GROUP}" ]; then
+            echo
+            echo "Grouped PRs are always reviewed by hand: Dependabot's summary"
+            echo "metadata does not describe them accurately. Check the diff for"
+            echo "a major bump before merging."
+          fi
