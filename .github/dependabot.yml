@@ -75,6 +75,12 @@ updates:
           - "eslint"
           - "prettier"
           - "typescript-eslint"
+    ignore:
+      # @angular/compiler-cli@22 peers typescript ">=6.0 <6.1", so TypeScript 7
+      # cannot resolve here at all. It was proposed and closed twice already
+      # (#100, #128). Lift this the moment an Angular release widens the range.
+      - dependency-name: "typescript"
+        versions: [">=7"]
 
   # GitHub Actions
   - package-ecosystem: github-actions

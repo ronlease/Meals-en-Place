@@ -2321,3 +2321,60 @@ Feature: Harden DataProtection Key Ring on macOS and Linux
     Then the startup log emits a warning naming the key-ring directory and the permission bits
     And the README security note is linked in the warning message
 ```
+
+---
+
+## [MEP-040] Raise Test Coverage on the Offline Tools Projects
+
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** none
+
+### Business Problem
+The CI coverage gate is scoped to `MealsEnPlace.Api` (93.9%). The two offline
+console utilities are outside that gate and are materially less covered:
+
+| Project | Line coverage |
+|---|---|
+| `MealsEnPlace.Tools.Dedup` | 85.1% |
+| `MealsEnPlace.Tools.Ingest` | 54.0% |
+
+The scoping decision was deliberate — these tools are never deployed, and
+holding them to the API's bar would either weaken that bar or block unrelated
+dependency work on test debt. It is not an argument that the gap is fine. The
+ingest tool writes directly to the recipe database and is the entry point for
+the bulk Kaggle catalog, so a defect there corrupts the data every other
+feature reads. That is the least pleasant place in the codebase to have half
+the lines untested.
+
+The number surfaced when `coverlet.collector` went 6.0.4 -> 10.0.1: the same
+code measured 4518 coverable lines against 1900 before. The earlier figure was
+not isolated, so treat the current measurement as the first trustworthy one
+rather than as a regression.
+
+### Acceptance Criteria
+```gherkin
+Feature: Offline Tools Test Coverage
+
+  Scenario: Ingest tool reaches the API's coverage bar
+    Given the MealsEnPlace.Tools.Ingest project
+    When the test suite runs with coverage collection
+    Then line coverage for that assembly is at least 90%
+
+  Scenario: Dedup tool reaches the API's coverage bar
+    Given the MealsEnPlace.Tools.Dedup project
+    When the test suite runs with coverage collection
+    Then line coverage for that assembly is at least 90%
+
+  Scenario: The write path is covered against malformed input
+    Given a Kaggle row with over-length strings, embedded NULs, or missing measures
+    When the ingest write path processes it
+    Then the row is truncated or rejected per the MEP-026 rules
+    And no malformed value reaches the database
+
+  Scenario: Both tools rejoin the gate once they clear the bar
+    Given both tool assemblies are at or above 90%
+    When coverlet.runsettings is reviewed
+    Then the Include filter is widened to cover them
+    And the CI gate enforces 90% across all three assemblies
+```
