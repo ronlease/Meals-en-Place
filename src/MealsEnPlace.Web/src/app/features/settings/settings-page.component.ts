@@ -13,6 +13,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { AiAvailabilityService } from '../../core/services/ai-availability.service';
 import { PreferencesService } from '../../core/services/preferences.service';
 import { SettingsService } from '../../core/services/settings.service';
+import { TodoistAvailabilityService } from '../../core/services/todoist-availability.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.component';
 
 @Component({
@@ -96,6 +97,25 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
 
       .test-result.failure {
         color: #c54;
+      }
+
+      .integration-subsection {
+        margin-top: 8px;
+      }
+
+      .integration-subsection + .integration-subsection {
+        border-top: 1px solid var(--mat-sys-outline-variant, #e0e0e0);
+        margin-top: 24px;
+        padding-top: 24px;
+      }
+
+      .integration-subsection h3 {
+        margin: 0 0 4px 0;
+      }
+
+      .integration-subsection p.subsection-description {
+        color: var(--mat-sys-on-surface-variant, #666);
+        margin: 0 0 12px 0;
       }
     `,
   ],
@@ -193,12 +213,82 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
       <mat-card class="section-card">
         <mat-card-header>
           <mat-card-title>External Integrations</mat-card-title>
+          <mat-card-subtitle>
+            Third-party providers the app can push to. Each token is encrypted at
+            rest and never returned by any endpoint.
+          </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
-          <p class="stub-note">
-            Todoist and other third-party providers will configure here when their
-            stories ship (MEP-028, MEP-029).
-          </p>
+          <section class="integration-subsection">
+            <h3>Todoist</h3>
+            <p class="subsection-description">
+              Paste your Todoist personal API token to enable shopping-list and
+              meal-plan pushes. Tokens can be generated from Todoist Settings →
+              Integrations → Developer.
+            </p>
+
+            <div class="ai-row">
+              @if (todoistAvailability.configured()) {
+                <span class="status-pill configured">
+                  <mat-icon fontIcon="check_circle" inline></mat-icon>
+                  Todoist token configured
+                </span>
+              } @else {
+                <span class="status-pill not-configured">
+                  <mat-icon fontIcon="warning" inline></mat-icon>
+                  No Todoist token — push actions disabled
+                </span>
+              }
+            </div>
+
+            <div class="ai-row" style="margin-top: 16px;">
+              <mat-form-field appearance="outline" class="token-field">
+                <mat-label>Todoist API token</mat-label>
+                <input
+                  matInput
+                  type="password"
+                  autocomplete="off"
+                  placeholder="your-todoist-api-token"
+                  [(ngModel)]="todoistTokenInput"
+                />
+                <mat-hint>Stored encrypted; response never echoes the value back.</mat-hint>
+              </mat-form-field>
+            </div>
+
+            <div class="actions">
+              <button
+                mat-flat-button
+                color="primary"
+                [disabled]="todoistSaving() || !todoistTokenInput().trim()"
+                (click)="saveTodoist()"
+              >
+                Save
+              </button>
+              <button
+                mat-stroked-button
+                [disabled]="todoistTesting() || (!todoistTokenInput().trim() && !todoistAvailability.configured())"
+                (click)="testTodoist()"
+              >
+                Test connection
+              </button>
+              @if (todoistAvailability.configured()) {
+                <button mat-stroked-button color="warn" (click)="removeTodoist()">Remove token</button>
+              }
+              @if (todoistSaving() || todoistTesting()) {
+                <mat-progress-spinner diameter="24" mode="indeterminate" />
+              }
+            </div>
+
+            @if (todoistTestResult(); as result) {
+              <div class="test-result" [class.success]="result.success" [class.failure]="!result.success">
+                @if (result.success) {
+                  <span><mat-icon fontIcon="check" inline></mat-icon> Todoist accepted the token.</span>
+                } @else {
+                  <span><mat-icon fontIcon="error" inline></mat-icon> {{ result.message }}</span>
+                }
+              </div>
+            }
+          </section>
         </mat-card-content>
       </mat-card>
 
@@ -229,6 +319,11 @@ export class SettingsPageComponent {
   protected readonly saving = signal(false);
   protected readonly testResult = signal<{ message: string; success: boolean } | null>(null);
   protected readonly testing = signal(false);
+  protected readonly todoistAvailability = inject(TodoistAvailabilityService);
+  protected readonly todoistSaving = signal(false);
+  protected readonly todoistTestResult = signal<{ message: string; success: boolean } | null>(null);
+  protected readonly todoistTesting = signal(false);
+  protected readonly todoistTokenInput = signal('');
   protected readonly tokenInput = signal('');
 
   private readonly dialog = inject(MatDialog);
@@ -237,6 +332,7 @@ export class SettingsPageComponent {
 
   constructor() {
     this.aiAvailability.refresh();
+    this.todoistAvailability.refresh();
   }
 
   remove(): void {
@@ -263,6 +359,30 @@ export class SettingsPageComponent {
       });
   }
 
+  removeTodoist(): void {
+    const data: ConfirmDialogData = {
+      confirmLabel: 'Remove token',
+      message: 'The stored Todoist API token will be deleted. Push actions will disable until a new token is saved.',
+      title: 'Remove Todoist API token?',
+    };
+    this.dialog
+      .open(ConfirmDialogComponent, { data })
+      .afterClosed()
+      .subscribe((confirmed: boolean | undefined) => {
+        if (!confirmed) {
+          return;
+        }
+        this.settingsService.clearTodoistToken().subscribe({
+          next: (status) => {
+            this.todoistAvailability.setConfigured(status.configured);
+            this.todoistTokenInput.set('');
+            this.todoistTestResult.set(null);
+            this.snackBar.open('Todoist token removed.', 'Dismiss', { duration: 4000 });
+          },
+        });
+      });
+  }
+
   save(): void {
     const raw = this.tokenInput().trim();
     if (!raw) {
@@ -284,6 +404,27 @@ export class SettingsPageComponent {
     });
   }
 
+  saveTodoist(): void {
+    const raw = this.todoistTokenInput().trim();
+    if (!raw) {
+      return;
+    }
+    this.todoistSaving.set(true);
+    this.settingsService.saveTodoistToken(raw).subscribe({
+      complete: () => this.todoistSaving.set(false),
+      error: () => {
+        this.todoistSaving.set(false);
+        this.snackBar.open('Could not save the Todoist token. See console for details.', 'Dismiss', { duration: 5000 });
+      },
+      next: (status) => {
+        this.todoistAvailability.setConfigured(status.configured);
+        this.todoistTokenInput.set('');
+        this.todoistTestResult.set(null);
+        this.snackBar.open('Todoist token saved.', 'Dismiss', { duration: 4000 });
+      },
+    });
+  }
+
   test(): void {
     const candidate = this.tokenInput().trim();
     this.testing.set(true);
@@ -296,6 +437,24 @@ export class SettingsPageComponent {
       },
       next: (result) =>
         this.testResult.set({
+          message: result.errorMessage ?? 'Unknown error.',
+          success: result.success,
+        }),
+    });
+  }
+
+  testTodoist(): void {
+    const candidate = this.todoistTokenInput().trim();
+    this.todoistTesting.set(true);
+    this.todoistTestResult.set(null);
+    this.settingsService.testTodoistToken(candidate.length > 0 ? candidate : undefined).subscribe({
+      complete: () => this.todoistTesting.set(false),
+      error: () => {
+        this.todoistTesting.set(false);
+        this.todoistTestResult.set({ message: 'Network error contacting the server.', success: false });
+      },
+      next: (result) =>
+        this.todoistTestResult.set({
           message: result.errorMessage ?? 'Unknown error.',
           success: result.success,
         }),

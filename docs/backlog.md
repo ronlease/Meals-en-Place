@@ -2067,9 +2067,23 @@ Feature: Retroactive Rename UOM to UnitOfMeasure Across Codebase
 
 ## [MEP-035] Todoist Settings UI: Token Entry, Project Picker, Test Connection
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-028 (the push surface must exist first)
+
+### Implementation Notes
+Scope delivered:
+
+- `TodoistTokenStore` mirrors `ClaudeTokenStore`: DataProtection-encrypted file at `%LOCALAPPDATA%/MealsEnPlace/todoist-token.dat` with distinct purpose `"MealsEnPlace.TodoistToken.v1"` so ciphertexts are not interchangeable with the Claude token. The key ring at `%LOCALAPPDATA%/MealsEnPlace/keys/` is shared.
+- `ITodoistTokenResolver` — single source of truth. Encrypted store wins; `Todoist:Token` user secret is the fallback. Consumed by `TodoistClient`, both push targets, the Settings status endpoint, and the Test Connection endpoint.
+- Four new endpoints on `SettingsController`: `POST /todoist/token` (save), `POST /todoist/test` (live `GET /rest/v2/projects` via new `TodoistTestClient`), `DELETE /todoist/token`. Status endpoint now consults the resolver rather than `TodoistOptions.IsConfigured` (removed).
+- Frontend: External Integrations card stub replaced with a live Todoist subsection matching the AI (Claude) section (password input, status pill, Save / Test connection / Remove token, `ConfirmDialogComponent` before remove). `TodoistAvailabilityService` gained `setConfigured` for optimistic updates after save/remove.
+- Tests: 24 new tests — `TodoistTokenStoreTests` (6, including a ciphertext-isolation test across the two providers), `TodoistTokenResolverTests` (6), `TodoistTestClientTests` (4), plus 8 new `SettingsControllerTests` scenarios covering the Todoist endpoints and the "failed candidate never overwrites stored" rule. Existing push-target and client tests adapted to the resolver constructor.
+- Error message on push targets updated from "Set the Todoist:Token user secret." to "Save a Todoist API token from the Settings page."
+
+### Deferred (scope decisions)
+- Removing the user-secret fallback entirely — kept for now so existing local setups don't break. Migration note: once the Settings UI has been in general use for a release cycle, drop the `TodoistOptions.Token` binding and simplify `TodoistTokenResolver` to read only from the store.
+- Non-Windows hardening of the DataProtection key ring — tracked separately as MEP-039.
 
 ### Business Problem
 MEP-028 and MEP-029 ship the Todoist push flow by reading the API token from `dotnet user-secrets` (`Todoist:Token`) and a fixed project ID from `Todoist:ProjectId`. That works for single-developer local use but doesn't match the bring-your-own-credential pattern MEP-032 established: the user should be able to paste their token into the Settings page, have it verified against Todoist, and persist it via ASP.NET DataProtection the same way the Claude key is stored. This story closes that gap and brings Todoist into the standard External Integrations section of the Settings page.
@@ -2241,4 +2255,51 @@ Feature: Canonical Ingredient Deduplication Pass
     When the fold happens
     Then the folded-away name is appended to the survivor's alias / synonym list (exact schema TBD at implementation time)
     And the fold is auditable / reversible via that synonym list
+```
+
+## [MEP-039] Harden DataProtection Key Ring on macOS and Linux
+
+**Status:** Post-MVP (Backlog)
+**Priority:** Low
+**Depends on:** MEP-032 (Claude token), MEP-035 (Todoist token) — the consumers of the key ring
+
+### Business Problem
+ASP.NET DataProtection is used to encrypt the Claude API key (MEP-032) and the Todoist API token (MEP-035) at rest. On Windows, `PersistKeysToFileSystem` transparently wraps the key-ring files with DPAPI, which binds them to the current Windows user account. On macOS and Linux, no such wrapping is applied by default: the key-ring XML files sit on disk protected only by filesystem permissions. If a second local account (or a backup, or a mis-scoped Docker volume mount) gains read access to `~/.local/share/MealsEnPlace/keys/`, the attacker can decrypt every token the app has stored.
+
+For a single-user local tool this is acceptable at MVP, but it's a meaningful delta in the security posture between platforms. Post-MVP we should close the gap so the non-Windows experience matches Windows.
+
+Options to evaluate at implementation time:
+- `ProtectKeysWithCertificate` using a locally-generated cert whose private key is stored in the platform keystore (macOS Keychain / libsecret on Linux).
+- A community package such as `AspNetCore.DataProtection.Keychain` (macOS) or a `libsecret`-backed key XML encryptor (Linux).
+- As a lighter-weight fallback, enforce `chmod 700` on the keys directory at startup and warn loudly when the permission check fails.
+
+Story should also document the current gap in the project README so users running the app outside Windows understand the tradeoff until this lands.
+
+### Acceptance Criteria
+```gherkin
+Feature: Harden DataProtection Key Ring on macOS and Linux
+
+  Scenario: Key-ring files are encrypted at rest on macOS
+    Given the app starts on macOS with no existing key ring
+    When DataProtection initializes
+    Then the generated key XML on disk is not the plaintext key
+    And decryption requires access to the macOS Keychain entry the app created
+
+  Scenario: Key-ring files are encrypted at rest on Linux
+    Given the app starts on a Linux host with `libsecret` (or the chosen backing store) available
+    When DataProtection initializes
+    Then the generated key XML on disk is not the plaintext key
+    And decryption requires access to the libsecret entry the app created
+
+  Scenario: Windows behavior is unchanged
+    Given the app starts on Windows
+    When DataProtection initializes
+    Then DPAPI continues to wrap the key ring exactly as it does today
+    And no regression in existing Claude / Todoist token round-tripping
+
+  Scenario: Startup warns when key ring sits on disk with loose permissions
+    Given the backing-store approach is unavailable on the current host
+    When the app starts
+    Then the startup log emits a warning naming the key-ring directory and the permission bits
+    And the README security note is linked in the warning message
 ```

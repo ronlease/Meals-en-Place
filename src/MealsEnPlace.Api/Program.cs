@@ -58,14 +58,17 @@ builder.Services.AddCors(options =>
     });
 });
 
-// -- BYO Claude API key storage -----------------------------------------------
-// Encrypt the user-supplied Anthropic token at rest via ASP.NET DataProtection.
-// Keys and token file live under LocalApplicationData so they never land in the
-// repo and persist across app restarts.
+// -- BYO API key storage ------------------------------------------------------
+// Encrypt user-supplied external API tokens at rest via ASP.NET DataProtection.
+// Keys and token files live under LocalApplicationData so they never land in the
+// repo and persist across app restarts. The key ring is shared across all
+// per-provider token stores (Claude, Todoist, etc.); each store uses a distinct
+// DataProtection purpose string so ciphertexts are not interchangeable.
 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 var settingsDirectory = Path.Combine(localAppData, "MealsEnPlace");
 var keyRingDirectory = Path.Combine(settingsDirectory, "keys");
-var tokenFilePath = Path.Combine(settingsDirectory, "claude-token.dat");
+var claudeTokenFilePath = Path.Combine(settingsDirectory, "claude-token.dat");
+var todoistTokenFilePath = Path.Combine(settingsDirectory, "todoist-token.dat");
 Directory.CreateDirectory(keyRingDirectory);
 
 builder.Services.AddDataProtection()
@@ -75,14 +78,22 @@ builder.Services.AddDataProtection()
 builder.Services.AddSingleton(new ClaudeTokenStoreOptions
 {
     KeyRingDirectory = keyRingDirectory,
-    TokenFilePath = tokenFilePath
+    TokenFilePath = claudeTokenFilePath
 });
 builder.Services.AddSingleton<IClaudeTokenStore, ClaudeTokenStore>();
 builder.Services.AddScoped<IClaudeAvailability, ClaudeAvailability>();
 
-// -- Todoist integration (MEP-028 / MEP-029) ---------------------------------
-// Token lives in `dotnet user-secrets` under "Todoist:Token" for now. MEP-035
-// will later add a Settings-page flow that stores the token via DataProtection.
+builder.Services.AddSingleton(new TodoistTokenStoreOptions
+{
+    TokenFilePath = todoistTokenFilePath
+});
+builder.Services.AddSingleton<ITodoistTokenStore, TodoistTokenStore>();
+
+// -- Todoist integration (MEP-028 / MEP-029 / MEP-035) -----------------------
+// Token resolves via the encrypted Settings-page store first, then falls back
+// to the legacy `Todoist:Token` user secret. `Todoist:ProjectId` in user
+// secrets remains the only source for the push target ID today (MEP-036 will
+// surface previously-used project IDs).
 builder.Services.Configure<TodoistOptions>(
     builder.Configuration.GetSection(TodoistOptions.SectionName));
 builder.Services.AddHttpClient("Todoist", client =>
@@ -92,6 +103,8 @@ builder.Services.AddHttpClient("Todoist", client =>
     client.Timeout = TimeSpan.FromSeconds(15);
 });
 builder.Services.AddScoped<ITodoistClient, TodoistClient>();
+builder.Services.AddScoped<ITodoistTestClient, TodoistTestClient>();
+builder.Services.AddScoped<ITodoistTokenResolver, TodoistTokenResolver>();
 builder.Services.AddScoped<IShoppingListPushTarget, TodoistShoppingListPushTarget>();
 builder.Services.AddScoped<IMealPlanPushTarget, TodoistMealPlanPushTarget>();
 

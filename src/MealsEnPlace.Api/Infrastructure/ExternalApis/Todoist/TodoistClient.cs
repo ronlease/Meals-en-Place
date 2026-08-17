@@ -2,14 +2,13 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Options;
 
 namespace MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 
 /// <inheritdoc cref="ITodoistClient"/>
 public sealed class TodoistClient(
     IHttpClientFactory httpClientFactory,
-    IOptions<TodoistOptions> options) : ITodoistClient
+    ITodoistTokenResolver tokenResolver) : ITodoistClient
 {
     private const string HttpClientName = "Todoist";
 
@@ -68,10 +67,10 @@ public sealed class TodoistClient(
     private async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var token = options.Value.Token;
+        var token = await tokenResolver.ResolveAsync(cancellationToken);
         if (string.IsNullOrWhiteSpace(token))
         {
-            throw new InvalidOperationException("Todoist integration is not configured. Set the Todoist:Token user secret.");
+            throw new InvalidOperationException("Todoist integration is not configured. Save a Todoist API token from the Settings page.");
         }
 
         var client = httpClientFactory.CreateClient(HttpClientName);

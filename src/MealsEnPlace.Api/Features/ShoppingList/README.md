@@ -31,7 +31,7 @@ Auto-generates shopping lists by comparing meal plan ingredient requirements aga
 - `IShoppingListPushTarget` is the provider-agnostic push contract; `TodoistShoppingListPushTarget` is the first implementation.
 - Idempotency comes from the shared `ExternalTaskLink` table (one row per pushed item, discriminated by `SourceType = ShoppingListItem` and scoped by `SourceScope` = meal plan id or `"standalone"`). Each link stores a SHA-256 hash of the task title so re-pushes can detect content changes and emit a Todoist PATCH rather than a duplicate task.
 - Removed items are closed on Todoist (not deleted) so the user's completed-history stays intact.
-- Token source: `Todoist:Token` via `dotnet user-secrets` for now. MEP-035 will move storage to ASP.NET DataProtection and add the Settings page paste flow; MEP-036 will surface previously-used project ids as quick-pick targets.
+- Token source: resolved through `ITodoistTokenResolver` (MEP-035) — the DataProtection-encrypted store written by the Settings page wins, with the legacy `Todoist:Token` user secret as fallback. MEP-036 will surface previously-used project ids as quick-pick targets.
 
 ## Files
 

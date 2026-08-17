@@ -53,7 +53,7 @@ Generates weekly meal plans by scoring recipes against current inventory, waste-
 - One Todoist task per `MealPlanSlot` titled `"{MealSlot}: {RecipeTitle}"` with a `due_date` computed from `WeekStartDate` + the slot's `DayOfWeek` offset (Monday-first ordering, matching the generation code).
 - Idempotency via the shared `ExternalTaskLink` table (discriminated by `SourceType = MealPlanSlot`, scoped by meal plan id). Hash input includes both content and due date so a recipe swap *or* a day shuffle shows up as a stale hash and triggers an update.
 - Removed slots → remote task close + local link delete. Slot recipe swap → PATCH (update).
-- Token source and follow-ons: same as MEP-028 — `Todoist:Token` user secret for now; MEP-035 moves storage to DataProtection and adds the Settings UI; MEP-036 adds project-id quick-pick.
+- Token source: resolved through `ITodoistTokenResolver` (MEP-035) — the DataProtection-encrypted store written by the Settings page wins, with the legacy `Todoist:Token` user secret as fallback. Follow-on: MEP-036 adds project-id quick-pick.
 
 ## Files
 

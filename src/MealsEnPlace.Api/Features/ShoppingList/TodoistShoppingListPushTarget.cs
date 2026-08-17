@@ -17,7 +17,8 @@ namespace MealsEnPlace.Api.Features.ShoppingList;
 public sealed class TodoistShoppingListPushTarget(
     MealsEnPlaceDbContext dbContext,
     IOptions<TodoistOptions> options,
-    ITodoistClient todoistClient) : IShoppingListPushTarget
+    ITodoistClient todoistClient,
+    ITodoistTokenResolver tokenResolver) : IShoppingListPushTarget
 {
     private const string StandaloneScopeKey = "standalone";
     public const string TodoistProviderName = "Todoist";
@@ -27,9 +28,9 @@ public sealed class TodoistShoppingListPushTarget(
     public async Task<ShoppingListPushResult> PushAsync(
         Guid? mealPlanId, CancellationToken cancellationToken = default)
     {
-        if (!options.Value.IsConfigured)
+        if (!await tokenResolver.HasTokenAsync(cancellationToken))
         {
-            throw new InvalidOperationException("Todoist integration is not configured. Set the Todoist:Token user secret.");
+            throw new InvalidOperationException("Todoist integration is not configured. Save a Todoist API token from the Settings page.");
         }
 
         var scope = mealPlanId?.ToString() ?? StandaloneScopeKey;
