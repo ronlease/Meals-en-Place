@@ -1,21 +1,44 @@
 version: 2
 
 updates:
-  # NuGet packages for the API project
+  # NuGet packages across every project in the solution.
+  #
+  # This previously watched /src/MealsEnPlace.Api only, so the tools and test
+  # projects received no updates at all. GHSA-2m69-gcr7-jv3q reached main that
+  # way: SQLitePCLRaw 2.1.11 sat unwatched in tests/MealsEnPlace.Unit, failed
+  # the .NET Dependency Scan, and had to be pinned by hand in #125.
   - package-ecosystem: nuget
-    directory: /src/MealsEnPlace.Api
+    directories:
+      - /src/MealsEnPlace.Api
+      - /src/MealsEnPlace.Tools.Dedup
+      - /src/MealsEnPlace.Tools.Ingest
+      - /tests/MealsEnPlace.Integration
+      - /tests/MealsEnPlace.Unit
     schedule:
       interval: weekly
     target-branch: main
-    open-pull-requests-limit: 5
+    open-pull-requests-limit: 10
     groups:
-      efcore:
-        patterns:
-          - "Microsoft.EntityFrameworkCore*"
-          - "Npgsql.EntityFrameworkCore*"
-      aspnetcore:
+      # EF Core, ASP.NET Core and Microsoft.Extensions.* ship on the .NET
+      # release train and share a major. Keeping them in one group means a
+      # framework bump arrives as a single PR rather than as halves that can
+      # land independently.
+      dotnet:
         patterns:
           - "Microsoft.AspNetCore*"
+          - "Microsoft.EntityFrameworkCore*"
+          - "Microsoft.Extensions*"
+          - "Npgsql.EntityFrameworkCore*"
+      # Test tooling moves together and touches no shipped code, so it is one
+      # PR per week rather than one per package across two test projects.
+      test-tooling:
+        patterns:
+          - "coverlet*"
+          - "FluentAssertions"
+          - "Microsoft.NET.Test.Sdk"
+          - "Moq"
+          - "SQLitePCLRaw*"
+          - "xunit*"
 
   # npm packages for the Angular frontend
   - package-ecosystem: npm
@@ -25,13 +48,33 @@ updates:
     target-branch: main
     open-pull-requests-limit: 5
     groups:
+      # Angular core, Material/CDK, the CLI and build tooling, angular-eslint
+      # and TypeScript all move on one release train and peer-depend on each
+      # other's major. They have to upgrade together or not at all.
+      #
+      # This was previously two groups, `angular` and `angular-material`. The
+      # split let @angular/material and @angular/cdk go 21 -> 22 on their own
+      # in #75 while @angular/core stayed on 21. cdk@22 peers
+      # @angular/common@^22, so `npm ci` failed ERESOLVE on main and on every
+      # branch cut from it until #124 landed the missing half.
+      #
+      # angular-eslint peers @angular/cli and @angular/compiler-cli peers a
+      # one-minor TypeScript window, so both belong in this group as well —
+      # leaving either out makes the group PR unmergeable on a major bump.
       angular:
         patterns:
+          - "@angular-devkit/*"
+          - "@angular-eslint/*"
           - "@angular/*"
-      angular-material:
+          - "angular-eslint"
+          - "typescript"
+      # Lint and format tooling with no peer tie to the Angular major.
+      lint-and-format:
         patterns:
-          - "@angular/material"
-          - "@angular/cdk"
+          - "@eslint/*"
+          - "eslint"
+          - "prettier"
+          - "typescript-eslint"
 
   # GitHub Actions
   - package-ecosystem: github-actions
