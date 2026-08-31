@@ -20,6 +20,12 @@ public sealed class RecipeImportService(
     MealsEnPlaceDbContext dbContext,
     ILogger<RecipeImportService> logger) : IRecipeImportService
 {
+    /// <summary>
+    /// Maximum number of items that may be requested in a single page.
+    /// Callers supplying a larger value are silently clamped to this limit.
+    /// </summary>
+    public const int MaxPageSize = 100;
+
     /// <inheritdoc />
     public async Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default)
     {
@@ -82,34 +88,53 @@ public sealed class RecipeImportService(
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<RecipeListItemDto>> GetAllLocalRecipesAsync(CancellationToken cancellationToken = default)
+    public async Task<PagedResult<RecipeListItemDto>> GetPagedLocalRecipesAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken = default)
     {
-        var recipes = await dbContext.Recipes
-            .AsNoTracking()
-            .Include(r => r.DietaryTags)
-            .Include(r => r.RecipeIngredients)
-                .ThenInclude(ri => ri.CanonicalIngredient)
-            .OrderBy(r => r.Title)
-            .ToListAsync(cancellationToken);
+        // Clamp inputs to safe bounds — no 400 errors for out-of-range values.
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
 
-        return recipes.Select(r =>
-        {
-            var unresolved = r.RecipeIngredients.Count(ri => !ri.IsContainerResolved);
-            return new RecipeListItemDto
+        // Total count uses a simple COUNT(*) on the Recipes table — much
+        // cheaper than counting the projected result set.
+        var totalCount = await dbContext.Recipes.LongCountAsync(cancellationToken);
+
+        // Project directly to the DTO in the database. No Include/ThenInclude
+        // collection loads — DietaryTags and RecipeIngredient counts are
+        // correlated subqueries that EF Core emits as scalar SELECT statements,
+        // so no cartesian product forms. IsFullyResolved cannot be projected
+        // from the C# computed property, so it is expressed as two Any()
+        // subqueries that EF Core translates to SQL EXISTS clauses.
+        var items = await dbContext.Recipes
+            .AsNoTracking()
+            .OrderBy(r => r.Title)
+            .Select(r => new RecipeListItemDto
             {
                 CuisineType = r.CuisineType,
-                DietaryTags = r.DietaryTags.Select(dt => dt.Tag).OrderBy(t => t).ToList(),
-                Id = r.Id,
-                IngredientNames = r.RecipeIngredients
-                    .Select(ri => ri.CanonicalIngredient.Name)
-                    .OrderBy(n => n)
+                DietaryTags = r.DietaryTags
+                    .Select(dt => dt.Tag)
+                    .OrderBy(t => t)
                     .ToList(),
-                IsFullyResolved = r.IsFullyResolved,
+                Id = r.Id,
+                IsFullyResolved = r.RecipeIngredients.Any()
+                    && r.RecipeIngredients.All(ri => ri.IsContainerResolved),
                 Title = r.Title,
-                TotalIngredients = r.RecipeIngredients.Count,
-                UnresolvedCount = unresolved
-            };
-        }).ToList();
+                TotalIngredients = r.RecipeIngredients.Count(),
+                UnresolvedCount = r.RecipeIngredients.Count(ri => !ri.IsContainerResolved)
+            })
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new PagedResult<RecipeListItemDto>
+        {
+            Items = items,
+            Page = page,
+            PageSize = pageSize,
+            TotalCount = totalCount
+        };
     }
 
     /// <inheritdoc />

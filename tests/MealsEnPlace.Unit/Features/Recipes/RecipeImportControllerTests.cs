@@ -23,16 +23,26 @@
 //   When Create is called
 //   Then the response is 400 Bad Request
 //
-// Scenario: GetAllLocalRecipes returns 200 with list from service
-//   Given the service returns a non-empty list of RecipeListItemDto
-//   When GetAllLocalRecipes is called
+// Scenario: GetLocalRecipes returns 200 with paged result from service
+//   Given the service returns a non-empty PagedResult of RecipeListItemDto
+//   When GetLocalRecipes is called
 //   Then the response is 200 OK
-//   And the body contains the list
+//   And the body contains the PagedResult
 //
-// Scenario: GetAllLocalRecipes returns 200 with empty list when library is empty
-//   Given the service returns an empty list
-//   When GetAllLocalRecipes is called
-//   Then the response is 200 OK with an empty list
+// Scenario: GetLocalRecipes returns 200 with empty page when library is empty
+//   Given the service returns an empty PagedResult
+//   When GetLocalRecipes is called
+//   Then the response is 200 OK with an empty Items list
+//
+// Scenario: GetLocalRecipes passes page and pageSize to the service
+//   Given page=3 and pageSize=50 are supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with page=3 and pageSize=50
+//
+// Scenario: GetLocalRecipes uses default page and pageSize when not supplied
+//   Given no pagination query parameters are provided
+//   When GetLocalRecipes is called
+//   Then the service is called with page=1 and pageSize=25
 //
 // Scenario: GetById with known id returns 200 with recipe detail
 //   Given the service returns a RecipeDetailDto for a given id
@@ -45,6 +55,7 @@
 //   Then the response is 404 Not Found
 
 using FluentAssertions;
+using MealsEnPlace.Api.Common;
 using MealsEnPlace.Api.Features.Recipes;
 using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
@@ -217,10 +228,10 @@ public class RecipeImportControllerTests
             Times.Never);
     }
 
-    // ── GetAllLocalRecipes ────────────────────────────────────────────────────
+    // ── GetLocalRecipes ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAllLocalRecipes_LibraryHasRecipes_Returns200WithList()
+    public async Task GetLocalRecipes_LibraryHasRecipes_Returns200WithPagedResult()
     {
         // Arrange
         var items = new List<RecipeListItemDto>
@@ -228,34 +239,82 @@ public class RecipeImportControllerTests
             new() { Id = Guid.NewGuid(), Title = "Pasta" },
             new() { Id = Guid.NewGuid(), Title = "Soup" }
         };
+        var pagedResult = new PagedResult<RecipeListItemDto>
+        {
+            Items = items,
+            Page = 1,
+            PageSize = 25,
+            TotalCount = 2
+        };
         _serviceMock
-            .Setup(s => s.GetAllLocalRecipesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(items);
+            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.StatusCode.Should().Be(200);
-        ok.Value.Should().BeEquivalentTo(items);
+        ok.Value.Should().Be(pagedResult);
     }
 
     [Fact]
-    public async Task GetAllLocalRecipes_EmptyLibrary_Returns200WithEmptyList()
+    public async Task GetLocalRecipes_EmptyLibrary_Returns200WithEmptyItems()
     {
         // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto>
+        {
+            Items = [],
+            Page = 1,
+            PageSize = 25,
+            TotalCount = 0
+        };
         _serviceMock
-            .Setup(s => s.GetAllLocalRecipesAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new List<RecipeListItemDto>());
+            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
         ok.StatusCode.Should().Be(200);
-        ok.Value.As<IEnumerable<RecipeListItemDto>>().Should().BeEmpty();
+        ok.Value.As<PagedResult<RecipeListItemDto>>().Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_WithExplicitPageAndPageSize_PassesValuesToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 3, PageSize = 50, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(3, 50, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(page: 3, pageSize: 50, cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(s => s.GetPagedLocalRecipesAsync(3, 50, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_NoParametersSupplied_UsesDefaultPageAndPageSize()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(1, 25, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(s => s.GetPagedLocalRecipesAsync(1, 25, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // ── GetById ───────────────────────────────────────────────────────────────

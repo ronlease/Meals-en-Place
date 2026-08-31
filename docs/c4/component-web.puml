@@ -15,9 +15,9 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
 
     ' ── Feature Page Components ────────────────────────────────
     Component(inventoryPage, "Inventory Page", "Angular Standalone Components", "Tab-based Pantry/Fridge/Freezer view with add/edit dialogs and container reference detection")
-    Component(recipeBrowser, "Recipe Browser", "Angular Standalone Components", "My Recipes library table and What Can I Make matching tab with dietary filters")
+    Component(recipeBrowser, "Recipe Browser", "Angular Standalone Components", "My Recipes library table with server-side paging (prev/next only — no page jump, no page-size selector — to prevent OFFSET queries that exceed the database command timeout at depth) and What Can I Make matching tab with dietary filters")
     Component(recipeCreate, "Recipe Create", "Angular Standalone Component", "Manual recipe creation form with dynamic ingredient rows")
-    Component(mealPlanBoard, "Meal Plan Board", "Angular Standalone Components", "7-day x 4-slot grid with plan generation and recipe swap dialogs")
+    Component(mealPlanBoard, "Meal Plan Board", "Angular Standalone Components", "7-day x 4-slot grid with plan generation. Swap dialog receives a capped page (100) of the library plus the true total count, states when the list is partial, and handles a failed recipe fetch distinctly from an empty library")
     Component(shoppingListPage, "Shopping List Page", "Angular Standalone Component", "Table of items needed from meal plan gaps with regenerate capability")
     Component(seasonalProducePage, "Seasonal Produce Page", "Angular Standalone Component", "In Season Now and Full Calendar toggle views for USDA Zone 7a")
     Component(expirationPage, "Expiration Tracking Page", "Angular Standalone Component", "Cross-location expiry tracking with color-coded urgency and day filters")
@@ -34,7 +34,7 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
     Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
     Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
-    Component(recipeService, "RecipeService", "Angular Service, providedIn: root", "Recipe library, manual creation, matching, detail, add-to-shopping-list")
+    Component(recipeService, "RecipeService", "Angular Service, providedIn: root", "Paged recipe library, manual creation, matching, detail, add-to-shopping-list")
     Component(referenceDataService, "ReferenceDataService", "Angular Service, providedIn: root", "Canonical ingredients and units of measure for forms")
     Component(seasonalProduceService, "SeasonalProduceService", "Angular Service, providedIn: root", "In-season and full calendar queries")
     Component(shoppingListService, "ShoppingListService", "Angular Service, providedIn: root", "Generate, fetch, and push shopping lists")

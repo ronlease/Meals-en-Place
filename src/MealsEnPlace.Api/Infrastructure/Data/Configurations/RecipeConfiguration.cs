@@ -31,6 +31,11 @@ public class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
             .IsRequired()
             .HasMaxLength(300);
 
+        // Supports ORDER BY Title on the paged list endpoint at 1.6 M-row scale
+        // and keeps the parallel COUNT(*) affordable via an index-only scan.
+        builder.HasIndex(r => r.Title)
+            .HasDatabaseName("IX_Recipes_Title");
+
         // IsFullyResolved is computed — do not map to a column.
         builder.Ignore(r => r.IsFullyResolved);
     }
