@@ -5,6 +5,8 @@
 // Scenario: Re-push with quantity change updates the existing task
 // Scenario: Re-push after an item was removed closes the corresponding task and deletes the link
 // Scenario: PushAsync throws InvalidOperationException when Todoist:Token is not configured
+// Scenario: Null override with no configured project records null ExternalProjectId (Inbox) in the link
+// Scenario: Null override with a configured static project uses the configured project and records it in the link
 // Scenario: Project override routes tasks to the specified project and records it in the link
 // Scenario: Override does not modify the static Todoist:ProjectId configuration
 
@@ -176,6 +178,62 @@ public sealed class TodoistShoppingListPushTargetTests : IDisposable
         result.Closed.Should().Be(1);
         _todoistMock.Verify(c => c.CloseTaskAsync("remote-orphan", It.IsAny<CancellationToken>()), Times.Once);
         (await _dbContext.ExternalTaskLinks.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task PushAsync_NullOverrideAndNoConfiguredProject_RecordsNullExternalProjectId()
+    {
+        // Arrange — no override and no static project configured: the pre-MEP-036
+        // Inbox fallback. Verifies that ExternalTaskLink.ExternalProjectId is null and
+        // that the Todoist task payload carries a null project ID (Inbox).
+        var mealPlanId = Guid.NewGuid();
+        var flour = SeedIngredient("Flour");
+        SeedShoppingListItem(mealPlanId, flour.Id, 250m);
+
+        TodoistTaskPayload? capturedPayload = null;
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .Callback<TodoistTaskPayload, CancellationToken>((p, _) => capturedPayload = p)
+            .ReturnsAsync("remote-1");
+
+        // No static ProjectId — this is the Inbox fallback path
+        var sut = BuildSut(token: "sample-token", staticProjectId: null);
+
+        // Act
+        await sut.PushAsync(mealPlanId, projectIdOverride: null);
+
+        // Assert — both the payload and the persisted link record null (Inbox)
+        capturedPayload!.ProjectId.Should().BeNull();
+        var link = await _dbContext.ExternalTaskLinks.SingleAsync();
+        link.ExternalProjectId.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task PushAsync_NullOverrideWithConfiguredProject_UsesConfiguredProjectAndRecordsItInLink()
+    {
+        // Arrange — no override but a configured static Todoist:ProjectId. This is the
+        // primary regression guard for existing users who never open the project-picker
+        // dialog: their pushes must still route to the configured project, not Inbox.
+        var mealPlanId = Guid.NewGuid();
+        var flour = SeedIngredient("Flour");
+        SeedShoppingListItem(mealPlanId, flour.Id, 250m);
+
+        TodoistTaskPayload? capturedPayload = null;
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .Callback<TodoistTaskPayload, CancellationToken>((p, _) => capturedPayload = p)
+            .ReturnsAsync("remote-1");
+
+        // Static ProjectId is configured — MEP-028 default behavior
+        var sut = BuildSut(token: "sample-token", staticProjectId: "configured-project-id");
+
+        // Act — no override: the service must fall back to the configured project
+        await sut.PushAsync(mealPlanId, projectIdOverride: null);
+
+        // Assert — payload and link both record the configured project, not null
+        capturedPayload!.ProjectId.Should().Be("configured-project-id");
+        var link = await _dbContext.ExternalTaskLinks.SingleAsync();
+        link.ExternalProjectId.Should().Be("configured-project-id");
     }
 
     [Fact]

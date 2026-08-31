@@ -2140,9 +2140,25 @@ Feature: Todoist Settings UI
 
 ## [MEP-036] Surface Associated Todoist Project IDs for Push Target Selection
 
-**Status:** In Progress
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first), MEP-035 (the Todoist token resolver and `GET /rest/v2/projects` client)
+
+### Implementation Notes
+Shipped across backend, frontend, tests, and docs.
+
+- `GET /api/v1/settings/todoist/projects/history` (`TodoistProjectHistoryService`) returns the distinct non-null `ExternalProjectId` values for Provider = "Todoist", always Inbox-first, with display names resolved through one `GET /rest/v2/projects` call via the new `ITodoistProjectClient`. Degradation is a first-class path: an unreachable, failing, or unconfigured Todoist returns 200 with null display names and `namesResolved: false` — never a 5xx.
+- Last-used project is **derived**, not stored: the newest `ExternalTaskLink` row per `SourceType` yields `lastUsedShoppingListProjectId` / `lastUsedMealPlanProjectId`. No new column and **no migration**, and the value cannot drift from what was actually pushed.
+- Optional `{ projectId }` body (`TodoistPushRequest`) on the three push endpoints overrides `Todoist:ProjectId` for that push only. Omitting the body preserves the pre-MEP-036 fallback chain exactly, which is the regression path existing users hit.
+- Frontend: `TodoistProjectPickerDialogComponent` (shared) opens between the "Push to Todoist" click and the push on both surfaces. It takes a `resourceType` and reads the matching `lastUsed*` off the response; a remembered project absent from the list falls back to Inbox.
+- Tests: 605 unit (up from 598) + 18 integration, all green. Coverage 93.9% line / 81.9% branch.
+
+### Scope decisions made during implementation
+- **Server-derived recall beat client-side storage.** The frontend initially kept the last-used project in `localStorage`. That was removed: it duplicated a fact the API already derives from push history, and the two silently diverge when site data is cleared or the user pushes from another browser. The server is the single source of truth.
+- **Project names resolve lazily on dialog open**, per the pre-implementation scope decision above. Confirmed correct during build: the Todoist create-task response carries `project_id` but no project name, so denormalizing a name onto `ExternalTaskLink` would have required the same `GET /projects` call plus a migration plus rename-staleness handling.
+
+### Known gap (not introduced here)
+The Angular dialog's spec file cannot execute — the frontend has no test runner configured. Tracked as MEP-041.
 
 ### Business Problem
 MEP-028 and MEP-029 push shopping lists and meal plans to Todoist, targeting whichever project is configured via the `Todoist:ProjectId` user secret (or Inbox when unset). That override is static — the user has to edit the user secret and restart the app every time they want to aim pushes at a different project. The Angular "Push to Todoist" buttons on the shopping list page and meal plan board fire the push immediately, with no opportunity to choose a destination.
@@ -2423,4 +2439,74 @@ Feature: Offline Tools Test Coverage
     When coverlet.runsettings is reviewed
     Then the Include filter is widened to cover them
     And the CI gate enforces 90% across all three assemblies
+```
+
+---
+
+## [MEP-041] Angular Frontend Test Infrastructure (Vitest)
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** none
+
+### Business Problem
+The .NET side of the codebase has 598 unit tests and 18 integration tests behind
+a CI coverage gate enforcing 90% line coverage. The Angular frontend has zero
+executable tests and no configured test runner. There is literally no way to run
+a spec file today. Every Angular component shipped so far -- inventory management,
+meal plan board, recipe browser, shopping list, settings, container resolution
+dialog -- is completely untested.
+
+MEP-036 surfaced the gap by being the first story to produce a `.spec.ts` file
+(`todoist-project-picker-dialog.component.spec.ts`), but that spec has never been
+executed because no runner is installed. The project shows evidence of an
+incomplete Vitest setup: `tsconfig.spec.json` already declares
+`"types": ["vitest/globals"]` and includes `src/**/*.spec.ts`, but `package.json`
+lists no test runner dependency (no vitest, no karma, no jest), and `angular.json`
+has no `test` architect target. Someone chose a direction and the work stopped
+partway.
+
+Angular 22 dropped Karma support. The Frontend Engineer's assessment recommends
+Vitest via `@analogjs/vitest-angular`: three devDependencies (`vitest`,
+`@analogjs/vitest-angular`, `@vitest/coverage-v8`), a `vitest.config.ts` using
+the Analog plugin with `environment: 'jsdom'` and the Analog setup file, and
+either a `test` target in `angular.json` using the
+`@analogjs/vitest-angular:test` builder or updating the npm script to
+`vitest run`. The existing MEP-036 spec is already Vitest-native and requires no
+changes once the runner is in place.
+
+This is blocking infrastructure. Until it ships, no frontend test can execute,
+and the testing asymmetry between backend and frontend will widen with every new
+component.
+
+### Acceptance Criteria
+```gherkin
+Feature: Angular Frontend Test Infrastructure
+
+  Scenario: Test runner is installed and npm test executes specs
+    Given the Angular project has vitest, @analogjs/vitest-angular, and @vitest/coverage-v8 as devDependencies
+    And a vitest.config.ts exists using the Analog plugin with environment "jsdom"
+    And angular.json has a test architect target or the npm test script invokes vitest
+    When a developer runs "npm test" from the MealsEnPlace.Web directory
+    Then vitest discovers and executes all *.spec.ts files under src/
+    And the process exits with code 0 when all specs pass
+
+  Scenario: Existing MEP-036 dialog spec runs and passes
+    Given the todoist-project-picker-dialog.component.spec.ts file exists from MEP-036
+    When vitest runs the full test suite
+    Then the MEP-036 spec is discovered, executed, and passes
+    And no changes to the spec file itself are required
+
+  Scenario: Coverage collection works and reports a number
+    Given @vitest/coverage-v8 is configured
+    When a developer runs "npm test -- --coverage"
+    Then a coverage report is generated for the Angular source files
+    And the report shows a line-coverage percentage
+
+  Scenario: Coverage gate participation decision is recorded
+    Given the frontend test infrastructure is operational
+    When the team reviews coverage results
+    Then a decision is recorded on whether the Angular project joins a CI coverage gate and at what threshold
+    And the decision follows the same pattern as MEP-040 (offline tools outside the gate until they clear a bar)
+    And if the frontend stays outside the gate initially, the rationale and target threshold are documented
 ```

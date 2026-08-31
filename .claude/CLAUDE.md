@@ -8,7 +8,7 @@ season. Single-user, local deployment only.
 
 ## Tech Stack
 - **API:** ASP.NET Core 10 Web API, Entity Framework Core 10, PostgreSQL
-- **Frontend:** Angular 21, standalone components, Angular Material, ApexCharts
+- **Frontend:** Angular 22, standalone components, Angular Material, ApexCharts
 - **Auth:** None — single user, local deployment
 - **AI:** Claude API (recipe dietary classification, ingredient normalization, meal plan optimization, unit of measure resolution, container reference flagging)
 - **External APIs:** Open Food Facts (ingredient metadata), Todoist REST v2 (shopping list + meal plan push — MEP-028 / MEP-029)
@@ -38,7 +38,7 @@ MealsEnPlace/
       Models/
         Entities/                   # EF Core entity classes
       Program.cs
-    MealsEnPlace.Web/               # Angular 21 frontend
+    MealsEnPlace.Web/               # Angular 22 frontend
     MealsEnPlace.Tools.Ingest/      # Offline console tool for Kaggle bulk recipe ingest (MEP-026)
   tests/
     MealsEnPlace.Unit/              # xUnit unit tests, mirroring Features/ structure
@@ -59,7 +59,7 @@ MealsEnPlace/
 | Product Owner | `product-owner.md` | Backlog, business problems, acceptance criteria |
 | Architect | `architect.md` | Swashbuckle OpenAPI, PlantUML C4 models |
 | Backend Engineer | `backend-engineer.md` | .NET 10 API, recipe pipeline, Claude integration, external API clients |
-| Frontend Engineer | `frontend-engineer.md` | Angular 21, pantry UI, meal plan board, recipe browser |
+| Frontend Engineer | `frontend-engineer.md` | Angular 22, pantry UI, meal plan board, recipe browser |
 | QA Engineer | `qa-engineer.md` | Gherkin scenarios, xUnit tests |
 
 ## Workflow

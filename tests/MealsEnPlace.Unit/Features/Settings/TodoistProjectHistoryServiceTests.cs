@@ -6,11 +6,14 @@
 // Scenario: Returns entries with null display names when no token is configured
 // Scenario: NamesResolved is false and NameResolutionError is set when token is missing
 // Scenario: NamesResolved is false and NameResolutionError is set when project client fails
+// Scenario: Duplicate project IDs across multiple ExternalTaskLink rows collapse to a single history entry
 // Scenario: LastUsedShoppingListProjectId reflects the most recent ShoppingListItem push
 // Scenario: LastUsedMealPlanProjectId reflects the most recent MealPlanSlot push
 // Scenario: LastUsedProjectId is null when no links exist for that source type
+// Scenario: Last-used project ID is independent per source type even with interleaved rows
 // Scenario: A historic project ID not in the live list still appears in the result
 // Scenario: Inbox is always the first entry regardless of history
+// Scenario: Project client is called exactly once regardless of how many distinct history IDs exist
 
 using FluentAssertions;
 using MealsEnPlace.Api.Features.Settings;
@@ -181,6 +184,29 @@ public sealed class TodoistProjectHistoryServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task GetProjectHistoryAsync_DuplicateProjectIds_CollapsesToSingleEntry()
+    {
+        // Arrange — three ExternalTaskLink rows all referencing the same project ID.
+        // The distinct-ID query must collapse them to one history entry.
+        SeedLink("2331547980", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-3));
+        SeedLink("2331547980", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-2));
+        SeedLink("2331547980", ExternalTaskSource.MealPlanSlot, DateTime.UtcNow.AddDays(-1));
+        await _dbContext.SaveChangesAsync();
+
+        SetupToken("tok");
+        _projectClientMock
+            .Setup(c => c.GetProjectsAsync("tok", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TodoistProjectListResult { Succeeded = true, Projects = [] });
+
+        // Act
+        var result = await BuildSut().GetProjectHistoryAsync();
+
+        // Assert — Inbox plus exactly one entry for "2331547980", not three
+        result.Projects.Should().HaveCount(2);
+        result.Projects.Count(p => p.ProjectId == "2331547980").Should().Be(1);
+    }
+
+    [Fact]
     public async Task GetProjectHistoryAsync_HistoricIdNotInLiveList_StillAppearsWithNullName()
     {
         SeedLink("stale-id", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow);
@@ -217,6 +243,57 @@ public sealed class TodoistProjectHistoryServiceTests : IDisposable
         var result = await BuildSut().GetProjectHistoryAsync();
 
         result.Projects[0].IsInbox.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task GetProjectHistoryAsync_InterleavedSourceTypes_LastUsedIsIndependentPerType()
+    {
+        // Arrange — four rows interleaved across both source types.
+        // Timeline (oldest first): MP@-5 → SL@-3 → MP@-2 → SL@-1
+        // The globally newest row is SL@-1, but MP's newest is MP@-2.
+        // An ordering bug (e.g. ordering all rows together before partitioning) would
+        // make LastUsedMealPlanProjectId return "SL-latest" instead of "MP-latest".
+        SeedLink("MP-early", ExternalTaskSource.MealPlanSlot, DateTime.UtcNow.AddDays(-5));
+        SeedLink("SL-early", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-3));
+        SeedLink("MP-latest", ExternalTaskSource.MealPlanSlot, DateTime.UtcNow.AddDays(-2));
+        SeedLink("SL-latest", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-1));
+        await _dbContext.SaveChangesAsync();
+
+        SetupToken("tok");
+        _projectClientMock
+            .Setup(c => c.GetProjectsAsync("tok", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TodoistProjectListResult { Succeeded = true, Projects = [] });
+
+        // Act
+        var result = await BuildSut().GetProjectHistoryAsync();
+
+        // Assert — each source type independently picks its own most-recent row
+        result.LastUsedShoppingListProjectId.Should().Be("SL-latest");
+        result.LastUsedMealPlanProjectId.Should().Be("MP-latest");
+    }
+
+    [Fact]
+    public async Task GetProjectHistoryAsync_MultipleDistinctHistoryIds_CallsProjectClientOnce()
+    {
+        // Arrange — three distinct project IDs; the service must issue one GET /rest/v2/projects
+        // call and resolve names in bulk rather than one call per ID.
+        SeedLink("AAA", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-3));
+        SeedLink("BBB", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-2));
+        SeedLink("CCC", ExternalTaskSource.MealPlanSlot, DateTime.UtcNow.AddDays(-1));
+        await _dbContext.SaveChangesAsync();
+
+        SetupToken("tok");
+        _projectClientMock
+            .Setup(c => c.GetProjectsAsync("tok", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TodoistProjectListResult { Succeeded = true, Projects = [] });
+
+        // Act
+        await BuildSut().GetProjectHistoryAsync();
+
+        // Assert — exactly one round-trip to the Todoist projects API
+        _projectClientMock.Verify(
+            c => c.GetProjectsAsync("tok", It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     private TodoistProjectHistoryService BuildSut() =>

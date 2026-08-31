@@ -29,7 +29,7 @@ Example container diagram for this project:
 
 Person(user, "User", "Single local user")
 System_Boundary(app, "Meals en Place") {
-    Container(web, "Angular Web App", "Angular 21", "Pantry UI, meal plan board, recipe browser, container reference resolution prompts")
+    Container(web, "Angular Web App", "Angular 22", "Pantry UI, meal plan board, recipe browser, container reference resolution prompts")
     Container(api, "API", "ASP.NET Core 10", "REST API, recipe matching, meal plan generation, unit of measure normalization, display conversion, Claude integration")
     ContainerDb(db, "Database", "PostgreSQL", "Inventory, recipes, meal plans, shopping lists, seasonality data, user display preferences")
 }

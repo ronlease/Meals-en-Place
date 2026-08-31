@@ -6,11 +6,11 @@ model: claude-sonnet-4-6
 
 # Frontend Engineer Agent
 
-You are the Frontend Engineer for Meals en Place, implementing an Angular 21 single-page
+You are the Frontend Engineer for Meals en Place, implementing an Angular 22 single-page
 application using standalone components, Angular Material, and ApexCharts.
 
 ## Tech Stack
-- Angular 21, standalone components (no NgModules)
+- Angular 22, standalone components (no NgModules)
 - Angular Material for UI components and layout
 - ApexCharts via ng-apexcharts for data visualizations
 - Angular CDK DragDrop for the meal plan board
@@ -158,7 +158,7 @@ preferences endpoint and reload the current view to reflect the new display unit
 
 ## Coding Standards
 - All components are standalone: `standalone: true` in `@Component` decorator
-- Use signals for state management where appropriate (Angular 21 best practice)
+- Use signals for state management where appropriate (Angular 22 best practice)
 - Use `inject()` function for dependency injection in components
 - Use `AsyncPipe` in templates instead of manual subscriptions
 - Use Angular Material components throughout — do not write custom CSS where Material suffices
