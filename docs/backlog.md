@@ -2510,3 +2510,135 @@ Feature: Angular Frontend Test Infrastructure
     And the decision follows the same pattern as MEP-040 (offline tools outside the gate until they clear a bar)
     And if the frontend stays outside the gate initially, the rationale and target threshold are documented
 ```
+
+---
+
+## [MEP-042] Migrate Todoist Integration from REST v2 to Unified API v1
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-028 (shopping list push), MEP-029 (meal plan push), MEP-035 (token entry and Test Connection), MEP-036 (project quick-pick and history endpoint)
+
+### Business Problem
+The Todoist integration shipped under MEP-028, MEP-029, MEP-035, and MEP-036 targets
+Todoist's REST API v2 (`/rest/v2/` paths). Todoist has deprecated that API surface and is
+actively returning deprecation notices instead of results. The user discovered the breakage
+by clicking "Test Connection" on the Settings page, but the problem is not confined to that
+button: all six call sites across four files use `/rest/v2/` paths, which means shopping list
+push (MEP-028), meal plan push (MEP-029), Test Connection (MEP-035), and the project
+quick-pick name resolution (MEP-036) are all broken or on borrowed time. This is a live
+outage of shipped functionality, not a future-proofing exercise.
+
+The replacement is Todoist's Unified API v1, documented at
+`https://developer.todoist.com/`, with a base path of
+`https://api.todoist.com/api/v1/`. Authentication is unchanged (`Authorization: Bearer
+{token}`), but two structural changes affect the implementation beyond a path swap:
+
+1. **Response envelope change.** List endpoints (`GET /projects`, `GET /tasks`, etc.) no
+   longer return a bare JSON array. They return a paginated envelope
+   `{"results": [...], "next_cursor": "..." | null}`. Both `TodoistProjectClient` and
+   `TodoistTestClient` currently deserialize `GET /projects` as a bare array and will fail
+   to parse even after the path is corrected. Accounts with many projects require
+   cursor-following rather than a single call.
+
+2. **Object ID format change.** API v1 uses alphanumeric IDs (e.g., `69mF7QcCj9JmXxp8`);
+   REST v2 used numeric IDs (e.g., `7246645180`). Every `ExternalTaskLink` row persisted by
+   prior pushes stores REST v2-format IDs in both `ExternalTaskId` and `ExternalProjectId`.
+   Against API v1 those stored IDs are the wrong format, which breaks two things:
+   - **Push idempotency.** MEP-028 and MEP-029 update and close existing tasks by stored
+     `ExternalTaskId`. Stale-format IDs mean updates fail or, worse, duplicate tasks get
+     created on the next push.
+   - **MEP-036 project quick-pick.** It matches stored `ExternalProjectId` values against
+     the project list returned by Todoist to resolve display names. With mismatched ID
+     formats, every previously-used project fails to resolve and degrades to a raw ID.
+
+The implementation must make an explicit decision between two strategies for the stored-ID
+problem and document the tradeoff:
+- **(a) Migrate stored IDs** via the Todoist ID-mapping endpoint (reported to exist under
+  `/api/v1/ids/`; the exact path and shape must be confirmed against the live docs at
+  implementation time rather than assumed from this description). This preserves push
+  history, idempotency, and MEP-036 quick-pick continuity, but adds complexity and a
+  network dependency on the mapping endpoint.
+- **(b) Accept a one-time reset** of `ExternalTaskLink` rows, which loses push history and
+  the MEP-036 quick-pick project history. This is far simpler but means the next push after
+  upgrade re-creates all tasks rather than updating them, which could duplicate tasks already
+  in the user's Todoist. The user would need to manually close or delete the old tasks.
+
+### Acceptance Criteria
+```gherkin
+Feature: Migrate Todoist Integration from REST v2 to Unified API v1
+
+  Scenario: Base address and all call-site paths updated to API v1
+    Given Program.cs configures the Todoist HttpClient with a base address
+    And six call sites across TodoistClient.cs, TodoistProjectClient.cs, TodoistTestClient.cs, and ITodoistTestClient.cs reference /rest/v2/ paths
+    When this story is implemented
+    Then the base address points at the API v1 root (https://api.todoist.com/api/v1/)
+    And every call site uses the corresponding /api/v1/ path
+    And no /rest/v2/ path reference remains in any tracked file (verified via grep gate)
+    And the ITodoistTestClient XML doc comment referencing the v2 path is updated
+
+  Scenario: GET /projects consumers parse the paginated envelope
+    Given Todoist API v1 GET /projects returns {"results": [...], "next_cursor": "..." | null}
+    And TodoistProjectClient and TodoistTestClient both currently deserialize the response as a bare JSON array
+    When this story is implemented
+    Then both consumers deserialize the {"results", "next_cursor"} envelope
+    And cursor-following is implemented so accounts with many projects return all results
+    And the deserialization model is shared between the two consumers
+
+  Scenario: Test Connection returns a real success or failure
+    Given the user clicks "Test connection" on the Todoist section of the Settings page
+    When the backend issues the API v1 equivalent of the projects call
+    Then a valid token returns success with no deprecation notice
+    And an invalid token returns the Todoist-reported error message
+    And an unreachable Todoist API returns a clear network-error message
+
+  Scenario: Task create works against API v1
+    Given a shopping list or meal plan push creates new Todoist tasks
+    When the push executes via POST /api/v1/tasks
+    Then tasks are created in the configured project
+    And the response is parsed to extract the new API v1-format task ID
+    And the ExternalTaskLink row stores the API v1-format ID
+
+  Scenario: Task update works against API v1
+    Given an ExternalTaskLink row exists with an API v1-format ExternalTaskId
+    And the corresponding shopping list item or meal plan slot has changed (ContentHash differs)
+    When the push executes
+    Then the existing Todoist task is updated via POST /api/v1/tasks/{id}
+    And no duplicate task is created
+
+  Scenario: Task close works against API v1
+    Given an ExternalTaskLink row exists for an item that has been removed from the source
+    When the push executes
+    Then the Todoist task is closed via POST /api/v1/tasks/{id}/close
+    And the ExternalTaskLink row is updated accordingly
+
+  Scenario: Push idempotency is preserved end-to-end
+    Given a shopping list has been pushed to Todoist via API v1
+    And no items have changed since the last push
+    When the user pushes again
+    Then the push result reports zero created, zero updated, zero closed
+    And no duplicate tasks appear in Todoist
+
+  Scenario: Stored-ID migration strategy is decided and documented
+    Given ExternalTaskLink rows from prior pushes store REST v2-format numeric IDs
+    And API v1 uses alphanumeric IDs that do not match the stored values
+    When the implementation begins
+    Then the team selects either (a) migrating stored IDs via the Todoist ID-mapping endpoint or (b) resetting ExternalTaskLink rows
+    And the decision is documented in the Implementation Notes section of this backlog item
+    And if option (a) is chosen, the ID-mapping endpoint path and shape are confirmed against live Todoist docs before coding begins
+    And if option (b) is chosen, the migration deletes or archives stale ExternalTaskLink rows and the user is informed that the next push will re-create tasks
+
+  Scenario: MEP-036 project quick-pick resolves display names after migration
+    Given the stored-ID strategy has been applied
+    When the user opens the Todoist push dialog on the shopping list page or meal plan board
+    Then GET /api/v1/settings/todoist/projects/history returns previously-used projects with resolved display names
+    And the degraded path (200 with namesResolved: false) is preserved when Todoist is unreachable
+
+  Scenario: Existing tests are updated for API v1 behavior
+    Given unit tests exist for TodoistClient, TodoistProjectClient, TodoistTestClient, and the push targets
+    When this story is implemented
+    Then all test assertions reference the API v1 paths and response shapes
+    And tests for the paginated envelope and cursor-following are added
+    And the MEP-036 degraded-path test (200 with namesResolved: false) continues to pass
+    And the full test suite passes with no regressions
+```
