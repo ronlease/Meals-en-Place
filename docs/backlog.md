@@ -2841,3 +2841,268 @@ is filed as MEP-044.
 
 Follow-on items filed: MEP-044 (keyset pagination for deep recipe pages), MEP-045 (paginate
 `/inventory/ingredients`).
+
+---
+
+## [MEP-044] Keyset Pagination for Deep Recipe Pages
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-043 (introduced the OFFSET-based pagination that this story replaces)
+
+### Business Problem
+MEP-043 replaced the unbounded recipe list query with OFFSET-based pagination. Page 1
+now returns in approximately 120ms (down from a 32-second timeout), and the endpoint is
+functional for normal browsing. However, OFFSET pagination degrades linearly with depth
+because PostgreSQL must skip all preceding rows before returning the requested page.
+Against the live 1,643,098-row catalog, page 1000 was measured at 19.9 seconds, and pages
+beyond approximately 1500 will exceed the 30-second Postgres command timeout and return
+HTTP 500 again. With 16,431 total pages at the default page size of 100, more than 90% of
+the catalog is unreachable via direct paging.
+
+A guard rail already shipped in MEP-043's frontend: the Angular paginator offers only
+previous/next navigation -- no first/last buttons, no arbitrary page jumps -- so users
+cannot navigate into the failing range. This prevents the user from encountering the error
+today, but it is a UI constraint masking a data-access limitation, not a fix. The catalog
+remains truncated in practice.
+
+Keyset (cursor-based) pagination is the remedy. Instead of `OFFSET @skip`, the query uses
+a composite cursor on the existing sort key:
+`WHERE (Title, Id) > (@lastTitle, @lastId) ORDER BY Title, Id LIMIT @pageSize`. This
+executes in constant time at any depth because the B-tree index on `(Title, Id)` seeks
+directly to the cursor position. The `IX_Recipes_Title` index created in MEP-043 already
+covers the `Title` column; a composite index on `(Title, Id)` may be needed depending on
+query plan analysis.
+
+**Tradeoffs:** Keyset pagination cannot jump to an arbitrary page number -- it requires
+the cursor from the previous page to fetch the next one. This pairs naturally with the
+previous/next-only UI MEP-043 already shipped, so no UI regression occurs. The API
+contract changes: the response returns a cursor string (opaque to the client) instead of
+a page number, and the request accepts a cursor parameter instead of a page parameter.
+The `PagedResult<T>` helper from MEP-043 under `Common/` will need to be extended or
+supplemented with a cursor-based variant. Existing consumers of the page-number-based
+contract (the Angular recipe browser) must be updated.
+
+### Acceptance Criteria
+```gherkin
+Feature: Keyset Pagination for Deep Recipe Pages
+
+  Scenario: Recipe list endpoint accepts a cursor parameter
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with no cursor parameter
+    Then the response returns the first page of results ordered by Title, Id
+    And the response includes a nextCursor value for fetching the next page
+    And the response includes totalCount metadata
+
+  Scenario: Fetching the next page via cursor
+    Given I have a nextCursor value from a previous recipe list response
+    When I call GET /api/v1/recipes with that cursor value
+    Then the response returns the next page of results immediately following the cursor position
+    And no results from the previous page are repeated
+    And no results are skipped
+
+  Scenario: Deep pages return in constant time
+    Given the recipe catalog contains over 1,600,000 rows
+    When I fetch page 1000 using sequential cursor-based navigation
+    Then the response returns in under 2 seconds
+    And no Npgsql command timeout or cancellation exception occurs
+
+  Scenario: Last page indicates no more results
+    Given I am on the final page of the recipe catalog
+    When I fetch that page via cursor
+    Then the response includes an empty or null nextCursor value
+    And the response contains fewer items than the requested page size or zero items
+
+  Scenario: Angular recipe browser uses cursor-based navigation
+    Given the frontend previously sent page number parameters to the API
+    When the recipe browser component is updated for cursor-based pagination
+    Then it sends cursor parameters instead of page numbers
+    And previous/next navigation continues to work correctly
+    And no arbitrary page-jump controls are offered
+```
+
+---
+
+## [MEP-045] Paginate GET /api/v1/inventory/ingredients
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-043 (introduced the `PagedResult<T>` helper this story reuses)
+
+### Business Problem
+MEP-043's sibling-endpoint audit identified `GET /api/v1/inventory/ingredients` as the
+highest-risk unbounded endpoint remaining in the API. This endpoint calls
+`ReferenceDataController.ListIngredients`, which returns every row in the
+`CanonicalIngredients` table with no LIMIT clause. After the MEP-026 bulk Kaggle ingest
+and the MEP-038 morphological deduplication pass, that table holds approximately 146,584
+rows. Unlike seed-data endpoints (units of measure at ~20 rows, seasonality at ~12 rows),
+the canonical ingredients table grows directly with the recipe catalog and will grow
+further with any future ingest.
+
+The endpoint is not as catastrophic as the pre-MEP-043 recipe list was -- 146K simple
+rows versus 1.6M rows with joined collections -- but it is on the same trajectory. At the
+current row count, the response payload is already several megabytes of JSON, which
+degrades frontend performance and increases memory pressure on both the server and the
+browser. As the catalog grows, this endpoint will eventually hit the same command timeout
+that took down the recipe list.
+
+The fix is the same pattern MEP-043 established: server-side pagination with
+database-side projection, reusing the `PagedResult<T>` helper introduced under `Common/`.
+
+**Remaining audit findings (for the record):** The following unbounded endpoints were
+identified in MEP-043's audit but do not warrant dedicated backlog items at this time:
+
+- `GET /api/v1/recipes/unresolved` and `GET /api/v1/recipes/unresolved-groups` -- medium
+  risk. These are filtered to recipes with unresolved container references, which bounds
+  the result set in practice. They could still be large immediately after a bulk ingest
+  before the user resolves containers. Monitor and paginate if the row count becomes
+  problematic.
+- `GET /api/v1/inventory` -- low risk. Returns per-user inventory items with no bulk
+  ingest path. Realistically bounded to hundreds of rows. No action needed unless usage
+  patterns change.
+- `GET /api/v1/inventory/units` -- no risk. Seed data only, approximately 20 rows, never
+  grows.
+- `GET /api/v1/seasonality` -- no risk. Seed data only, approximately 12 rows, never
+  grows.
+
+### Acceptance Criteria
+```gherkin
+Feature: Paginate Canonical Ingredients Endpoint
+
+  Scenario: Ingredients endpoint accepts pagination parameters
+    Given the CanonicalIngredients table contains over 146,000 rows
+    When I call GET /api/v1/inventory/ingredients with page=1 and pageSize=25
+    Then the response contains at most 25 ingredient items
+    And the response includes totalCount metadata reflecting the full table size
+    And the response includes the current page number and page size
+
+  Scenario: Default pagination when no parameters are supplied
+    Given the CanonicalIngredients table contains over 146,000 rows
+    When I call GET /api/v1/inventory/ingredients with no pagination parameters
+    Then the response uses a default page size
+    And the response returns only the first page of results
+    And the response is not unbounded
+
+  Scenario: Maximum page size is enforced
+    Given a caller requests GET /api/v1/inventory/ingredients with pageSize=10000
+    When the server processes the request
+    Then the page size is clamped to the documented maximum
+    And the response contains at most that maximum number of items
+
+  Scenario: Response uses database-side projection
+    Given the endpoint queries the CanonicalIngredients table
+    When the query executes
+    Then the SQL includes a LIMIT and OFFSET clause
+    And the projection selects only the fields needed by the response DTO
+    And the query does not load the full table into memory
+
+  Scenario: PagedResult helper from Common is reused
+    Given the PagedResult<T> helper was introduced in MEP-043 under Common/
+    When this endpoint is paginated
+    Then it uses the same PagedResult<T> response envelope
+    And the response shape is consistent with GET /api/v1/recipes
+
+  Scenario: Existing consumers continue to function
+    Given frontend components or other endpoints consume the ingredients list
+    When the endpoint is paginated
+    Then existing consumers are updated to pass pagination parameters
+    And no regression occurs in ingredient-dependent features (recipe matching, inventory add/edit)
+```
+
+---
+
+## [MEP-046] Recipe Search and Filtering
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-043 (pagination infrastructure the search results will page through)
+
+### Business Problem
+The recipe catalog contains 1,643,098 entries. MEP-043 made the catalog loadable by
+adding pagination, but loadable is not the same as usable. Nobody pages through 16,431
+pages to find dinner. The Angular recipe browser already has a dietary-tag filter chip row
+and a search icon in the toolbar, but neither is backed by server-side query logic -- the
+search icon is non-functional and the dietary-tag filter operates only on the current page
+of results, not the full catalog.
+
+Without server-side search, the catalog is effectively a very large, alphabetically sorted
+list that the user can only browse sequentially. The user cannot answer the basic question
+"do I have a recipe for chicken tikka masala?" without paging through hundreds of pages in
+the T section. This makes the 1.6M-recipe catalog a liability rather than an asset -- the
+data is there, but there is no way to find anything in it.
+
+This story adds real server-side search: at minimum, title substring matching so the user
+can type a recipe name and find it; ideally, ingredient matching so the user can search by
+what they have on hand (e.g., "chicken thigh" returns recipes containing that ingredient).
+Combined with the existing dietary-tag filter, this gives the user a practical way to
+narrow the catalog to a manageable result set that pagination can handle.
+
+**Technical approach:** At 1.6M rows, naive `LIKE '%term%'` queries will perform full
+table scans and exceed the command timeout. PostgreSQL full-text search
+(`tsvector`/`tsquery`) or a trigram index (`pg_trgm` extension with GIN/GiST index)
+is the likely mechanism. Full-text search is better for natural-language queries and
+relevance ranking; `pg_trgm` is better for substring and fuzzy matching. The choice
+should be evaluated during implementation, but either approach requires an explicit EF
+Core migration to create the index. The `pg_trgm` extension must be enabled via
+`CREATE EXTENSION IF NOT EXISTS pg_trgm` in the migration if that path is chosen.
+
+**Interaction with MEP-044:** If search narrows results to tens or hundreds of matches,
+deep pagination ceases to be a problem for searched result sets. Keyset pagination
+(MEP-044) remains relevant for unfiltered browsing of the full catalog, but in practice,
+search may reduce the urgency of that work by ensuring most user interactions hit small
+result sets.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe Search and Filtering
+
+  Scenario: Search recipes by title
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with a search query "tikka masala"
+    Then the response contains only recipes whose titles match the search term
+    And the response returns in under 2 seconds
+    And the results are paginated using the existing pagination infrastructure
+
+  Scenario: Search is case-insensitive
+    Given recipes with titles "Chicken Tikka Masala" and "chicken tikka masala" exist
+    When I search for "TIKKA MASALA"
+    Then both recipes appear in the results
+
+  Scenario: Search by ingredient name
+    Given recipes exist that contain the ingredient "chicken thigh"
+    When I search with an ingredient filter for "chicken thigh"
+    Then the response contains recipes that include that ingredient
+    And recipes without that ingredient are excluded
+
+  Scenario: Search combines with dietary-tag filter
+    Given recipes exist with various dietary tags and titles
+    When I search for "pasta" with a dietary tag filter of "Vegetarian"
+    Then the response contains only vegetarian recipes whose titles match "pasta"
+    And the filters are applied server-side, not client-side
+
+  Scenario: Empty search returns unfiltered paginated results
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with no search query and no filters
+    Then the response returns the standard paginated recipe list
+    And behavior is identical to the existing MEP-043 pagination
+
+  Scenario: Search with no matches returns an empty page
+    Given no recipe title or ingredient matches "xyznonexistent123"
+    When I search for "xyznonexistent123"
+    Then the response contains zero items
+    And totalCount is 0
+    And no error occurs
+
+  Scenario: Search is backed by a database index
+    Given the recipe catalog contains over 1,600,000 rows
+    When a search query executes
+    Then the query uses a full-text search index or trigram index rather than a sequential scan
+    And the index is created via an explicit EF Core migration
+
+  Scenario: Angular recipe browser integrates search
+    Given the recipe browser has an existing search icon in the toolbar
+    When the user types a search term and submits
+    Then the browser sends the search query as a parameter to the API
+    And the results update to show only matching recipes
+    And pagination resets to page 1 of the filtered results
+```
