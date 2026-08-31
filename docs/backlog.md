@@ -2147,7 +2147,7 @@ Feature: Todoist Settings UI
 ### Implementation Notes
 Shipped across backend, frontend, tests, and docs.
 
-- `GET /api/v1/settings/todoist/projects/history` (`TodoistProjectHistoryService`) returns the distinct non-null `ExternalProjectId` values for Provider = "Todoist", always Inbox-first, with display names resolved through one `GET /rest/v2/projects` call via the new `ITodoistProjectClient`. Degradation is a first-class path: an unreachable, failing, or unconfigured Todoist returns 200 with null display names and `namesResolved: false` — never a 5xx.
+- `GET /api/v1/settings/todoist/projects/history` (`TodoistProjectHistoryService`) returns the distinct non-null `ExternalProjectId` values for Provider = "Todoist", always Inbox-first, with display names resolved through one `GET /api/v1/projects` call via the new `ITodoistProjectClient` (migrated from `/rest/v2/` by MEP-042). Degradation is a first-class path: an unreachable, failing, or unconfigured Todoist returns 200 with null display names and `namesResolved: false` — never a 5xx.
 - Last-used project is **derived**, not stored: the newest `ExternalTaskLink` row per `SourceType` yields `lastUsedShoppingListProjectId` / `lastUsedMealPlanProjectId`. No new column and **no migration**, and the value cannot drift from what was actually pushed.
 - Optional `{ projectId }` body (`TodoistPushRequest`) on the three push endpoints overrides `Todoist:ProjectId` for that push only. Omitting the body preserves the pre-MEP-036 fallback chain exactly, which is the regression path existing users hit.
 - Frontend: `TodoistProjectPickerDialogComponent` (shared) opens between the "Push to Todoist" click and the push on both surfaces. It takes a `resourceType` and reads the matching `lastUsed*` off the response; a remembered project absent from the list falls back to Inbox.
@@ -2195,7 +2195,7 @@ Feature: Associated Todoist Project Quick-Pick
     Given distinct project IDs exist in the local push history
     When the client calls GET /api/v1/settings/todoist/projects/history
     Then the backend reads the distinct IDs from ExternalTaskLink
-    And issues one GET /rest/v2/projects call through the MEP-035 token resolver to map IDs to names
+    And issues one GET /api/v1/projects call through the MEP-035 token resolver to map IDs to names
     And returns each entry with its project ID and resolved display name
 
   Scenario: Name resolution degrades to raw IDs when Todoist is unreachable

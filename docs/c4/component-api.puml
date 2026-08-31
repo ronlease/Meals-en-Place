@@ -30,8 +30,8 @@ Container_Boundary(api, "API (ASP.NET Core 10, EF Core 10)") {
     Component(claudeClient, "Claude AI Client", "ClaudeService", "Dietary classification, unit of measure resolution, meal plan optimization, substitution suggestions (currently stub)")
     Component(anthropicTestClient, "Anthropic Test Client", "AnthropicTestClient", "Minimal HTTP client that issues a one-token Messages API call to verify user-supplied keys from the Settings page")
     Component(todoistClient, "Todoist Client", "TodoistClient, TodoistTokenResolver", "REST v2 HTTP client used by both push targets: create / update / close tasks. Resolves the current token via encrypted store first, then user-secret fallback")
-    Component(todoistProjectClient, "Todoist Project Client", "TodoistProjectClient", "Fetches all Todoist projects via GET /rest/v2/projects to resolve project IDs to display names for the push-target picker. Degrades gracefully — returns raw IDs on failure rather than throwing")
-    Component(todoistTestClient, "Todoist Test Client", "TodoistTestClient", "Minimal HTTP client that issues GET /rest/v2/projects to verify user-supplied Todoist tokens from the Settings page")
+    Component(todoistProjectClient, "Todoist Project Client", "TodoistProjectClient", "Fetches all Todoist projects via GET /api/v1/projects to resolve project IDs to display names for the push-target picker. Degrades gracefully — returns raw IDs on failure rather than throwing")
+    Component(todoistTestClient, "Todoist Test Client", "TodoistTestClient", "Minimal HTTP client that issues GET /api/v1/projects to verify user-supplied Todoist tokens from the Settings page")
     Component(dataAccess, "Data Access", "MealsEnPlaceDbContext", "EF Core DbContext with 14 entity configurations (includes ExternalTaskLink)")
 
     ' === Common / Shared Components ===
@@ -89,7 +89,7 @@ Rel(anthropicTestClient, claude, "One-token Messages ping for Test Connection", 
 Rel(shoppingList, todoistClient, "Pushes shopping list items as tasks (MEP-028)")
 Rel(mealPlan, todoistClient, "Pushes meal plan slots as scheduled tasks (MEP-029)")
 Rel(todoistClient, todoist, "Creates, updates, closes tasks", "HTTPS/JSON")
-Rel(todoistProjectClient, todoist, "GET /rest/v2/projects for name resolution", "HTTPS/JSON")
+Rel(todoistProjectClient, todoist, "GET /api/v1/projects for name resolution", "HTTPS/JSON")
 Rel(todoistTestClient, todoist, "GET /projects for Test Connection", "HTTPS/JSON")
 Rel(dataAccess, db, "Reads/Writes", "EF Core / Npgsql")
 
