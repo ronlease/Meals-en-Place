@@ -23,25 +23,25 @@
 //   When Create is called
 //   Then the response is 400 Bad Request
 //
-// Scenario: GetAllLocalRecipes returns 200 with paged result from service
+// Scenario: GetLocalRecipes returns 200 with paged result from service
 //   Given the service returns a non-empty PagedResult of RecipeListItemDto
-//   When GetAllLocalRecipes is called
+//   When GetLocalRecipes is called
 //   Then the response is 200 OK
 //   And the body contains the PagedResult
 //
-// Scenario: GetAllLocalRecipes returns 200 with empty page when library is empty
+// Scenario: GetLocalRecipes returns 200 with empty page when library is empty
 //   Given the service returns an empty PagedResult
-//   When GetAllLocalRecipes is called
+//   When GetLocalRecipes is called
 //   Then the response is 200 OK with an empty Items list
 //
-// Scenario: GetAllLocalRecipes passes page and pageSize to the service
+// Scenario: GetLocalRecipes passes page and pageSize to the service
 //   Given page=3 and pageSize=50 are supplied
-//   When GetAllLocalRecipes is called
+//   When GetLocalRecipes is called
 //   Then the service is called with page=3 and pageSize=50
 //
-// Scenario: GetAllLocalRecipes uses default page and pageSize when not supplied
+// Scenario: GetLocalRecipes uses default page and pageSize when not supplied
 //   Given no pagination query parameters are provided
-//   When GetAllLocalRecipes is called
+//   When GetLocalRecipes is called
 //   Then the service is called with page=1 and pageSize=25
 //
 // Scenario: GetById with known id returns 200 with recipe detail
@@ -228,10 +228,10 @@ public class RecipeImportControllerTests
             Times.Never);
     }
 
-    // ── GetAllLocalRecipes ────────────────────────────────────────────────────
+    // ── GetLocalRecipes ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task GetAllLocalRecipes_LibraryHasRecipes_Returns200WithPagedResult()
+    public async Task GetLocalRecipes_LibraryHasRecipes_Returns200WithPagedResult()
     {
         // Arrange
         var items = new List<RecipeListItemDto>
@@ -251,7 +251,7 @@ public class RecipeImportControllerTests
             .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(cancellationToken: CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -260,7 +260,7 @@ public class RecipeImportControllerTests
     }
 
     [Fact]
-    public async Task GetAllLocalRecipes_EmptyLibrary_Returns200WithEmptyItems()
+    public async Task GetLocalRecipes_EmptyLibrary_Returns200WithEmptyItems()
     {
         // Arrange
         var pagedResult = new PagedResult<RecipeListItemDto>
@@ -275,7 +275,7 @@ public class RecipeImportControllerTests
             .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(cancellationToken: CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
 
         // Assert
         var ok = result.Result.Should().BeOfType<OkObjectResult>().Subject;
@@ -284,7 +284,7 @@ public class RecipeImportControllerTests
     }
 
     [Fact]
-    public async Task GetAllLocalRecipes_WithExplicitPageAndPageSize_PassesValuesToService()
+    public async Task GetLocalRecipes_WithExplicitPageAndPageSize_PassesValuesToService()
     {
         // Arrange
         var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 3, PageSize = 50, TotalCount = 0 };
@@ -293,7 +293,7 @@ public class RecipeImportControllerTests
             .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(page: 3, pageSize: 50, cancellationToken: CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(page: 3, pageSize: 50, cancellationToken: CancellationToken.None);
 
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
@@ -301,7 +301,7 @@ public class RecipeImportControllerTests
     }
 
     [Fact]
-    public async Task GetAllLocalRecipes_NoParametersSupplied_UsesDefaultPageAndPageSize()
+    public async Task GetLocalRecipes_NoParametersSupplied_UsesDefaultPageAndPageSize()
     {
         // Arrange
         var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
@@ -310,7 +310,7 @@ public class RecipeImportControllerTests
             .ReturnsAsync(pagedResult);
 
         // Act
-        var result = await _sut.GetAllLocalRecipes(cancellationToken: CancellationToken.None);
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
 
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();

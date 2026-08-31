@@ -11,7 +11,7 @@ season. Single-user, local deployment only.
 - **Frontend:** Angular 22, standalone components, Angular Material, ApexCharts
 - **Auth:** None — single user, local deployment
 - **AI:** Claude API (recipe dietary classification, ingredient normalization, meal plan optimization, unit of measure resolution, container reference flagging)
-- **External APIs:** Open Food Facts (ingredient metadata), Todoist REST v2 (shopping list + meal plan push — MEP-028 / MEP-029)
+- **External APIs:** Open Food Facts (ingredient metadata), Todoist Unified API v1 (shopping list + meal plan push — MEP-028 / MEP-029, migrated from REST v2 in MEP-042)
 - **Recipe catalog (bulk):** Kaggle "Recipe Dataset (over 2M)" ingested via `MealsEnPlace.Tools.Ingest`. Each user downloads their own copy under CC BY-NC-SA 4.0; the dataset is never committed. See [CITATION.cff](../CITATION.cff) and [README.md](../README.md) for setup.
 - **Testing:** xUnit, Gherkin-style naming, FluentAssertions, Moq
 - **Documentation:** Swashbuckle (OpenAPI/Swagger), PlantUML (C4 models)

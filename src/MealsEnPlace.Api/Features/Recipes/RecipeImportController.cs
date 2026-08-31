@@ -49,7 +49,7 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     /// </returns>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<RecipeListItemDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetAllLocalRecipes(
+    public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetLocalRecipes(
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
         CancellationToken cancellationToken = default)
