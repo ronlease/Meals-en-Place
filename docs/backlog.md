@@ -2671,3 +2671,123 @@ defined in `TodoistProjectPageEnvelope.cs` (internal, Todoist namespace) and use
 `TodoistProjectClient`. `TodoistTestClient.PingAsync` checks only the HTTP status code and
 does not parse the body, so it does not consume the envelope type — but the type is
 available in the shared namespace if that ever changes.
+
+---
+
+## [MEP-043] Recipe List Endpoint Pagination and Query Optimization
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-026 (bulk ingest created the data volume that makes the unbounded query fatal)
+
+### Business Problem
+The recipes page is completely broken. Opening it in the browser shows "Failed to load
+recipes. Please try again." and the API returns HTTP 500 after approximately 32 seconds.
+The root cause is that `GET /api/v1/recipes` loads the entire Recipes table --
+1,643,098 rows with 13,635,157 joined RecipeIngredient rows -- into memory in a single
+unbounded query. The endpoint accepts no paging parameters; its implementation calls
+`ToListAsync` on a query with two `Include`/`ThenInclude` collection navigations (DietaryTags
+and RecipeIngredients with CanonicalIngredient), which EF Core executes as a single SQL
+statement containing two left-joined collection subqueries. This is the exact pattern EF
+Core's `MultipleCollectionIncludeWarning` exists to flag: it produces a cartesian explosion
+where every combination of DietaryTag and RecipeIngredient rows is materialized. The
+resulting SQL contains no LIMIT and no OFFSET, so Postgres attempts to build the full result
+set, exceeds the 30-second command timeout, and cancels the statement
+(`Npgsql.PostgresException 57014`), which the API surfaces as a 500.
+
+The endpoint worked before MEP-026 because the recipe catalog was on the order of hundreds
+of rows (TheMealDB's roughly 600 recipes). The Kaggle ingest grew the data by five orders
+of magnitude and exposed an always-unbounded query that was already technically incorrect
+(the cartesian explosion existed before, it just completed within the timeout at small
+scale).
+
+This is a live defect on a primary user-facing page with no workaround -- the user cannot
+browse, search, or interact with their recipe library at all. There is no client-side
+fallback because the endpoint returns zero usable data.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe List Endpoint Pagination and Query Optimization
+
+  Scenario: Recipe list endpoint accepts pagination parameters
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with page=1 and pageSize=25
+    Then the response contains at most 25 recipe items
+    And the response includes totalCount metadata reflecting the full catalog size
+    And the response includes the current page number and page size
+
+  Scenario: Default pagination when no parameters are supplied
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with no pagination parameters
+    Then the response uses a sensible default page size (e.g. 25)
+    And the response returns only the first page of results
+    And the response is not unbounded
+
+  Scenario: Maximum page size is enforced
+    Given a caller requests GET /api/v1/recipes with pageSize=10000
+    When the server processes the request
+    Then the page size is clamped to a documented maximum (e.g. 100)
+    And the response contains at most that maximum number of items
+
+  Scenario: Page of recipes returns well within the command timeout
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with page=1 and pageSize=25
+    Then the response returns in under 2 seconds
+    And no Npgsql command timeout or cancellation exception occurs
+
+  Scenario: Query uses projection instead of Include/ThenInclude
+    Given the endpoint previously used Include(DietaryTags) and Include(RecipeIngredients).ThenInclude(CanonicalIngredient)
+    When the implementation is updated
+    Then the query projects directly to RecipeListItemDto in the database via Select
+    And the emitted SQL does not produce a cartesian product across collection navigations
+    And the EF Core MultipleCollectionIncludeWarning is no longer triggered
+
+  Scenario: RecipeListItemDto contains the required summary fields
+    Given the list endpoint projects to RecipeListItemDto
+    When the projection runs
+    Then each item includes TotalIngredients as a count of the recipe's ingredients
+    And each item includes UnresolvedCount as a count of unresolved container references
+    And each item includes DietaryTags as a list of tag names
+    And the implementation evaluates whether IngredientNames belongs on the list DTO or should be deferred to the detail endpoint to keep the list query lean
+
+  Scenario: AsSplitQuery is used where collection loads remain
+    Given any query path that still loads multiple collection navigations
+    When the query executes
+    Then AsSplitQuery is applied to prevent cartesian explosion
+    And each collection loads in a separate SQL statement
+
+  Scenario: Database index supports ORDER BY Title at scale
+    Given the recipe catalog contains over 1,600,000 rows
+    And the list endpoint orders results by Title
+    When the query executes
+    Then a database index on Recipes.Title supports the sort without a full table scan
+    And the total-count query is supported by an efficient path (index-only count or similar)
+
+  Scenario: Shared pagination helper is introduced or a decision is documented
+    Given no shared pagination helper currently exists under Common/
+    And other list endpoints will need the same pagination treatment
+    When this story is implemented
+    Then either a shared pagination model (page, pageSize, totalCount response wrapper) is introduced under Common/
+    Or the decision to defer the shared helper is documented with a rationale
+
+  Scenario: Angular recipe browser uses server-side pagination
+    Given the frontend previously expected the full recipe list in a single response
+    When the recipe browser component is updated
+    Then it sends page and pageSize query parameters to the API
+    And it renders pagination controls (next, previous, page indicator)
+    And the "Failed to load recipes" error no longer appears
+
+  Scenario: Recipes page renders successfully against the bulk catalog
+    Given the recipe catalog contains over 1,600,000 rows
+    When I open the recipes page in the browser
+    Then the page loads and displays the first page of recipes
+    And I can navigate to subsequent pages
+    And no HTTP 500 or timeout error occurs
+
+  Scenario: Sibling list endpoints are audited for the same unbounded pattern
+    Given MEP-026 grew the data volume across multiple tables
+    When this story is implemented
+    Then all other list endpoints under Recipes/ are checked for unbounded queries
+    And any other list endpoint in the API that predates MEP-026 is checked for the same pattern
+    And any endpoint found to be unbounded is either fixed in this story or a follow-on backlog item is filed
+```
