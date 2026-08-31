@@ -2676,7 +2676,7 @@ available in the shared namespace if that ever changes.
 
 ## [MEP-043] Recipe List Endpoint Pagination and Query Optimization
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Depends on:** MEP-026 (bulk ingest created the data volume that makes the unbounded query fatal)
 
@@ -2791,3 +2791,53 @@ Feature: Recipe List Endpoint Pagination and Query Optimization
     And any other list endpoint in the API that predates MEP-026 is checked for the same pattern
     And any endpoint found to be unbounded is either fixed in this story or a follow-on backlog item is filed
 ```
+
+### Implementation Notes
+
+**IngredientNames removal (deliberate, verified-unused):** `RecipeListItemDto.IngredientNames`
+was removed. The entire Angular app was grepped for `ingredientNames`; the string appears only
+in the TypeScript model declaration (`core/models/recipe.models.ts`) and is not referenced by
+any template, component, or service. It was the sole reason the previous query joined all 13.6M
+RecipeIngredient rows, which caused the Postgres 57014 command-timeout 500.
+
+**Page size max — 100:** A page of 100 summary rows (no ingredient data, all projected as
+scalars) is fast at the database level. Larger values risk re-approaching the command timeout;
+100 is more items than any practical recipe-browser page would display. Default is 25.
+
+**Clamping, not 400:** Out-of-range page and pageSize values are silently clamped (page < 1 → 1;
+pageSize > 100 → 100; pageSize < 1 → 1). Client errors for boundary values are surprising and
+unhelpful; clamping produces a valid, predictable result.
+
+**Shared `PagedResult<T>` introduced in `Common/`:** Introduced now rather than deferred.
+Other endpoints will need the same pagination treatment (see sibling audit below), and the type
+is small enough that the upfront cost is trivial. Keeping pagination local would mean
+duplicating the response envelope across every future paged endpoint.
+
+**`IsFullyResolved` projection:** The C# computed property cannot be translated to SQL directly.
+It is expressed in the EF Core projection as:
+`r.RecipeIngredients.Any() && r.RecipeIngredients.All(ri => ri.IsContainerResolved)`.
+EF Core 10 translates this to two SQL EXISTS subqueries — no client evaluation.
+
+**Database index:** `IX_Recipes_Title` (B-tree) on `Recipes.Title` added in migration
+`20260831013330_AddRecipesTitleIndex`. Up creates the index; Down drops it.
+The index creation on the live 1.6M-row table took approximately 4.3 seconds (one-time migration cost).
+
+**Measured endpoint latency:** First request after JIT warm-up: 313ms. Steady state (second
+request): 233ms. Both well under the 2-second requirement. Deep-offset pagination (page 10000,
+SKIP 249,975 rows) degrades to approximately 10 seconds — that is a known PostgreSQL large-OFFSET
+limitation, not introduced by this change. Keyset (cursor-based) pagination is the remedy and
+is filed as MEP-044.
+
+**Sibling endpoint audit (unbounded queries):**
+
+| Endpoint | Service/Method | Unbounded? | Risk |
+|---|---|---|---|
+| `GET /api/v1/recipes/unresolved` | `ContainerResolutionService.GetUnresolvedRecipesAsync` | Yes — no LIMIT | Medium: filtered to recipes with unresolved ingredients; still could be large post-ingest |
+| `GET /api/v1/recipes/unresolved-groups` | `ContainerResolutionService.GetUnresolvedGroupsAsync` | Yes — no LIMIT | Medium: grouped/aggregated query on RecipeIngredients filtered by IsContainerResolved=false |
+| `GET /api/v1/inventory` | `InventoryRepository.GetAllAsync` | Yes — no LIMIT | Low: per-user inventory; no bulk ingest path; realistically bounded to hundreds of rows |
+| `GET /api/v1/inventory/ingredients` | `ReferenceDataController.ListIngredients` | Yes — no LIMIT | High: CanonicalIngredients table grows with bulk ingest dedup; could reach hundreds of thousands |
+| `GET /api/v1/inventory/units` | `ReferenceDataController.ListUnits` | Yes — no LIMIT | None: seed data only, ~20 rows, never grows |
+| `GET /api/v1/seasonality` | `SeasonalProduceService` | Yes — no LIMIT | None: seed data only, ~12 rows |
+
+Follow-on items filed: MEP-044 (keyset pagination for deep recipe pages), MEP-045 (paginate
+`/inventory/ingredients`).

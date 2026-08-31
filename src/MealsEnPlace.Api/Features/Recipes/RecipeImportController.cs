@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Common;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MealsEnPlace.Api.Features.Recipes;
@@ -33,15 +34,28 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
         return CreatedAtAction(nameof(GetById), new { id = recipe.Id }, recipe);
     }
 
-    /// <summary>Returns all local recipes with resolution status.</summary>
+    /// <summary>Returns a paged list of local recipes ordered by title.</summary>
+    /// <param name="page">
+    /// 1-based page number. Values below 1 are clamped to 1. Default: 1.
+    /// </param>
+    /// <param name="pageSize">
+    /// Items per page. Clamped to [1, 100]; the documented maximum is 100.
+    /// Default: 25.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>200 with the list of recipes.</returns>
+    /// <returns>
+    /// 200 with a <see cref="PagedResult{RecipeListItemDto}"/> containing the requested
+    /// page of recipes and pagination metadata (totalCount, totalPages, page, pageSize).
+    /// </returns>
     [HttpGet]
-    [ProducesResponseType(typeof(IReadOnlyList<RecipeListItemDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<RecipeListItemDto>>> GetAllLocalRecipes(CancellationToken cancellationToken)
+    [ProducesResponseType(typeof(PagedResult<RecipeListItemDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetAllLocalRecipes(
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25,
+        CancellationToken cancellationToken = default)
     {
-        var recipes = await recipeImportService.GetAllLocalRecipesAsync(cancellationToken);
-        return Ok(recipes);
+        var result = await recipeImportService.GetPagedLocalRecipesAsync(page, pageSize, cancellationToken);
+        return Ok(result);
     }
 
     /// <summary>Returns the full detail of a single recipe.</summary>

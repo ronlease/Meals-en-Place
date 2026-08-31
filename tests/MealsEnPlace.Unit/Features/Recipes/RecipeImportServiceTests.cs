@@ -25,9 +25,14 @@
 //   When CreateRecipeAsync is called
 //   Then Claude.ClassifyDietaryTagsAsync is never invoked and the recipe has no dietary tags
 //
-// Scenario: GetAllLocalRecipesAsync returns empty list when no recipes exist
-// Scenario: GetAllLocalRecipesAsync returns recipes ordered by title ascending
-// Scenario: GetAllLocalRecipesAsync returns correct unresolved count
+// Scenario: GetPagedLocalRecipesAsync returns empty Items when no recipes exist
+// Scenario: GetPagedLocalRecipesAsync returns recipes ordered by title ascending
+// Scenario: GetPagedLocalRecipesAsync returns correct unresolved count
+// Scenario: GetPagedLocalRecipesAsync returns correct TotalCount
+// Scenario: GetPagedLocalRecipesAsync clamps page below 1 to 1
+// Scenario: GetPagedLocalRecipesAsync clamps pageSize above MaxPageSize to MaxPageSize
+// Scenario: GetPagedLocalRecipesAsync clamps pageSize below 1 to 1
+// Scenario: GetPagedLocalRecipesAsync respects Skip for page 2
 // Scenario: GetRecipeDetailAsync returns null when recipe not found
 // Scenario: GetRecipeDetailAsync returns full detail for an existing recipe
 
@@ -338,22 +343,25 @@ public class RecipeImportServiceTests : IDisposable
         tagCount.Should().Be(0);
     }
 
-    // ── GetAllLocalRecipesAsync ───────────────────────────────────────────────
+    // ── GetPagedLocalRecipesAsync — empty catalog ─────────────────────────────
 
     [Fact]
-    public async Task GetAllLocalRecipesAsync_NoRecipes_ReturnsEmptyList()
+    public async Task GetPagedLocalRecipesAsync_NoRecipes_ReturnsEmptyItems()
     {
         // Arrange — nothing seeded beyond reference units of measure
 
         // Act
-        var result = await _sut.GetAllLocalRecipesAsync();
+        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
 
         // Assert
-        result.Should().BeEmpty();
+        result.Items.Should().BeEmpty();
+        result.TotalCount.Should().Be(0);
     }
 
+    // ── GetPagedLocalRecipesAsync — ordering ──────────────────────────────────
+
     [Fact]
-    public async Task GetAllLocalRecipesAsync_MultipleRecipes_OrderedByTitleAscending()
+    public async Task GetPagedLocalRecipesAsync_MultipleRecipes_OrderedByTitleAscending()
     {
         // Arrange
         _dbContext.Recipes.AddRange(
@@ -376,16 +384,18 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetAllLocalRecipesAsync();
+        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
 
         // Assert
-        result.Should().HaveCount(2);
-        result[0].Title.Should().Be("Apple Cake");
-        result[1].Title.Should().Be("Zucchini Soup");
+        result.Items.Should().HaveCount(2);
+        result.Items[0].Title.Should().Be("Apple Cake");
+        result.Items[1].Title.Should().Be("Zucchini Soup");
     }
 
+    // ── GetPagedLocalRecipesAsync — unresolved count ──────────────────────────
+
     [Fact]
-    public async Task GetAllLocalRecipesAsync_RecipeWithUnresolvedIngredients_ReturnsCorrectUnresolvedCount()
+    public async Task GetPagedLocalRecipesAsync_RecipeWithUnresolvedIngredients_ReturnsCorrectUnresolvedCount()
     {
         // Arrange
         var canonical = new CanonicalIngredient
@@ -429,11 +439,96 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetAllLocalRecipesAsync();
+        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
 
         // Assert
-        var dto = result.Should().ContainSingle().Subject;
+        var dto = result.Items.Should().ContainSingle().Subject;
         dto.UnresolvedCount.Should().Be(1);
+    }
+
+    // ── GetPagedLocalRecipesAsync — TotalCount metadata ──────────────────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_MultipleRecipes_TotalCountReflectsFullCatalog()
+    {
+        // Arrange — seed 3 recipes, request only 2 per page
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Alpha" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Beta" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Gamma" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 2);
+
+        // Assert
+        result.TotalCount.Should().Be(3);
+        result.Items.Should().HaveCount(2);
+        result.TotalPages.Should().Be(2);
+    }
+
+    // ── GetPagedLocalRecipesAsync — page boundary: page 2 skips page 1 items ──
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_Page2WithPageSize1_ReturnsSecondRecipe()
+    {
+        // Arrange
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Alpha" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Beta" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(page: 2, pageSize: 1);
+
+        // Assert
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Beta");
+        result.Page.Should().Be(2);
+    }
+
+    // ── GetPagedLocalRecipesAsync — clamping ──────────────────────────────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_PageBelowOne_ClampsToOne()
+    {
+        // Arrange — empty catalog is fine; we care about the returned Page field
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(page: -5, pageSize: 25);
+
+        // Assert
+        result.Page.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_PageSizeAboveMax_ClampsToMaxPageSize()
+    {
+        // Arrange — seed 1 recipe so we can observe the clamped Items count
+        _dbContext.Recipes.Add(new Recipe
+        {
+            CuisineType = string.Empty,
+            Id = Guid.NewGuid(),
+            Instructions = string.Empty,
+            ServingCount = 1,
+            Title = "Only Recipe"
+        });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — request 10,000 per page
+        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 10_000);
+
+        // Assert
+        result.PageSize.Should().Be(RecipeImportService.MaxPageSize);
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_PageSizeBelowOne_ClampsToOne()
+    {
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 0);
+
+        // Assert
+        result.PageSize.Should().Be(1);
     }
 
     // ── GetRecipeDetailAsync ──────────────────────────────────────────────────
