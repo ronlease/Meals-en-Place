@@ -42,6 +42,13 @@ const DAY_ORDER = [
 ];
 const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
+/**
+ * Page size for the swap dialog's recipe list. This is the API's maximum page
+ * size (MEP-043) — the widest choice available until the picker gains search
+ * (MEP-046). The dialog states plainly when the list is partial.
+ */
+const RECIPE_PICKER_PAGE_SIZE = 100;
+
 @Component({
   selector: 'app-meal-plan-board',
   standalone: true,
@@ -333,7 +340,9 @@ export class MealPlanBoardComponent implements OnInit {
   private readonly mealPlanService = inject(MealPlanService);
   private readonly recipeService = inject(RecipeService);
   private readonly snackBar = inject(MatSnackBar);
+  private recipeLoadFailed = false;
   private recipes: RecipeListItemDto[] = [];
+  private recipeTotalCount = 0;
 
   private applyConsumedAt(slotId: string, consumedAt: string | null): void {
     this.plan.update((p) => {
@@ -420,8 +429,20 @@ export class MealPlanBoardComponent implements OnInit {
 
   ngOnInit(): void {
     this.loadActivePlan();
-    this.recipeService.getRecipes().subscribe({
-      next: (recipes) => (this.recipes = recipes),
+    // The swap picker has no search yet (MEP-046), so it can only offer a page of
+    // the library. Request the maximum page size to widen the choice, and record
+    // the true total so the dialog can say plainly that the list is partial.
+    this.recipeService.getRecipes(1, RECIPE_PICKER_PAGE_SIZE).subscribe({
+      error: () => {
+        this.recipeLoadFailed = true;
+        this.recipes = [];
+        this.recipeTotalCount = 0;
+      },
+      next: (result) => {
+        this.recipeLoadFailed = false;
+        this.recipes = result.items;
+        this.recipeTotalCount = result.totalCount;
+      },
     });
   }
 
@@ -482,7 +503,9 @@ export class MealPlanBoardComponent implements OnInit {
     const data: SwapDialogData = {
       currentRecipeId: slot.recipeId,
       currentRecipeTitle: slot.recipeTitle,
+      loadFailed: this.recipeLoadFailed,
       recipes: this.recipes,
+      totalCount: this.recipeTotalCount,
     };
     const ref = this.dialog.open(MealPlanSwapDialogComponent, { data });
     ref.afterClosed().subscribe((recipeId: string | undefined) => {

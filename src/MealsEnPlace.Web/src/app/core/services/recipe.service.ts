@@ -6,6 +6,7 @@ import {
   BulkResolveGroupRequest,
   BulkResolveGroupResponse,
   CreateRecipeRequest,
+  PagedResult,
   RecipeDetailDto,
   RecipeListItemDto,
   RecipeMatchResponse,
@@ -40,8 +41,11 @@ export class RecipeService {
     return this.http.get<RecipeDetailDto>(`${this.baseUrl}/${id}`);
   }
 
-  getRecipes(): Observable<RecipeListItemDto[]> {
-    return this.http.get<RecipeListItemDto[]>(this.baseUrl);
+  getRecipes(page = 1, pageSize = 25): Observable<PagedResult<RecipeListItemDto>> {
+    const params = new HttpParams()
+      .set('page', page)
+      .set('pageSize', pageSize);
+    return this.http.get<PagedResult<RecipeListItemDto>>(this.baseUrl, { params });
   }
 
   getUnresolvedGroups(): Observable<UnresolvedGroupResponse[]> {

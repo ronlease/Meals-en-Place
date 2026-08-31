@@ -3,6 +3,8 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatChipListboxChange, MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
+import { PageEvent } from '@angular/material/paginator';
+import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
@@ -18,6 +20,9 @@ import { RecipeService } from '../../core/services/recipe.service';
 import { RecipeDetailDialogComponent } from './recipe-detail-dialog.component';
 import { RecipeMatchResultsComponent } from './recipe-match-results.component';
 
+/** Fixed page size for the recipe library. Max allowed by the API is 100. */
+const LIBRARY_PAGE_SIZE = 25;
+
 @Component({
   selector: 'app-recipe-browser',
   standalone: true,
@@ -25,6 +30,7 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
     MatButtonModule,
     MatChipsModule,
     MatIconModule,
+    MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTableModule,
     MatTabsModule,
@@ -117,6 +123,22 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
                   (click)="openRecipeDetail(row)"
                 />
               </mat-table>
+
+              <!--
+                Prev/next navigation only. showFirstLastButtons is omitted (defaults false)
+                to prevent one-click jumps to the last page, which can exceed the database
+                command timeout at this dataset size (1.6 M+ recipes, 16 000+ pages).
+                hidePageSize removes the page-size selector to further prevent deep jumps.
+              -->
+              <mat-paginator
+                [length]="totalCount()"
+                [pageSize]="pageSize()"
+                [pageIndex]="currentPage() - 1"
+                [hidePageSize]="true"
+                [disabled]="libraryLoading()"
+                (page)="onPageChange($event)"
+                aria-label="Recipe library pagination"
+              />
             }
           </div>
         </ng-template>
@@ -271,8 +293,10 @@ import { RecipeMatchResultsComponent } from './recipe-match-results.component';
 })
 export class RecipeBrowserComponent implements OnInit {
   readonly allDietaryTags: DietaryTag[] = [
-    'Vegetarian', 'Vegan', 'Carnivore', 'LowCarb', 'GlutenFree', 'DairyFree',
+    'Carnivore', 'DairyFree', 'GlutenFree', 'LowCarb', 'Vegan', 'Vegetarian',
   ];
+  protected readonly currentPage = signal(1);
+  protected readonly library = signal<RecipeListItemDto[]>([]);
   protected readonly libraryColumns = [
     'title',
     'cuisineType',
@@ -282,45 +306,47 @@ export class RecipeBrowserComponent implements OnInit {
   ];
   protected readonly libraryError = signal(false);
   protected readonly libraryLoading = signal(false);
-  protected readonly library = signal<RecipeListItemDto[]>([]);
   protected readonly matchError = signal(false);
   protected readonly matchLoading = signal(false);
   protected readonly matchResults = signal<RecipeMatchResponse | null>(null);
+  protected readonly pageSize = signal(LIBRARY_PAGE_SIZE);
+  protected readonly totalCount = signal(0);
 
   private readonly dialog = inject(MatDialog);
   private readonly recipeService = inject(RecipeService);
-  private readonly snackBar = inject(MatSnackBar);
   private selectedDietaryTags: string[] = [];
+  private readonly snackBar = inject(MatSnackBar);
 
   findMatches(): void {
     this.matchError.set(false);
     this.matchLoading.set(true);
-    this.recipeService.matchRecipes(undefined, this.selectedDietaryTags.length > 0 ? this.selectedDietaryTags : undefined).subscribe({
-      error: () => {
-        this.matchLoading.set(false);
-        this.matchError.set(true);
-        this.snackBar.open('Failed to load matches.', 'Dismiss', {
-          duration: 4000,
-        });
-      },
-      next: (results) => {
-        this.matchLoading.set(false);
-        this.matchResults.set(results);
-      },
-    });
+    this.recipeService
+      .matchRecipes(undefined, this.selectedDietaryTags.length > 0 ? this.selectedDietaryTags : undefined)
+      .subscribe({
+        error: () => {
+          this.matchLoading.set(false);
+          this.matchError.set(true);
+          this.snackBar.open('Failed to load matches.', 'Dismiss', { duration: 4000 });
+        },
+        next: (results) => {
+          this.matchLoading.set(false);
+          this.matchResults.set(results);
+        },
+      });
   }
 
   loadLibrary(): void {
     this.libraryError.set(false);
     this.libraryLoading.set(true);
-    this.recipeService.getRecipes().subscribe({
+    this.recipeService.getRecipes(this.currentPage(), this.pageSize()).subscribe({
       error: () => {
         this.libraryLoading.set(false);
         this.libraryError.set(true);
       },
-      next: (recipes) => {
+      next: (result) => {
+        this.library.set(result.items);
         this.libraryLoading.set(false);
-        this.library.set(recipes);
+        this.totalCount.set(result.totalCount);
       },
     });
   }
@@ -331,6 +357,12 @@ export class RecipeBrowserComponent implements OnInit {
 
   onDietaryFilterChange(event: MatChipListboxChange): void {
     this.selectedDietaryTags = event.value ?? [];
+  }
+
+  onPageChange(event: PageEvent): void {
+    // MatPaginator uses 0-based pageIndex; the API uses 1-based page numbers.
+    this.currentPage.set(event.pageIndex + 1);
+    this.loadLibrary();
   }
 
   openRecipeDetail(recipe: RecipeListItemDto): void {

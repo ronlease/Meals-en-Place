@@ -1,4 +1,16 @@
 // ----------------------------------------------------------------
+// Shared pagination wrapper
+// ----------------------------------------------------------------
+
+export interface PagedResult<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+  totalPages: number;
+}
+
+// ----------------------------------------------------------------
 // Recipe library list DTO
 // ----------------------------------------------------------------
 
@@ -6,7 +18,6 @@ export interface RecipeListItemDto {
   cuisineType: string;
   dietaryTags: DietaryTag[];
   id: string;
-  ingredientNames: string[];
   isFullyResolved: boolean;
   title: string;
   totalIngredients: number;
