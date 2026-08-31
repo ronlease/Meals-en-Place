@@ -9,7 +9,7 @@ namespace MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 public interface ITodoistTestClient
 {
     /// <summary>
-    /// Issues <c>GET /rest/v2/projects</c> with <paramref name="token"/> and
+    /// Issues <c>GET /api/v1/projects</c> with <paramref name="token"/> and
     /// reports success or the Todoist-reported error message.
     /// </summary>
     Task<TodoistTestResult> PingAsync(string token, CancellationToken cancellationToken = default);

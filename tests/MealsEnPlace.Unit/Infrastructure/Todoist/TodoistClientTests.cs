@@ -1,9 +1,9 @@
 // Feature: Todoist REST API client (MEP-028 / MEP-029 infrastructure)
 //
-// Scenario: CreateTaskAsync posts to /rest/v2/tasks with Bearer auth and returns the new task id
+// Scenario: CreateTaskAsync posts to /api/v1/tasks with Bearer auth and returns the new task id
 // Scenario: CreateTaskAsync propagates a TodoistApiException on non-success status
-// Scenario: UpdateTaskAsync posts to /rest/v2/tasks/{id} with the updated payload
-// Scenario: CloseTaskAsync posts to /rest/v2/tasks/{id}/close
+// Scenario: UpdateTaskAsync posts to /api/v1/tasks/{id} with the updated payload
+// Scenario: CloseTaskAsync posts to /api/v1/tasks/{id}/close
 // Scenario: Any call without a configured token throws InvalidOperationException before hitting the wire
 
 using System.Net;
@@ -47,7 +47,7 @@ public sealed class TodoistClientTests
         id.Should().Be("remote-123");
         capturedRequest.Should().NotBeNull();
         capturedRequest!.Method.Should().Be(HttpMethod.Post);
-        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/rest/v2/tasks");
+        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/api/v1/tasks");
         capturedRequest.Headers.Authorization!.Scheme.Should().Be("Bearer");
         capturedRequest.Headers.Authorization.Parameter.Should().Be("test-token");
         capturedBody.Should().Contain("\"content\":\"Buy milk\"");
@@ -91,7 +91,7 @@ public sealed class TodoistClientTests
 
         // Assert
         capturedRequest!.Method.Should().Be(HttpMethod.Post);
-        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/rest/v2/tasks/remote-456");
+        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/api/v1/tasks/remote-456");
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public sealed class TodoistClientTests
 
         // Assert
         capturedRequest!.Method.Should().Be(HttpMethod.Post);
-        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/rest/v2/tasks/remote-789/close");
+        capturedRequest.RequestUri!.AbsolutePath.Should().Be("/api/v1/tasks/remote-789/close");
     }
 
     [Fact]

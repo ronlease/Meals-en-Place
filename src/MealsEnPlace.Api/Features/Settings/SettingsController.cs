@@ -59,7 +59,7 @@ public class SettingsController(
 
     /// <summary>
     /// Returns the set of Todoist project IDs previously used as push targets,
-    /// merged with live display names resolved in a single <c>GET /rest/v2/projects</c>
+    /// merged with live display names resolved in a single <c>GET /api/v1/projects</c>
     /// call. The Inbox sentinel is always present. When the Todoist call fails or no
     /// token is configured, entries carry null display names and
     /// <c>NamesResolved = false</c> — the endpoint never returns 500 for a Todoist
@@ -171,7 +171,7 @@ public class SettingsController(
     }
 
     /// <summary>
-    /// Issues a live Todoist <c>GET /rest/v2/projects</c> call using either the
+    /// Issues a live Todoist <c>GET /api/v1/projects</c> call using either the
     /// supplied candidate token or the currently resolved token (encrypted
     /// store first, user-secret fallback). An invalid candidate never overwrites
     /// an already-valid stored token.

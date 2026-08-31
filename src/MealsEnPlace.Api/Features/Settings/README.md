@@ -13,10 +13,10 @@ affordances when a token is missing.
 | `POST` | `/api/v1/settings/claude/token` | Persists the supplied Anthropic API key encrypted at rest. Response omits the raw key. |
 | `POST` | `/api/v1/settings/claude/test` | Issues a minimal Messages API request using either the supplied candidate token or the persisted token. Never overwrites the persisted value on failure. |
 | `DELETE` | `/api/v1/settings/claude/token` | Removes the persisted Claude key. Claude-backed features take their deterministic-only branch until a new key is saved. |
-| `GET` | `/api/v1/settings/todoist/projects/history` | Returns previously-used Todoist project IDs merged with live display names (one `GET /rest/v2/projects` call). Always includes the Inbox sentinel. Degrades gracefully to raw IDs with `namesResolved = false` when Todoist is unreachable or no token is configured — never returns 500 for connectivity issues. |
+| `GET` | `/api/v1/settings/todoist/projects/history` | Returns previously-used Todoist project IDs merged with live display names (one `GET /api/v1/projects` call). Always includes the Inbox sentinel. Degrades gracefully to raw IDs with `namesResolved = false` when Todoist is unreachable or no token is configured — never returns 500 for connectivity issues. |
 | `GET` | `/api/v1/settings/todoist/status` | Returns `{ configured: bool }` for Todoist; true when either the encrypted store or the legacy `Todoist:Token` user secret has a token. |
 | `POST` | `/api/v1/settings/todoist/token` | Persists the supplied Todoist API token encrypted at rest. Response omits the raw token. |
-| `POST` | `/api/v1/settings/todoist/test` | Issues a `GET /rest/v2/projects` using either the supplied candidate token or the currently resolved token. Never overwrites the persisted value on failure. |
+| `POST` | `/api/v1/settings/todoist/test` | Issues a `GET /api/v1/projects` using either the supplied candidate token or the currently resolved token. Never overwrites the persisted value on failure. |
 | `DELETE` | `/api/v1/settings/todoist/token` | Removes the persisted Todoist token. The legacy user-secret fallback (if present) remains in effect. |
 
 ## Storage
@@ -73,7 +73,7 @@ shown before a push. It:
 1. Queries `ExternalTaskLink` for distinct non-null `ExternalProjectId` values where
    `Provider = "Todoist"` (using the pre-built index on `(Provider, ExternalProjectId)`).
 2. Resolves the current token via `ITodoistTokenResolver`.
-3. Issues one `GET /rest/v2/projects` call through `ITodoistProjectClient` to map
+3. Issues one `GET /api/v1/projects` call through `ITodoistProjectClient` to map
    IDs to display names.
 4. Always prepends the Inbox sentinel (`projectId = null`, `isInbox = true`).
 5. Returns `namesResolved = false` and a `nameResolutionError` message when the

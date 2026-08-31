@@ -3,7 +3,7 @@ namespace MealsEnPlace.Api.Features.Settings;
 /// <summary>
 /// Response shape for <c>GET /api/v1/settings/todoist/projects/history</c> (MEP-036).
 /// Merges locally-recorded project IDs from <c>ExternalTaskLink</c> with live display
-/// names resolved in a single <c>GET /rest/v2/projects</c> call. The Inbox sentinel is
+/// names resolved in a single <c>GET /api/v1/projects</c> call. The Inbox sentinel is
 /// always present as the first entry regardless of push history.
 /// </summary>
 public sealed class TodoistProjectHistoryResponse
@@ -31,7 +31,7 @@ public sealed class TodoistProjectHistoryResponse
     public string? NameResolutionError { get; init; }
 
     /// <summary>
-    /// True when the <c>GET /rest/v2/projects</c> call succeeded and
+    /// True when the <c>GET /api/v1/projects</c> call succeeded and
     /// <see cref="TodoistProjectHistoryEntry.DisplayName"/> is populated for all
     /// history entries. False when the call failed or no token is configured —
     /// the UI should show raw IDs and a hint that names could not be loaded.

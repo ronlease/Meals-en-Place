@@ -275,7 +275,7 @@ public sealed class TodoistProjectHistoryServiceTests : IDisposable
     [Fact]
     public async Task GetProjectHistoryAsync_MultipleDistinctHistoryIds_CallsProjectClientOnce()
     {
-        // Arrange — three distinct project IDs; the service must issue one GET /rest/v2/projects
+        // Arrange — three distinct project IDs; the service must issue one GET /api/v1/projects
         // call and resolve names in bulk rather than one call per ID.
         SeedLink("AAA", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-3));
         SeedLink("BBB", ExternalTaskSource.ShoppingListItem, DateTime.UtcNow.AddDays(-2));

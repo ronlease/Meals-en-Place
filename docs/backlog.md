@@ -2515,7 +2515,7 @@ Feature: Angular Frontend Test Infrastructure
 
 ## [MEP-042] Migrate Todoist Integration from REST v2 to Unified API v1
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Depends on:** MEP-028 (shopping list push), MEP-029 (meal plan push), MEP-035 (token entry and Test Connection), MEP-036 (project quick-pick and history endpoint)
 
@@ -2642,3 +2642,32 @@ Feature: Migrate Todoist Integration from REST v2 to Unified API v1
     And the MEP-036 degraded-path test (200 with namesResolved: false) continues to pass
     And the full test suite passes with no regressions
 ```
+
+### Implementation Notes
+
+**Stored-ID migration decision:** The deployment database was checked at implementation
+time (`SELECT COUNT(*) FROM "ExternalTaskLinks"` returned 0). No push history existed,
+so no REST v2-format IDs were persisted anywhere. The ID-mapping-endpoint path (option a)
+was therefore unnecessary and was not implemented. Option b (reset) was effectively a no-op
+since there was nothing to reset. Any future deployment that has v2-era rows in
+`ExternalTaskLink` would need to run the Todoist ID-mapping endpoint (`/api/v1/ids/`) to
+translate stored numeric IDs to alphanumeric API v1 IDs before the next push — that pass
+is not present in this codebase and would need to be added as a one-time data migration if
+the need arises.
+
+**BaseAddress/path convention:** `BaseAddress` remains `https://api.todoist.com` (origin
+only, no path component). All request URIs use full absolute paths with a leading slash,
+e.g. `/api/v1/projects`. This avoids the HttpClient relative-URI trap where a leading slash
+would discard any path already on `BaseAddress`.
+
+**Cursor-following safety:** `TodoistProjectClient.GetProjectsAsync` follows the
+`next_cursor` field across pages. Two safety mechanisms guard against infinite loops: (1) a
+hard cap of 50 pages, and (2) an equality check — if the returned `next_cursor` equals the
+cursor used for the current request, iteration stops. A network or non-2xx failure on any
+page returns `Succeeded = false` immediately rather than returning a partial list silently.
+
+**Shared envelope type:** `TodoistProjectPageEnvelope` and `TodoistProjectEnvelopeItem` are
+defined in `TodoistProjectPageEnvelope.cs` (internal, Todoist namespace) and used by
+`TodoistProjectClient`. `TodoistTestClient.PingAsync` checks only the HTTP status code and
+does not parse the body, so it does not consume the envelope type — but the type is
+available in the shared namespace if that ever changes.

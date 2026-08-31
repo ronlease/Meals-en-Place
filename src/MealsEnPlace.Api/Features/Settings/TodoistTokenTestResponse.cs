@@ -2,7 +2,7 @@ namespace MealsEnPlace.Api.Features.Settings;
 
 /// <summary>
 /// Response shape for <c>POST /api/v1/settings/todoist/test</c>. Carries the
-/// outcome of the live <c>GET /rest/v2/projects</c> probe plus an optional
+/// outcome of the live <c>GET /api/v1/projects</c> probe plus an optional
 /// error message when the call failed.
 /// </summary>
 public sealed class TodoistTokenTestResponse

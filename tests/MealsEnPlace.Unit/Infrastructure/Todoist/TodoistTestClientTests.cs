@@ -1,9 +1,10 @@
-// Feature: Todoist Test Connection client (MEP-035)
+// Feature: Todoist Test Connection client (MEP-035 / MEP-042)
 //
-// Scenario: Successful GET /projects returns Success=true
+// Scenario: Successful GET /api/v1/projects returns Success=true
 // Scenario: Non-success response surfaces the Todoist error message
 // Scenario: Network error returns a friendly failure result
 // Scenario: Bearer token is attached to the Authorization header
+// Scenario: Whitespace token throws ArgumentException before hitting the wire
 
 using System.Net;
 using FluentAssertions;
@@ -22,9 +23,10 @@ public sealed class TodoistTestClientTests
         var handler = BuildHandler((req, _) =>
         {
             captured = req;
+            // Realistic API v1 envelope — PingAsync checks status only, not body shape.
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
             {
-                Content = new StringContent("[]")
+                Content = new StringContent("{\"results\":[],\"next_cursor\":null}")
             });
         });
         var sut = BuildClient(handler);
@@ -34,7 +36,7 @@ public sealed class TodoistTestClientTests
         result.Success.Should().BeTrue();
         result.ErrorMessage.Should().BeNull();
         captured!.Method.Should().Be(HttpMethod.Get);
-        captured.RequestUri!.AbsolutePath.Should().Be("/rest/v2/projects");
+        captured.RequestUri!.AbsolutePath.Should().Be("/api/v1/projects");
         captured.Headers.Authorization!.Scheme.Should().Be("Bearer");
         captured.Headers.Authorization.Parameter.Should().Be("good-token");
     }
