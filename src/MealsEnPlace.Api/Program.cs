@@ -89,11 +89,11 @@ builder.Services.AddSingleton(new TodoistTokenStoreOptions
 });
 builder.Services.AddSingleton<ITodoistTokenStore, TodoistTokenStore>();
 
-// -- Todoist integration (MEP-028 / MEP-029 / MEP-035) -----------------------
+// -- Todoist integration (MEP-028 / MEP-029 / MEP-035 / MEP-036) -------------
 // Token resolves via the encrypted Settings-page store first, then falls back
-// to the legacy `Todoist:Token` user secret. `Todoist:ProjectId` in user
-// secrets remains the only source for the push target ID today (MEP-036 will
-// surface previously-used project IDs).
+// to the legacy `Todoist:Token` user secret. `Todoist:ProjectId` remains the
+// static fallback project; MEP-036 surfaces previously-used project IDs as a
+// per-push override via the project history quick-pick.
 builder.Services.Configure<TodoistOptions>(
     builder.Configuration.GetSection(TodoistOptions.SectionName));
 builder.Services.AddHttpClient("Todoist", client =>
@@ -102,11 +102,13 @@ builder.Services.AddHttpClient("Todoist", client =>
     client.DefaultRequestHeaders.Add("Accept", "application/json");
     client.Timeout = TimeSpan.FromSeconds(15);
 });
+builder.Services.AddScoped<IMealPlanPushTarget, TodoistMealPlanPushTarget>();
+builder.Services.AddScoped<IShoppingListPushTarget, TodoistShoppingListPushTarget>();
 builder.Services.AddScoped<ITodoistClient, TodoistClient>();
+builder.Services.AddScoped<ITodoistProjectClient, TodoistProjectClient>();
+builder.Services.AddScoped<ITodoistProjectHistoryService, TodoistProjectHistoryService>();
 builder.Services.AddScoped<ITodoistTestClient, TodoistTestClient>();
 builder.Services.AddScoped<ITodoistTokenResolver, TodoistTokenResolver>();
-builder.Services.AddScoped<IShoppingListPushTarget, TodoistShoppingListPushTarget>();
-builder.Services.AddScoped<IMealPlanPushTarget, TodoistMealPlanPushTarget>();
 
 // -- Application services -----------------------------------------------------
 builder.Services.AddHttpClient("Anthropic", client =>

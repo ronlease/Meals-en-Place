@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
   ClaudeTokenStatusResponse,
@@ -11,7 +11,7 @@ import {
   TestTodoistTokenRequest,
   TodoistTokenTestResponse,
 } from '../models/settings.models';
-import { TodoistStatusResponse } from '../models/todoist.models';
+import { TodoistProjectHistoryResponse, TodoistStatusResponse } from '../models/todoist.models';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -25,6 +25,29 @@ export class SettingsService {
 
   clearTodoistToken(): Observable<TodoistStatusResponse> {
     return this.http.delete<TodoistStatusResponse>(`${this.todoistUrl}/token`);
+  }
+
+  getProjectHistory(): Observable<TodoistProjectHistoryResponse> {
+    // The API serializes with JsonIgnoreCondition.WhenWritingNull, so null-valued
+    // fields are absent from the payload rather than present as null. Normalize at
+    // this boundary so consumers can rely on the declared `string | null` shape and
+    // strict null checks behave; without this, an absent key arrives as undefined
+    // and slips past every `!== null` guard downstream.
+    return this.http
+      .get<TodoistProjectHistoryResponse>(`${this.todoistUrl}/projects/history`)
+      .pipe(
+        map((response) => ({
+          lastUsedMealPlanProjectId: response.lastUsedMealPlanProjectId ?? null,
+          lastUsedShoppingListProjectId: response.lastUsedShoppingListProjectId ?? null,
+          nameResolutionError: response.nameResolutionError ?? null,
+          namesResolved: response.namesResolved ?? false,
+          projects: (response.projects ?? []).map((project) => ({
+            displayName: project.displayName ?? null,
+            isInbox: project.isInbox ?? false,
+            projectId: project.projectId ?? null,
+          })),
+        })),
+      );
   }
 
   getStatus(): Observable<ClaudeTokenStatusResponse> {

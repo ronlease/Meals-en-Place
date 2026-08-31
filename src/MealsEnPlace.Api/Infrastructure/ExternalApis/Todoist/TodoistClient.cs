@@ -18,11 +18,19 @@ public sealed class TodoistClient(
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
 
+    private HttpRequestMessage BuildRequest(HttpMethod method, string path, TodoistTaskPayload payload)
+    {
+        return new HttpRequestMessage(method, path)
+        {
+            Content = JsonContent.Create(payload, options: SerializerOptions)
+        };
+    }
+
     public async Task CloseTaskAsync(string taskId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
 
-        using var request = new HttpRequestMessage(HttpMethod.Post, $"/rest/v2/tasks/{taskId}/close");
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"/api/v1/tasks/{taskId}/close");
         await SendAsync(request, cancellationToken);
     }
 
@@ -32,7 +40,7 @@ public sealed class TodoistClient(
     {
         ArgumentNullException.ThrowIfNull(payload);
 
-        using var request = BuildRequest(HttpMethod.Post, "/rest/v2/tasks", payload);
+        using var request = BuildRequest(HttpMethod.Post, "/api/v1/tasks", payload);
         using var response = await SendAsync(request, cancellationToken);
 
         var body = await response.Content.ReadFromJsonAsync<TodoistTaskEnvelope>(SerializerOptions, cancellationToken);
@@ -44,24 +52,28 @@ public sealed class TodoistClient(
         return body.Id;
     }
 
-    public async Task UpdateTaskAsync(
-        string taskId,
-        TodoistTaskPayload payload,
-        CancellationToken cancellationToken = default)
+    private static string ExtractErrorMessage(string body, string statusFallback)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
-        ArgumentNullException.ThrowIfNull(payload);
-
-        using var request = BuildRequest(HttpMethod.Post, $"/rest/v2/tasks/{taskId}", payload);
-        await SendAsync(request, cancellationToken);
-    }
-
-    private HttpRequestMessage BuildRequest(HttpMethod method, string path, TodoistTaskPayload payload)
-    {
-        return new HttpRequestMessage(method, path)
+        if (string.IsNullOrWhiteSpace(body))
         {
-            Content = JsonContent.Create(payload, options: SerializerOptions)
-        };
+            return $"Todoist returned HTTP {statusFallback}.";
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.String)
+            {
+                return error.GetString() ?? $"Todoist returned HTTP {statusFallback}.";
+            }
+        }
+        catch (JsonException)
+        {
+            // fall through to the raw body
+        }
+
+        return body.Length > 500 ? body[..500] : body;
     }
 
     private async Task<HttpResponseMessage> SendAsync(
@@ -89,28 +101,16 @@ public sealed class TodoistClient(
         return response;
     }
 
-    private static string ExtractErrorMessage(string body, string statusFallback)
+    public async Task UpdateTaskAsync(
+        string taskId,
+        TodoistTaskPayload payload,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return $"Todoist returned HTTP {statusFallback}.";
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(taskId);
+        ArgumentNullException.ThrowIfNull(payload);
 
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("error", out var error)
-                && error.ValueKind == JsonValueKind.String)
-            {
-                return error.GetString() ?? $"Todoist returned HTTP {statusFallback}.";
-            }
-        }
-        catch (JsonException)
-        {
-            // fall through to the raw body
-        }
-
-        return body.Length > 500 ? body[..500] : body;
+        using var request = BuildRequest(HttpMethod.Post, $"/api/v1/tasks/{taskId}", payload);
+        await SendAsync(request, cancellationToken);
     }
 
     private sealed class TodoistTaskEnvelope

@@ -8,7 +8,7 @@ title Component Diagram for Angular Web App
 Person_Ext(user, "User", "Single local user")
 Container_Ext(api, "API", "ASP.NET Core 10, EF Core 10", "REST API under /api/v1/")
 
-Container_Boundary(web, "Angular Web App — Angular 21, Angular Material") {
+Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
 
     ' ── App Shell ──────────────────────────────────────────────
     Component(appShell, "App Component", "Angular Standalone Component", "Main layout with Material sidenav, toolbar, theme toggle, and display-system preferences")
@@ -23,7 +23,14 @@ Container_Boundary(web, "Angular Web App — Angular 21, Angular Material") {
     Component(expirationPage, "Expiration Tracking Page", "Angular Standalone Component", "Cross-location expiry tracking with color-coded urgency and day filters")
     Component(wasteAlertsPage, "Waste Alerts Page", "Angular Standalone Component", "Card grid of expiring items with recipe suggestions and dismiss action")
 
+    ' ── Settings Page ──────────────────────────────────────────
+    Component(settingsPage, "Settings Page", "Angular Standalone Component", "BYO API key and Todoist token management: save, test connection, remove")
+
+    ' ── Shared Dialogs ─────────────────────────────────────────
+    Component(todoistProjectPicker, "Todoist Project Picker Dialog", "Angular Standalone Component (MAT_DIALOG)", "Pre-push project selection. Loads push-target history from the API, resolves display names, pre-selects the last-used project per resource type, and falls back to Inbox. Shows raw IDs with a hint when names cannot be resolved")
+
     ' ── Core Services ──────────────────────────────────────────
+    Component(settingsService, "SettingsService", "Angular Service, providedIn: root", "Claude API key and Todoist token save/test/clear, Todoist project history for push-target picker")
     Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
     Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
     Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
@@ -47,6 +54,7 @@ Rel(appShell, mealPlanBoard, "Routes to")
 Rel(appShell, shoppingListPage, "Routes to")
 Rel(appShell, seasonalProducePage, "Routes to")
 Rel(appShell, expirationPage, "Routes to")
+Rel(appShell, settingsPage, "Routes to")
 Rel(appShell, wasteAlertsPage, "Routes to")
 Rel(appShell, preferencesService, "Reads display system preference")
 Rel(appShell, themeService, "Toggles dark/light mode")
@@ -63,6 +71,10 @@ Rel(mealPlanBoard, todoistAvailabilityService, "Gates push button on Todoist con
 Rel(shoppingListPage, shoppingListService, "Uses")
 Rel(shoppingListPage, mealPlanService, "Uses")
 Rel(shoppingListPage, todoistAvailabilityService, "Gates push button on Todoist configured status")
+Rel(mealPlanBoard, todoistProjectPicker, "Opens pre-push project picker dialog")
+Rel(shoppingListPage, todoistProjectPicker, "Opens pre-push project picker dialog")
+Rel(todoistProjectPicker, settingsService, "Loads push-target history and resolved display names")
+Rel(settingsPage, settingsService, "Saves / tests / removes API keys and tokens")
 Rel(seasonalProducePage, seasonalProduceService, "Uses")
 Rel(expirationPage, inventoryService, "Uses")
 Rel(wasteAlertsPage, wasteAlertService, "Uses")
@@ -74,6 +86,7 @@ Rel(recipeService, api, "Calls", "HTTP/JSON")
 Rel(referenceDataService, api, "Calls", "HTTP/JSON")
 Rel(seasonalProduceService, api, "Calls", "HTTP/JSON")
 Rel(shoppingListService, api, "Calls", "HTTP/JSON")
+Rel(settingsService, api, "Calls", "HTTP/JSON")
 Rel(todoistAvailabilityService, api, "Calls", "HTTP/JSON")
 Rel(wasteAlertService, api, "Calls", "HTTP/JSON")
 

@@ -24,10 +24,13 @@ export class ShoppingListService {
     );
   }
 
-  pushMealPlanListToTodoist(mealPlanId: string): Observable<ShoppingListPushResult> {
+  pushMealPlanListToTodoist(
+    mealPlanId: string,
+    projectId: string | null
+  ): Observable<ShoppingListPushResult> {
     return this.http.post<ShoppingListPushResult>(
       `${this.baseUrl}/${mealPlanId}/shopping-list/push/todoist`,
-      {}
+      { projectId }
     );
   }
 

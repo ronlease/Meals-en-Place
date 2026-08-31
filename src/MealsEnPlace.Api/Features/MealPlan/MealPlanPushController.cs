@@ -1,3 +1,4 @@
+using MealsEnPlace.Api.Infrastructure.ExternalApis.Todoist;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MealsEnPlace.Api.Features.MealPlan;
@@ -15,6 +16,11 @@ public sealed class MealPlanPushController(IMealPlanPushTarget todoistTarget) : 
 {
     /// <summary>Pushes every slot of the meal plan to Todoist as scheduled tasks.</summary>
     /// <param name="id">The meal plan to push.</param>
+    /// <param name="request">
+    /// Optional. When <see cref="TodoistPushRequest.ProjectId"/> is supplied it overrides
+    /// the configured <c>Todoist:ProjectId</c> for this push only — the static secret is
+    /// never written to. Omit or set to null to use the configured default.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>200 with created / updated / closed counts; 400 when Todoist is not configured; 404 when the plan is not found.</returns>
     [HttpPost("{id:guid}/push/todoist")]
@@ -22,11 +28,13 @@ public sealed class MealPlanPushController(IMealPlanPushTarget todoistTarget) : 
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<MealPlanPushResult>> PushToTodoist(
-        Guid id, CancellationToken cancellationToken = default)
+        Guid id,
+        [FromBody] TodoistPushRequest? request = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            var result = await todoistTarget.PushAsync(id, cancellationToken);
+            var result = await todoistTarget.PushAsync(id, request?.ProjectId, cancellationToken);
             return Ok(result);
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("not configured", StringComparison.OrdinalIgnoreCase))

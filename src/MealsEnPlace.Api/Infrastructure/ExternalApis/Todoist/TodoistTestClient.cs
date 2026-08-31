@@ -8,12 +8,36 @@ public sealed class TodoistTestClient(IHttpClientFactory httpClientFactory) : IT
 {
     private const string HttpClientName = "Todoist";
 
+    private static string ExtractErrorMessage(string body, string statusFallback)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return $"Todoist returned HTTP {statusFallback}.";
+        }
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.TryGetProperty("error", out var error)
+                && error.ValueKind == JsonValueKind.String)
+            {
+                return error.GetString() ?? $"Todoist returned HTTP {statusFallback}.";
+            }
+        }
+        catch (JsonException)
+        {
+            // fall through to the raw body
+        }
+
+        return body.Length > 500 ? body[..500] : body;
+    }
+
     public async Task<TodoistTestResult> PingAsync(string token, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
 
         var client = httpClientFactory.CreateClient(HttpClientName);
-        using var request = new HttpRequestMessage(HttpMethod.Get, "/rest/v2/projects");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/v1/projects");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         try
@@ -47,29 +71,5 @@ public sealed class TodoistTestClient(IHttpClientFactory httpClientFactory) : IT
                 Success = false
             };
         }
-    }
-
-    private static string ExtractErrorMessage(string body, string statusFallback)
-    {
-        if (string.IsNullOrWhiteSpace(body))
-        {
-            return $"Todoist returned HTTP {statusFallback}.";
-        }
-
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            if (doc.RootElement.TryGetProperty("error", out var error)
-                && error.ValueKind == JsonValueKind.String)
-            {
-                return error.GetString() ?? $"Todoist returned HTTP {statusFallback}.";
-            }
-        }
-        catch (JsonException)
-        {
-            // fall through to the raw body
-        }
-
-        return body.Length > 500 ? body[..500] : body;
     }
 }

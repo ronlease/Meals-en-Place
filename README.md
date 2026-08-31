@@ -5,7 +5,7 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 ## Tech Stack
 
 - **API:** ASP.NET Core 10, Entity Framework Core 10, PostgreSQL
-- **Frontend:** Angular 21, Angular Material, PWA (service worker, offline support)
+- **Frontend:** Angular 22, Angular Material, PWA (service worker, offline support)
 - **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
 - **Recipe catalog:** Bulk ingested offline from the Kaggle "Recipe Dataset (over 2M)" via `MealsEnPlace.Tools.Ingest` (see [CITATION.cff](CITATION.cff))
 - **External APIs:** Open Food Facts (ingredient metadata), Todoist REST v2 (shopping list + meal plan task push — MEP-028 / MEP-029)
@@ -65,7 +65,7 @@ src/
       Data/                   # EF Core DbContext, migrations, configurations
       ExternalApis/           # Open Food Facts client
     Models/Entities/          # Domain entities and enums
-  MealsEnPlace.Web/           # Angular 21 frontend
+  MealsEnPlace.Web/           # Angular 22 frontend
     src/app/features/
       inventory/              # Pantry/Fridge/Freezer management
       expiration/             # Upcoming expiration dates view

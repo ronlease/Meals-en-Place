@@ -2140,40 +2140,102 @@ Feature: Todoist Settings UI
 
 ## [MEP-036] Surface Associated Todoist Project IDs for Push Target Selection
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
-**Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first)
+**Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first), MEP-035 (the Todoist token resolver and `GET /rest/v2/projects` client)
+
+### Implementation Notes
+Shipped across backend, frontend, tests, and docs.
+
+- `GET /api/v1/settings/todoist/projects/history` (`TodoistProjectHistoryService`) returns the distinct non-null `ExternalProjectId` values for Provider = "Todoist", always Inbox-first, with display names resolved through one `GET /api/v1/projects` call via the new `ITodoistProjectClient` (migrated from `/rest/v2/` by MEP-042). Degradation is a first-class path: an unreachable, failing, or unconfigured Todoist returns 200 with null display names and `namesResolved: false` — never a 5xx.
+- Last-used project is **derived**, not stored: the newest `ExternalTaskLink` row per `SourceType` yields `lastUsedShoppingListProjectId` / `lastUsedMealPlanProjectId`. No new column and **no migration**, and the value cannot drift from what was actually pushed.
+- Optional `{ projectId }` body (`TodoistPushRequest`) on the three push endpoints overrides `Todoist:ProjectId` for that push only. Omitting the body preserves the pre-MEP-036 fallback chain exactly, which is the regression path existing users hit.
+- Frontend: `TodoistProjectPickerDialogComponent` (shared) opens between the "Push to Todoist" click and the push on both surfaces. It takes a `resourceType` and reads the matching `lastUsed*` off the response; a remembered project absent from the list falls back to Inbox.
+- Tests: 605 unit (up from 598) + 18 integration, all green. Coverage 93.9% line / 81.9% branch.
+
+### Scope decisions made during implementation
+- **Server-derived recall beat client-side storage.** The frontend initially kept the last-used project in `localStorage`. That was removed: it duplicated a fact the API already derives from push history, and the two silently diverge when site data is cleared or the user pushes from another browser. The server is the single source of truth.
+- **Project names resolve lazily on dialog open**, per the pre-implementation scope decision above. Confirmed correct during build: the Todoist create-task response carries `project_id` but no project name, so denormalizing a name onto `ExternalTaskLink` would have required the same `GET /projects` call plus a migration plus rename-staleness handling.
+
+### Known gap (not introduced here)
+The Angular dialog's spec file cannot execute — the frontend has no test runner configured. Tracked as MEP-041.
 
 ### Business Problem
-MEP-028 pushes to the user's Todoist Inbox by default and allows overriding the target via the `Todoist:ProjectId` user secret. That override is static — the user has to edit the user secret every time they want to aim pushes at a different project. I'd rather the app remember which Todoist projects it has already pushed to (via the `ExternalTaskLink` rows it writes) and surface that list as a quick-pick when the user initiates a new push. This is a lighter-weight pattern than the "fetch every project from Todoist and show a full dropdown" flow the original MEP-028 AC described — more relevant to the user's actual usage, avoids an extra API call on every push screen, and works without an up-to-date Todoist OAuth scope.
+MEP-028 and MEP-029 push shopping lists and meal plans to Todoist, targeting whichever project is configured via the `Todoist:ProjectId` user secret (or Inbox when unset). That override is static — the user has to edit the user secret and restart the app every time they want to aim pushes at a different project. The Angular "Push to Todoist" buttons on the shopping list page and meal plan board fire the push immediately, with no opportunity to choose a destination.
+
+The push flow should offer a lightweight project picker before sending. Every push already records the `ExternalProjectId` it used on the `ExternalTaskLink` row, so the app can enumerate the projects it has actually pushed to from local data alone. That history-based list is more relevant than a full dump of every Todoist project (which would include projects the user never intends to use for groceries or meals), and it keeps the picker short.
+
+### Scope decisions
+- **Project names are resolved lazily when the dialog opens.** `ExternalTaskLink.ExternalProjectId` stores only the raw Todoist ID (e.g. `"2331547980"`), and no name is recoverable from the push path: `TodoistTaskPayload` is the request type, and `TodoistClient` deserializes the create-task response into a shape that reads only `Id`. Todoist's REST v2 create-task response carries `project_id`, not a project name. Denormalizing a name onto `ExternalTaskLink` would therefore still require a `GET /rest/v2/projects` call at push time, plus a migration, plus staleness handling on rename — paying all of that for a call it does not avoid. Resolving on dialog open buys the same names for one call, with no schema change and no staleness.
+- **The remembered selection is tracked per resource type.** Shopping lists and meal plans each remember their own last-used project, consistent with MEP-029's original AC and with routing groceries and meal prep to separate Todoist projects.
+- **Name resolution is server-side and best-effort.** The history endpoint merges local IDs with live names in one round trip rather than making the Angular client orchestrate two calls. A failed or unconfigured Todoist call degrades to raw IDs rather than blocking the picker.
+- **Out of scope:** a full dropdown of every Todoist project. A future story may add one alongside this history-based list; this story does not.
 
 ### Acceptance Criteria
 ```gherkin
 Feature: Associated Todoist Project Quick-Pick
 
-  Scenario: Push dialog offers the project IDs we have previously pushed to
-    Given at least one ExternalTaskLink row exists with Provider = "Todoist" and a non-null project ID recorded at push time
-    When the user clicks "Push to Todoist" on a shopping list or meal plan
-    Then a lightweight dialog lets the user pick from those previously-used project IDs (plus "Inbox")
-    And the selection is remembered for the next push of the same resource type
+  Scenario: Push button opens a project-selection dialog instead of pushing immediately
+    Given the user is on the shopping list page or the meal plan board
+    And a Todoist token is configured
+    When the user clicks "Push to Todoist"
+    Then a lightweight dialog appears before the push executes
+    And the dialog lists previously-used project targets plus "Inbox (default)"
+    And confirming the selection triggers the push to that project
+    And dismissing the dialog performs no push
 
-  Scenario: First-ever push has no history and goes to Inbox
-    Given no ExternalTaskLink rows exist for Todoist
-    When the user pushes
-    Then the push targets Inbox without a dialog prompt
-    And the link row records the Inbox project ID (or null) so the history starts building up
+  Scenario: Previously-used projects are enumerated from ExternalTaskLink rows
+    Given ExternalTaskLink rows exist with Provider = "Todoist" and varying ExternalProjectId values
+    When the dialog requests the available push targets
+    Then the response contains the distinct non-null ExternalProjectId values for that provider
+    And "Inbox (default)" is always present regardless of whether any null-project rows exist
+    And the query uses the existing index on (Provider, ExternalProjectId) so it stays fast as history grows
 
-  Scenario: Backfill from MEP-028 rows
-    Given MEP-028 shipped before project IDs were recorded on link rows
-    When this story runs its migration
-    Then an opportunistic backfill populates any missing project IDs from the configured default (or leaves them null when unknown)
-    And no data is lost
+  Scenario: History endpoint resolves project names in a single round trip
+    Given distinct project IDs exist in the local push history
+    When the client calls GET /api/v1/settings/todoist/projects/history
+    Then the backend reads the distinct IDs from ExternalTaskLink
+    And issues one GET /api/v1/projects call through the MEP-035 token resolver to map IDs to names
+    And returns each entry with its project ID and resolved display name
+
+  Scenario: Name resolution degrades to raw IDs when Todoist is unreachable
+    Given the local push history contains project IDs
+    And the Todoist API call fails or no token is configured
+    When the history endpoint responds
+    Then each entry still carries its project ID with a null display name
+    And the response flags that names were not resolved
+    And the dialog renders the raw IDs and a hint that names could not be loaded
+    And the user can still select a project and complete the push
+
+  Scenario: Selected project overrides the static Todoist:ProjectId for this push
+    Given the user selects project "2331547980" in the dialog
+    When the push executes
+    Then every task in this push targets project "2331547980"
+    And the ExternalTaskLink rows written by the push record "2331547980" as ExternalProjectId
+    And the Todoist:ProjectId user secret is not modified
+
+  Scenario: First-ever push has no history and offers only Inbox
+    Given no ExternalTaskLink rows exist for Provider = "Todoist"
+    When the user clicks "Push to Todoist"
+    Then the dialog shows only "Inbox (default)"
+    And confirming pushes to Inbox
+    And the resulting ExternalTaskLink rows record ExternalProjectId = null
+
+  Scenario: The dialog remembers the last selection per resource type
+    Given the user previously pushed a shopping list to project "2331547980"
+    And the user previously pushed a meal plan to project "9988776655"
+    When the user opens the push dialog from the shopping list page
+    Then "2331547980" is pre-selected
+    When the user opens the push dialog from the meal plan board
+    Then "9988776655" is pre-selected
+    And a remembered project that no longer appears in the resolved project list falls back to "Inbox (default)"
 
   Scenario: Relationship to MEP-035
-    Given MEP-035 eventually lands a dynamic Todoist project picker
-    When both stories are implemented
-    Then the associated-IDs quick-pick from this story remains a first-class option alongside the full Todoist project list
-    And the UI clearly distinguishes "projects you've used from this app" from "all your Todoist projects"
+    Given MEP-035 shipped Todoist token entry, Test Connection, and remove-token, but no project picker
+    When this story is implemented
+    Then the history-based quick-pick is the primary project selection mechanism
+    And it reuses the MEP-035 token resolver rather than introducing a second credential path
+    And a full live-API project dropdown remains a possible future story, out of scope here
 ```
 
 ## [MEP-037] Strip Ad / Tracking URLs on Recipe Ingest
@@ -2377,4 +2439,355 @@ Feature: Offline Tools Test Coverage
     When coverlet.runsettings is reviewed
     Then the Include filter is widened to cover them
     And the CI gate enforces 90% across all three assemblies
+```
+
+---
+
+## [MEP-041] Angular Frontend Test Infrastructure (Vitest)
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** none
+
+### Business Problem
+The .NET side of the codebase has 598 unit tests and 18 integration tests behind
+a CI coverage gate enforcing 90% line coverage. The Angular frontend has zero
+executable tests and no configured test runner. There is literally no way to run
+a spec file today. Every Angular component shipped so far -- inventory management,
+meal plan board, recipe browser, shopping list, settings, container resolution
+dialog -- is completely untested.
+
+MEP-036 surfaced the gap by being the first story to produce a `.spec.ts` file
+(`todoist-project-picker-dialog.component.spec.ts`), but that spec has never been
+executed because no runner is installed. The project shows evidence of an
+incomplete Vitest setup: `tsconfig.spec.json` already declares
+`"types": ["vitest/globals"]` and includes `src/**/*.spec.ts`, but `package.json`
+lists no test runner dependency (no vitest, no karma, no jest), and `angular.json`
+has no `test` architect target. Someone chose a direction and the work stopped
+partway.
+
+Angular 22 dropped Karma support. The Frontend Engineer's assessment recommends
+Vitest via `@analogjs/vitest-angular`: three devDependencies (`vitest`,
+`@analogjs/vitest-angular`, `@vitest/coverage-v8`), a `vitest.config.ts` using
+the Analog plugin with `environment: 'jsdom'` and the Analog setup file, and
+either a `test` target in `angular.json` using the
+`@analogjs/vitest-angular:test` builder or updating the npm script to
+`vitest run`. The existing MEP-036 spec is already Vitest-native and requires no
+changes once the runner is in place.
+
+This is blocking infrastructure. Until it ships, no frontend test can execute,
+and the testing asymmetry between backend and frontend will widen with every new
+component.
+
+### Acceptance Criteria
+```gherkin
+Feature: Angular Frontend Test Infrastructure
+
+  Scenario: Test runner is installed and npm test executes specs
+    Given the Angular project has vitest, @analogjs/vitest-angular, and @vitest/coverage-v8 as devDependencies
+    And a vitest.config.ts exists using the Analog plugin with environment "jsdom"
+    And angular.json has a test architect target or the npm test script invokes vitest
+    When a developer runs "npm test" from the MealsEnPlace.Web directory
+    Then vitest discovers and executes all *.spec.ts files under src/
+    And the process exits with code 0 when all specs pass
+
+  Scenario: Existing MEP-036 dialog spec runs and passes
+    Given the todoist-project-picker-dialog.component.spec.ts file exists from MEP-036
+    When vitest runs the full test suite
+    Then the MEP-036 spec is discovered, executed, and passes
+    And no changes to the spec file itself are required
+
+  Scenario: Coverage collection works and reports a number
+    Given @vitest/coverage-v8 is configured
+    When a developer runs "npm test -- --coverage"
+    Then a coverage report is generated for the Angular source files
+    And the report shows a line-coverage percentage
+
+  Scenario: Coverage gate participation decision is recorded
+    Given the frontend test infrastructure is operational
+    When the team reviews coverage results
+    Then a decision is recorded on whether the Angular project joins a CI coverage gate and at what threshold
+    And the decision follows the same pattern as MEP-040 (offline tools outside the gate until they clear a bar)
+    And if the frontend stays outside the gate initially, the rationale and target threshold are documented
+```
+
+---
+
+## [MEP-042] Migrate Todoist Integration from REST v2 to Unified API v1
+
+**Status:** Done
+**Priority:** High
+**Depends on:** MEP-028 (shopping list push), MEP-029 (meal plan push), MEP-035 (token entry and Test Connection), MEP-036 (project quick-pick and history endpoint)
+
+### Business Problem
+The Todoist integration shipped under MEP-028, MEP-029, MEP-035, and MEP-036 targets
+Todoist's REST API v2 (`/rest/v2/` paths). Todoist has deprecated that API surface and is
+actively returning deprecation notices instead of results. The user discovered the breakage
+by clicking "Test Connection" on the Settings page, but the problem is not confined to that
+button: all six call sites across four files use `/rest/v2/` paths, which means shopping list
+push (MEP-028), meal plan push (MEP-029), Test Connection (MEP-035), and the project
+quick-pick name resolution (MEP-036) are all broken or on borrowed time. This is a live
+outage of shipped functionality, not a future-proofing exercise.
+
+The replacement is Todoist's Unified API v1, documented at
+`https://developer.todoist.com/`, with a base path of
+`https://api.todoist.com/api/v1/`. Authentication is unchanged (`Authorization: Bearer
+{token}`), but two structural changes affect the implementation beyond a path swap:
+
+1. **Response envelope change.** List endpoints (`GET /projects`, `GET /tasks`, etc.) no
+   longer return a bare JSON array. They return a paginated envelope
+   `{"results": [...], "next_cursor": "..." | null}`. Both `TodoistProjectClient` and
+   `TodoistTestClient` currently deserialize `GET /projects` as a bare array and will fail
+   to parse even after the path is corrected. Accounts with many projects require
+   cursor-following rather than a single call.
+
+2. **Object ID format change.** API v1 uses alphanumeric IDs (e.g., `69mF7QcCj9JmXxp8`);
+   REST v2 used numeric IDs (e.g., `7246645180`). Every `ExternalTaskLink` row persisted by
+   prior pushes stores REST v2-format IDs in both `ExternalTaskId` and `ExternalProjectId`.
+   Against API v1 those stored IDs are the wrong format, which breaks two things:
+   - **Push idempotency.** MEP-028 and MEP-029 update and close existing tasks by stored
+     `ExternalTaskId`. Stale-format IDs mean updates fail or, worse, duplicate tasks get
+     created on the next push.
+   - **MEP-036 project quick-pick.** It matches stored `ExternalProjectId` values against
+     the project list returned by Todoist to resolve display names. With mismatched ID
+     formats, every previously-used project fails to resolve and degrades to a raw ID.
+
+The implementation must make an explicit decision between two strategies for the stored-ID
+problem and document the tradeoff:
+- **(a) Migrate stored IDs** via the Todoist ID-mapping endpoint (reported to exist under
+  `/api/v1/ids/`; the exact path and shape must be confirmed against the live docs at
+  implementation time rather than assumed from this description). This preserves push
+  history, idempotency, and MEP-036 quick-pick continuity, but adds complexity and a
+  network dependency on the mapping endpoint.
+- **(b) Accept a one-time reset** of `ExternalTaskLink` rows, which loses push history and
+  the MEP-036 quick-pick project history. This is far simpler but means the next push after
+  upgrade re-creates all tasks rather than updating them, which could duplicate tasks already
+  in the user's Todoist. The user would need to manually close or delete the old tasks.
+
+### Acceptance Criteria
+```gherkin
+Feature: Migrate Todoist Integration from REST v2 to Unified API v1
+
+  Scenario: Base address and all call-site paths updated to API v1
+    Given Program.cs configures the Todoist HttpClient with a base address
+    And six call sites across TodoistClient.cs, TodoistProjectClient.cs, TodoistTestClient.cs, and ITodoistTestClient.cs reference /rest/v2/ paths
+    When this story is implemented
+    Then the base address points at the API v1 root (https://api.todoist.com/api/v1/)
+    And every call site uses the corresponding /api/v1/ path
+    And no /rest/v2/ path reference remains in any tracked file (verified via grep gate)
+    And the ITodoistTestClient XML doc comment referencing the v2 path is updated
+
+  Scenario: GET /projects consumers parse the paginated envelope
+    Given Todoist API v1 GET /projects returns {"results": [...], "next_cursor": "..." | null}
+    And TodoistProjectClient and TodoistTestClient both currently deserialize the response as a bare JSON array
+    When this story is implemented
+    Then both consumers deserialize the {"results", "next_cursor"} envelope
+    And cursor-following is implemented so accounts with many projects return all results
+    And the deserialization model is shared between the two consumers
+
+  Scenario: Test Connection returns a real success or failure
+    Given the user clicks "Test connection" on the Todoist section of the Settings page
+    When the backend issues the API v1 equivalent of the projects call
+    Then a valid token returns success with no deprecation notice
+    And an invalid token returns the Todoist-reported error message
+    And an unreachable Todoist API returns a clear network-error message
+
+  Scenario: Task create works against API v1
+    Given a shopping list or meal plan push creates new Todoist tasks
+    When the push executes via POST /api/v1/tasks
+    Then tasks are created in the configured project
+    And the response is parsed to extract the new API v1-format task ID
+    And the ExternalTaskLink row stores the API v1-format ID
+
+  Scenario: Task update works against API v1
+    Given an ExternalTaskLink row exists with an API v1-format ExternalTaskId
+    And the corresponding shopping list item or meal plan slot has changed (ContentHash differs)
+    When the push executes
+    Then the existing Todoist task is updated via POST /api/v1/tasks/{id}
+    And no duplicate task is created
+
+  Scenario: Task close works against API v1
+    Given an ExternalTaskLink row exists for an item that has been removed from the source
+    When the push executes
+    Then the Todoist task is closed via POST /api/v1/tasks/{id}/close
+    And the ExternalTaskLink row is updated accordingly
+
+  Scenario: Push idempotency is preserved end-to-end
+    Given a shopping list has been pushed to Todoist via API v1
+    And no items have changed since the last push
+    When the user pushes again
+    Then the push result reports zero created, zero updated, zero closed
+    And no duplicate tasks appear in Todoist
+
+  Scenario: Stored-ID migration strategy is decided and documented
+    Given ExternalTaskLink rows from prior pushes store REST v2-format numeric IDs
+    And API v1 uses alphanumeric IDs that do not match the stored values
+    When the implementation begins
+    Then the team selects either (a) migrating stored IDs via the Todoist ID-mapping endpoint or (b) resetting ExternalTaskLink rows
+    And the decision is documented in the Implementation Notes section of this backlog item
+    And if option (a) is chosen, the ID-mapping endpoint path and shape are confirmed against live Todoist docs before coding begins
+    And if option (b) is chosen, the migration deletes or archives stale ExternalTaskLink rows and the user is informed that the next push will re-create tasks
+
+  Scenario: MEP-036 project quick-pick resolves display names after migration
+    Given the stored-ID strategy has been applied
+    When the user opens the Todoist push dialog on the shopping list page or meal plan board
+    Then GET /api/v1/settings/todoist/projects/history returns previously-used projects with resolved display names
+    And the degraded path (200 with namesResolved: false) is preserved when Todoist is unreachable
+
+  Scenario: Existing tests are updated for API v1 behavior
+    Given unit tests exist for TodoistClient, TodoistProjectClient, TodoistTestClient, and the push targets
+    When this story is implemented
+    Then all test assertions reference the API v1 paths and response shapes
+    And tests for the paginated envelope and cursor-following are added
+    And the MEP-036 degraded-path test (200 with namesResolved: false) continues to pass
+    And the full test suite passes with no regressions
+```
+
+### Implementation Notes
+
+**Stored-ID migration decision:** The deployment database was checked at implementation
+time (`SELECT COUNT(*) FROM "ExternalTaskLinks"` returned 0). No push history existed,
+so no REST v2-format IDs were persisted anywhere. The ID-mapping-endpoint path (option a)
+was therefore unnecessary and was not implemented. Option b (reset) was effectively a no-op
+since there was nothing to reset. Any future deployment that has v2-era rows in
+`ExternalTaskLink` would need to run the Todoist ID-mapping endpoint (`/api/v1/ids/`) to
+translate stored numeric IDs to alphanumeric API v1 IDs before the next push — that pass
+is not present in this codebase and would need to be added as a one-time data migration if
+the need arises.
+
+**BaseAddress/path convention:** `BaseAddress` remains `https://api.todoist.com` (origin
+only, no path component). All request URIs use full absolute paths with a leading slash,
+e.g. `/api/v1/projects`. This avoids the HttpClient relative-URI trap where a leading slash
+would discard any path already on `BaseAddress`.
+
+**Cursor-following safety:** `TodoistProjectClient.GetProjectsAsync` follows the
+`next_cursor` field across pages. Two safety mechanisms guard against infinite loops: (1) a
+hard cap of 50 pages, and (2) an equality check — if the returned `next_cursor` equals the
+cursor used for the current request, iteration stops. A network or non-2xx failure on any
+page returns `Succeeded = false` immediately rather than returning a partial list silently.
+
+**Shared envelope type:** `TodoistProjectPageEnvelope` and `TodoistProjectEnvelopeItem` are
+defined in `TodoistProjectPageEnvelope.cs` (internal, Todoist namespace) and used by
+`TodoistProjectClient`. `TodoistTestClient.PingAsync` checks only the HTTP status code and
+does not parse the body, so it does not consume the envelope type — but the type is
+available in the shared namespace if that ever changes.
+
+---
+
+## [MEP-043] Recipe List Endpoint Pagination and Query Optimization
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-026 (bulk ingest created the data volume that makes the unbounded query fatal)
+
+### Business Problem
+The recipes page is completely broken. Opening it in the browser shows "Failed to load
+recipes. Please try again." and the API returns HTTP 500 after approximately 32 seconds.
+The root cause is that `GET /api/v1/recipes` loads the entire Recipes table --
+1,643,098 rows with 13,635,157 joined RecipeIngredient rows -- into memory in a single
+unbounded query. The endpoint accepts no paging parameters; its implementation calls
+`ToListAsync` on a query with two `Include`/`ThenInclude` collection navigations (DietaryTags
+and RecipeIngredients with CanonicalIngredient), which EF Core executes as a single SQL
+statement containing two left-joined collection subqueries. This is the exact pattern EF
+Core's `MultipleCollectionIncludeWarning` exists to flag: it produces a cartesian explosion
+where every combination of DietaryTag and RecipeIngredient rows is materialized. The
+resulting SQL contains no LIMIT and no OFFSET, so Postgres attempts to build the full result
+set, exceeds the 30-second command timeout, and cancels the statement
+(`Npgsql.PostgresException 57014`), which the API surfaces as a 500.
+
+The endpoint worked before MEP-026 because the recipe catalog was on the order of hundreds
+of rows (TheMealDB's roughly 600 recipes). The Kaggle ingest grew the data by five orders
+of magnitude and exposed an always-unbounded query that was already technically incorrect
+(the cartesian explosion existed before, it just completed within the timeout at small
+scale).
+
+This is a live defect on a primary user-facing page with no workaround -- the user cannot
+browse, search, or interact with their recipe library at all. There is no client-side
+fallback because the endpoint returns zero usable data.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe List Endpoint Pagination and Query Optimization
+
+  Scenario: Recipe list endpoint accepts pagination parameters
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with page=1 and pageSize=25
+    Then the response contains at most 25 recipe items
+    And the response includes totalCount metadata reflecting the full catalog size
+    And the response includes the current page number and page size
+
+  Scenario: Default pagination when no parameters are supplied
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with no pagination parameters
+    Then the response uses a sensible default page size (e.g. 25)
+    And the response returns only the first page of results
+    And the response is not unbounded
+
+  Scenario: Maximum page size is enforced
+    Given a caller requests GET /api/v1/recipes with pageSize=10000
+    When the server processes the request
+    Then the page size is clamped to a documented maximum (e.g. 100)
+    And the response contains at most that maximum number of items
+
+  Scenario: Page of recipes returns well within the command timeout
+    Given the recipe catalog contains over 1,600,000 rows
+    When I call GET /api/v1/recipes with page=1 and pageSize=25
+    Then the response returns in under 2 seconds
+    And no Npgsql command timeout or cancellation exception occurs
+
+  Scenario: Query uses projection instead of Include/ThenInclude
+    Given the endpoint previously used Include(DietaryTags) and Include(RecipeIngredients).ThenInclude(CanonicalIngredient)
+    When the implementation is updated
+    Then the query projects directly to RecipeListItemDto in the database via Select
+    And the emitted SQL does not produce a cartesian product across collection navigations
+    And the EF Core MultipleCollectionIncludeWarning is no longer triggered
+
+  Scenario: RecipeListItemDto contains the required summary fields
+    Given the list endpoint projects to RecipeListItemDto
+    When the projection runs
+    Then each item includes TotalIngredients as a count of the recipe's ingredients
+    And each item includes UnresolvedCount as a count of unresolved container references
+    And each item includes DietaryTags as a list of tag names
+    And the implementation evaluates whether IngredientNames belongs on the list DTO or should be deferred to the detail endpoint to keep the list query lean
+
+  Scenario: AsSplitQuery is used where collection loads remain
+    Given any query path that still loads multiple collection navigations
+    When the query executes
+    Then AsSplitQuery is applied to prevent cartesian explosion
+    And each collection loads in a separate SQL statement
+
+  Scenario: Database index supports ORDER BY Title at scale
+    Given the recipe catalog contains over 1,600,000 rows
+    And the list endpoint orders results by Title
+    When the query executes
+    Then a database index on Recipes.Title supports the sort without a full table scan
+    And the total-count query is supported by an efficient path (index-only count or similar)
+
+  Scenario: Shared pagination helper is introduced or a decision is documented
+    Given no shared pagination helper currently exists under Common/
+    And other list endpoints will need the same pagination treatment
+    When this story is implemented
+    Then either a shared pagination model (page, pageSize, totalCount response wrapper) is introduced under Common/
+    Or the decision to defer the shared helper is documented with a rationale
+
+  Scenario: Angular recipe browser uses server-side pagination
+    Given the frontend previously expected the full recipe list in a single response
+    When the recipe browser component is updated
+    Then it sends page and pageSize query parameters to the API
+    And it renders pagination controls (next, previous, page indicator)
+    And the "Failed to load recipes" error no longer appears
+
+  Scenario: Recipes page renders successfully against the bulk catalog
+    Given the recipe catalog contains over 1,600,000 rows
+    When I open the recipes page in the browser
+    Then the page loads and displays the first page of recipes
+    And I can navigate to subsequent pages
+    And no HTTP 500 or timeout error occurs
+
+  Scenario: Sibling list endpoints are audited for the same unbounded pattern
+    Given MEP-026 grew the data volume across multiple tables
+    When this story is implemented
+    Then all other list endpoints under Recipes/ are checked for unbounded queries
+    And any other list endpoint in the API that predates MEP-026 is checked for the same pattern
+    And any endpoint found to be unbounded is either fixed in this story or a follow-on backlog item is filed
 ```
