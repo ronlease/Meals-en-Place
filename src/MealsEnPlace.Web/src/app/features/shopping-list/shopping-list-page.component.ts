@@ -1,6 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -13,6 +14,11 @@ import { ShoppingListPushResult } from '../../core/models/todoist.models';
 import { MealPlanService } from '../../core/services/meal-plan.service';
 import { ShoppingListService } from '../../core/services/shopping-list.service';
 import { TodoistAvailabilityService } from '../../core/services/todoist-availability.service';
+import {
+  TodoistProjectPickerDialogComponent,
+  TodoistProjectPickerResult,
+} from '../../shared/todoist-project-picker/todoist-project-picker-dialog.component';
+
 
 @Component({
   selector: 'app-shopping-list-page',
@@ -20,6 +26,7 @@ import { TodoistAvailabilityService } from '../../core/services/todoist-availabi
   imports: [
     CommonModule,
     MatButtonModule,
+    MatDialogModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatTableModule,
@@ -164,15 +171,14 @@ export class ShoppingListPageComponent implements OnInit {
   protected readonly pushing = signal(false);
   protected readonly todoistAvailability = inject(TodoistAvailabilityService);
 
+  private readonly dialog = inject(MatDialog);
   private readonly mealPlanService = inject(MealPlanService);
   private readonly shoppingListService = inject(ShoppingListService);
   private readonly snackBar = inject(MatSnackBar);
 
-  pushToTodoist(): void {
-    const plan = this.activePlan();
-    if (!plan) return;
+  private executePush(planId: string, projectId: string | null): void {
     this.pushing.set(true);
-    this.shoppingListService.pushMealPlanListToTodoist(plan.id).subscribe({
+    this.shoppingListService.pushMealPlanListToTodoist(planId, projectId).subscribe({
       error: (err) => {
         this.pushing.set(false);
         const message = err?.error?.detail ?? 'Push to Todoist failed.';
@@ -196,6 +202,16 @@ export class ShoppingListPageComponent implements OnInit {
       : 'Todoist: nothing to push.';
   }
 
+  private loadList(planId: string): void {
+    this.shoppingListService.getList(planId).subscribe({
+      error: () => this.loading.set(false),
+      next: (items) => {
+        this.loading.set(false);
+        this.items.set(items);
+      },
+    });
+  }
+
   ngOnInit(): void {
     this.loading.set(true);
     this.mealPlanService.getActivePlan().subscribe({
@@ -210,21 +226,25 @@ export class ShoppingListPageComponent implements OnInit {
     });
   }
 
+  pushToTodoist(): void {
+    const plan = this.activePlan();
+    if (!plan) return;
+
+    const ref = this.dialog.open(TodoistProjectPickerDialogComponent, {
+      data: { resourceType: 'shoppingList' },
+    });
+
+    ref.afterClosed().subscribe((result: TodoistProjectPickerResult | undefined) => {
+      if (result === undefined) return;
+      this.executePush(plan.id, result.projectId);
+    });
+  }
+
   regenerate(): void {
     const plan = this.activePlan();
     if (!plan) return;
     this.loading.set(true);
     this.shoppingListService.generateList(plan.id).subscribe({
-      error: () => this.loading.set(false),
-      next: (items) => {
-        this.loading.set(false);
-        this.items.set(items);
-      },
-    });
-  }
-
-  private loadList(planId: string): void {
-    this.shoppingListService.getList(planId).subscribe({
       error: () => this.loading.set(false),
       next: (items) => {
         this.loading.set(false);

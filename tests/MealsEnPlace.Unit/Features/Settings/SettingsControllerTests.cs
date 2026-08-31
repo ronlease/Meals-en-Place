@@ -11,7 +11,7 @@
 // Scenario: POST /claude/test does not overwrite the persisted token on failure
 // Scenario: DELETE /claude/token removes any persisted value
 //
-// Todoist scenarios (MEP-035):
+// Todoist scenarios (MEP-035 / MEP-036):
 // Scenario: GET /todoist/status reports configured when the resolver returns a token
 // Scenario: GET /todoist/status reports not-configured when the resolver is empty
 // Scenario: POST /todoist/token persists the value and response omits the raw token
@@ -21,6 +21,8 @@
 // Scenario: POST /todoist/test with no resolved and no candidate token returns 400
 // Scenario: POST /todoist/test does not overwrite the persisted token on failure
 // Scenario: DELETE /todoist/token removes any persisted encrypted value
+// Scenario: GET /todoist/projects/history returns the service result as 200
+// Scenario: GET /todoist/projects/history when Todoist is unreachable returns degraded result with NamesResolved=false
 
 using FluentAssertions;
 using MealsEnPlace.Api.Features.Settings;
@@ -36,6 +38,7 @@ public sealed class SettingsControllerTests
 {
     private readonly Mock<IAnthropicTestClient> _anthropicMock = new(MockBehavior.Strict);
     private readonly FakeClaudeTokenStore _claudeStore = new();
+    private readonly Mock<ITodoistProjectHistoryService> _historyServiceMock = new(MockBehavior.Strict);
     private readonly SettingsController _sut;
     private readonly Mock<ITodoistTestClient> _todoistTestMock = new(MockBehavior.Strict);
     private readonly FakeTodoistTokenStore _todoistStore = new();
@@ -45,6 +48,7 @@ public sealed class SettingsControllerTests
         _sut = new SettingsController(
             _anthropicMock.Object,
             _claudeStore,
+            _historyServiceMock.Object,
             _todoistTestMock.Object,
             new ResolverOverStore(_todoistStore),
             _todoistStore);
@@ -258,6 +262,57 @@ public sealed class SettingsControllerTests
 
         GetBody<TodoistStatusResponse>(action).Configured.Should().BeFalse();
         (await _todoistStore.ReadAsync()).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task GetTodoistProjectHistory_Returns200WithServiceResult()
+    {
+        var expected = new TodoistProjectHistoryResponse
+        {
+            NamesResolved = true,
+            Projects =
+            [
+                new TodoistProjectHistoryEntry { DisplayName = "Inbox (default)", IsInbox = true, ProjectId = null },
+                new TodoistProjectHistoryEntry { DisplayName = "Groceries", IsInbox = false, ProjectId = "2331547980" }
+            ]
+        };
+        _historyServiceMock
+            .Setup(s => s.GetProjectHistoryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(expected);
+
+        var action = await _sut.GetTodoistProjectHistory();
+
+        var body = GetBody<TodoistProjectHistoryResponse>(action);
+        body.Should().Be(expected);
+        body.NamesResolved.Should().BeTrue();
+        body.Projects.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetTodoistProjectHistory_WhenTodoistUnreachable_Returns200WithDegradedResult()
+    {
+        // The endpoint must never return 500 when Todoist is unreachable —
+        // name resolution is best-effort and degradation is surfaced via NamesResolved=false.
+        var degraded = new TodoistProjectHistoryResponse
+        {
+            NameResolutionError = "Network error contacting Todoist: timeout",
+            NamesResolved = false,
+            Projects =
+            [
+                new TodoistProjectHistoryEntry { DisplayName = "Inbox (default)", IsInbox = true, ProjectId = null },
+                new TodoistProjectHistoryEntry { DisplayName = null, IsInbox = false, ProjectId = "2331547980" }
+            ]
+        };
+        _historyServiceMock
+            .Setup(s => s.GetProjectHistoryAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(degraded);
+
+        var action = await _sut.GetTodoistProjectHistory();
+
+        var body = GetBody<TodoistProjectHistoryResponse>(action);
+        body.NamesResolved.Should().BeFalse();
+        body.NameResolutionError.Should().NotBeNullOrWhiteSpace();
+        body.Projects[1].DisplayName.Should().BeNull();
     }
 
     private static T GetBody<T>(ActionResult<T> action) where T : class

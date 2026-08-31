@@ -28,7 +28,9 @@ public sealed class TodoistMealPlanPushTarget(
     public string ProviderName => TodoistProviderName;
 
     public async Task<MealPlanPushResult> PushAsync(
-        Guid mealPlanId, CancellationToken cancellationToken = default)
+        Guid mealPlanId,
+        string? projectIdOverride = null,
+        CancellationToken cancellationToken = default)
     {
         if (!await tokenResolver.HasTokenAsync(cancellationToken))
         {
@@ -47,7 +49,9 @@ public sealed class TodoistMealPlanPushTarget(
         }
 
         var scope = mealPlanId.ToString();
-        var projectId = string.IsNullOrWhiteSpace(options.Value.ProjectId) ? null : options.Value.ProjectId;
+        var projectId = !string.IsNullOrWhiteSpace(projectIdOverride)
+            ? projectIdOverride
+            : (string.IsNullOrWhiteSpace(options.Value.ProjectId) ? null : options.Value.ProjectId);
 
         var links = await dbContext.ExternalTaskLinks
             .Where(l => l.Provider == TodoistProviderName

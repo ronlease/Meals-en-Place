@@ -13,8 +13,16 @@ public interface IMealPlanPushTarget
     string ProviderName { get; }
 
     /// <summary>Pushes every slot belonging to the meal plan.</summary>
+    /// <param name="mealPlanId">The plan whose slots to push.</param>
+    /// <param name="projectIdOverride">
+    /// When non-null, overrides the configured <c>Todoist:ProjectId</c> for this push only.
+    /// The static configuration is never modified. Null falls back to <c>Todoist:ProjectId</c>,
+    /// then Inbox.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     Task<MealPlanPushResult> PushAsync(
         Guid mealPlanId,
+        string? projectIdOverride = null,
         CancellationToken cancellationToken = default);
 }
 

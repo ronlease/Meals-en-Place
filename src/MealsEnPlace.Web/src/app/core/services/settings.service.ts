@@ -11,7 +11,7 @@ import {
   TestTodoistTokenRequest,
   TodoistTokenTestResponse,
 } from '../models/settings.models';
-import { TodoistStatusResponse } from '../models/todoist.models';
+import { TodoistProjectHistoryResponse, TodoistStatusResponse } from '../models/todoist.models';
 
 @Injectable({ providedIn: 'root' })
 export class SettingsService {
@@ -25,6 +25,10 @@ export class SettingsService {
 
   clearTodoistToken(): Observable<TodoistStatusResponse> {
     return this.http.delete<TodoistStatusResponse>(`${this.todoistUrl}/token`);
+  }
+
+  getProjectHistory(): Observable<TodoistProjectHistoryResponse> {
+    return this.http.get<TodoistProjectHistoryResponse>(`${this.todoistUrl}/projects/history`);
   }
 
   getStatus(): Observable<ClaudeTokenStatusResponse> {

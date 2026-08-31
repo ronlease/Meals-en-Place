@@ -18,8 +18,16 @@ public interface IShoppingListPushTarget
     /// the standalone list when null. Returns counts of created / updated /
     /// closed / unchanged tasks so the UI can summarize the outcome.
     /// </summary>
+    /// <param name="mealPlanId">Scope; null targets the standalone shopping list.</param>
+    /// <param name="projectIdOverride">
+    /// When non-null, overrides the configured <c>Todoist:ProjectId</c> for this push only.
+    /// The static configuration is never modified. Null falls back to <c>Todoist:ProjectId</c>,
+    /// then Inbox.
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
     Task<ShoppingListPushResult> PushAsync(
         Guid? mealPlanId,
+        string? projectIdOverride = null,
         CancellationToken cancellationToken = default);
 }
 

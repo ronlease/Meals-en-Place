@@ -18,6 +18,17 @@ export class MealPlanService {
   private readonly http = inject(HttpClient);
   private readonly slotsUrl = `${environment.apiUrl}/v1/meal-plan-slots`;
 
+  applyReorderByExpiry(
+    mealPlanId: string,
+    urgencyWindowDays?: number
+  ): Observable<MealPlanResponse> {
+    const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
+    return this.http.post<MealPlanResponse>(
+      `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/apply${query}`,
+      {}
+    );
+  }
+
   consumeSlot(slotId: string): Observable<ConsumeMealResponse> {
     return this.http.post<ConsumeMealResponse>(
       `${this.slotsUrl}/${slotId}/consume`,
@@ -38,27 +49,6 @@ export class MealPlanService {
     return this.http.get<MealPlanResponse>(`${this.baseUrl}/active`);
   }
 
-  swapSlot(
-    slotId: string,
-    request: SwapSlotRequest
-  ): Observable<MealPlanSlotResponse> {
-    return this.http.put<MealPlanSlotResponse>(
-      `${this.baseUrl}/slots/${slotId}`,
-      request
-    );
-  }
-
-  applyReorderByExpiry(
-    mealPlanId: string,
-    urgencyWindowDays?: number
-  ): Observable<MealPlanResponse> {
-    const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
-    return this.http.post<MealPlanResponse>(
-      `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/apply${query}`,
-      {}
-    );
-  }
-
   previewReorderByExpiry(
     mealPlanId: string,
     urgencyWindowDays?: number
@@ -70,10 +60,23 @@ export class MealPlanService {
     );
   }
 
-  pushToTodoist(mealPlanId: string): Observable<MealPlanPushResult> {
+  pushToTodoist(
+    mealPlanId: string,
+    projectId: string | null
+  ): Observable<MealPlanPushResult> {
     return this.http.post<MealPlanPushResult>(
       `${this.baseUrl}/${mealPlanId}/push/todoist`,
-      {}
+      { projectId }
+    );
+  }
+
+  swapSlot(
+    slotId: string,
+    request: SwapSlotRequest
+  ): Observable<MealPlanSlotResponse> {
+    return this.http.put<MealPlanSlotResponse>(
+      `${this.baseUrl}/slots/${slotId}`,
+      request
     );
   }
 

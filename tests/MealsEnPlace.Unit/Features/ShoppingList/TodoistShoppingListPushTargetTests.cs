@@ -1,10 +1,12 @@
-// Feature: Todoist Shopping List Push Target (MEP-028)
+// Feature: Todoist Shopping List Push Target (MEP-028 / MEP-036)
 //
 // Scenario: Happy path first push creates one task per item and records a link
 // Scenario: Re-push with unchanged content is a no-op (Todoist is never touched)
 // Scenario: Re-push with quantity change updates the existing task
 // Scenario: Re-push after an item was removed closes the corresponding task and deletes the link
 // Scenario: PushAsync throws InvalidOperationException when Todoist:Token is not configured
+// Scenario: Project override routes tasks to the specified project and records it in the link
+// Scenario: Override does not modify the static Todoist:ProjectId configuration
 
 using FluentAssertions;
 using MealsEnPlace.Api.Features.ShoppingList;
@@ -190,9 +192,62 @@ public sealed class TodoistShoppingListPushTargetTests : IDisposable
             .WithMessage("*not configured*");
     }
 
-    private TodoistShoppingListPushTarget BuildSut(string? token)
+    [Fact]
+    public async Task PushAsync_WithProjectOverride_RoutesTaskToSpecifiedProjectAndRecordsItInLink()
     {
-        var options = Options.Create(new TodoistOptions { Token = token });
+        // Arrange
+        var mealPlanId = Guid.NewGuid();
+        var flour = SeedIngredient("Flour");
+        SeedShoppingListItem(mealPlanId, flour.Id, 500m);
+
+        TodoistTaskPayload? capturedPayload = null;
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .Callback<TodoistTaskPayload, CancellationToken>((p, _) => capturedPayload = p)
+            .ReturnsAsync("remote-1");
+
+        // Use a configured static ProjectId that should be ignored when an override is supplied.
+        var sut = BuildSut(token: "sample-token", staticProjectId: "static-project-id");
+
+        // Act
+        await sut.PushAsync(mealPlanId, projectIdOverride: "override-project-id");
+
+        // Assert — the override must win over the static configuration.
+        capturedPayload!.ProjectId.Should().Be("override-project-id");
+        var link = await _dbContext.ExternalTaskLinks.SingleAsync();
+        link.ExternalProjectId.Should().Be("override-project-id");
+    }
+
+    [Fact]
+    public async Task PushAsync_WithProjectOverride_DoesNotModifyStaticConfiguration()
+    {
+        // Arrange
+        var mealPlanId = Guid.NewGuid();
+        var flour = SeedIngredient("Flour");
+        SeedShoppingListItem(mealPlanId, flour.Id, 500m);
+
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("remote-1");
+
+        var staticOptions = new TodoistOptions { ProjectId = "must-not-change", Token = "sample-token" };
+        var resolver = new StaticTodoistTokenResolver("sample-token");
+        var sut = new TodoistShoppingListPushTarget(
+            _dbContext,
+            Microsoft.Extensions.Options.Options.Create(staticOptions),
+            _todoistMock.Object,
+            resolver);
+
+        // Act
+        await sut.PushAsync(mealPlanId, projectIdOverride: "override-project-id");
+
+        // Assert — the static configuration must remain unmodified.
+        staticOptions.ProjectId.Should().Be("must-not-change");
+    }
+
+    private TodoistShoppingListPushTarget BuildSut(string? token, string? staticProjectId = null)
+    {
+        var options = Options.Create(new TodoistOptions { ProjectId = staticProjectId, Token = token });
         var resolver = new StaticTodoistTokenResolver(token);
         return new TodoistShoppingListPushTarget(_dbContext, options, _todoistMock.Object, resolver);
     }

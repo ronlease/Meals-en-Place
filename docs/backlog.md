@@ -2140,40 +2140,86 @@ Feature: Todoist Settings UI
 
 ## [MEP-036] Surface Associated Todoist Project IDs for Push Target Selection
 
-**Status:** Backlog
+**Status:** In Progress
 **Priority:** Medium
-**Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first)
+**Depends on:** MEP-028 (the `ExternalTaskLink` table must exist first), MEP-035 (the Todoist token resolver and `GET /rest/v2/projects` client)
 
 ### Business Problem
-MEP-028 pushes to the user's Todoist Inbox by default and allows overriding the target via the `Todoist:ProjectId` user secret. That override is static — the user has to edit the user secret every time they want to aim pushes at a different project. I'd rather the app remember which Todoist projects it has already pushed to (via the `ExternalTaskLink` rows it writes) and surface that list as a quick-pick when the user initiates a new push. This is a lighter-weight pattern than the "fetch every project from Todoist and show a full dropdown" flow the original MEP-028 AC described — more relevant to the user's actual usage, avoids an extra API call on every push screen, and works without an up-to-date Todoist OAuth scope.
+MEP-028 and MEP-029 push shopping lists and meal plans to Todoist, targeting whichever project is configured via the `Todoist:ProjectId` user secret (or Inbox when unset). That override is static — the user has to edit the user secret and restart the app every time they want to aim pushes at a different project. The Angular "Push to Todoist" buttons on the shopping list page and meal plan board fire the push immediately, with no opportunity to choose a destination.
+
+The push flow should offer a lightweight project picker before sending. Every push already records the `ExternalProjectId` it used on the `ExternalTaskLink` row, so the app can enumerate the projects it has actually pushed to from local data alone. That history-based list is more relevant than a full dump of every Todoist project (which would include projects the user never intends to use for groceries or meals), and it keeps the picker short.
+
+### Scope decisions
+- **Project names are resolved lazily when the dialog opens.** `ExternalTaskLink.ExternalProjectId` stores only the raw Todoist ID (e.g. `"2331547980"`), and no name is recoverable from the push path: `TodoistTaskPayload` is the request type, and `TodoistClient` deserializes the create-task response into a shape that reads only `Id`. Todoist's REST v2 create-task response carries `project_id`, not a project name. Denormalizing a name onto `ExternalTaskLink` would therefore still require a `GET /rest/v2/projects` call at push time, plus a migration, plus staleness handling on rename — paying all of that for a call it does not avoid. Resolving on dialog open buys the same names for one call, with no schema change and no staleness.
+- **The remembered selection is tracked per resource type.** Shopping lists and meal plans each remember their own last-used project, consistent with MEP-029's original AC and with routing groceries and meal prep to separate Todoist projects.
+- **Name resolution is server-side and best-effort.** The history endpoint merges local IDs with live names in one round trip rather than making the Angular client orchestrate two calls. A failed or unconfigured Todoist call degrades to raw IDs rather than blocking the picker.
+- **Out of scope:** a full dropdown of every Todoist project. A future story may add one alongside this history-based list; this story does not.
 
 ### Acceptance Criteria
 ```gherkin
 Feature: Associated Todoist Project Quick-Pick
 
-  Scenario: Push dialog offers the project IDs we have previously pushed to
-    Given at least one ExternalTaskLink row exists with Provider = "Todoist" and a non-null project ID recorded at push time
-    When the user clicks "Push to Todoist" on a shopping list or meal plan
-    Then a lightweight dialog lets the user pick from those previously-used project IDs (plus "Inbox")
-    And the selection is remembered for the next push of the same resource type
+  Scenario: Push button opens a project-selection dialog instead of pushing immediately
+    Given the user is on the shopping list page or the meal plan board
+    And a Todoist token is configured
+    When the user clicks "Push to Todoist"
+    Then a lightweight dialog appears before the push executes
+    And the dialog lists previously-used project targets plus "Inbox (default)"
+    And confirming the selection triggers the push to that project
+    And dismissing the dialog performs no push
 
-  Scenario: First-ever push has no history and goes to Inbox
-    Given no ExternalTaskLink rows exist for Todoist
-    When the user pushes
-    Then the push targets Inbox without a dialog prompt
-    And the link row records the Inbox project ID (or null) so the history starts building up
+  Scenario: Previously-used projects are enumerated from ExternalTaskLink rows
+    Given ExternalTaskLink rows exist with Provider = "Todoist" and varying ExternalProjectId values
+    When the dialog requests the available push targets
+    Then the response contains the distinct non-null ExternalProjectId values for that provider
+    And "Inbox (default)" is always present regardless of whether any null-project rows exist
+    And the query uses the existing index on (Provider, ExternalProjectId) so it stays fast as history grows
 
-  Scenario: Backfill from MEP-028 rows
-    Given MEP-028 shipped before project IDs were recorded on link rows
-    When this story runs its migration
-    Then an opportunistic backfill populates any missing project IDs from the configured default (or leaves them null when unknown)
-    And no data is lost
+  Scenario: History endpoint resolves project names in a single round trip
+    Given distinct project IDs exist in the local push history
+    When the client calls GET /api/v1/settings/todoist/projects/history
+    Then the backend reads the distinct IDs from ExternalTaskLink
+    And issues one GET /rest/v2/projects call through the MEP-035 token resolver to map IDs to names
+    And returns each entry with its project ID and resolved display name
+
+  Scenario: Name resolution degrades to raw IDs when Todoist is unreachable
+    Given the local push history contains project IDs
+    And the Todoist API call fails or no token is configured
+    When the history endpoint responds
+    Then each entry still carries its project ID with a null display name
+    And the response flags that names were not resolved
+    And the dialog renders the raw IDs and a hint that names could not be loaded
+    And the user can still select a project and complete the push
+
+  Scenario: Selected project overrides the static Todoist:ProjectId for this push
+    Given the user selects project "2331547980" in the dialog
+    When the push executes
+    Then every task in this push targets project "2331547980"
+    And the ExternalTaskLink rows written by the push record "2331547980" as ExternalProjectId
+    And the Todoist:ProjectId user secret is not modified
+
+  Scenario: First-ever push has no history and offers only Inbox
+    Given no ExternalTaskLink rows exist for Provider = "Todoist"
+    When the user clicks "Push to Todoist"
+    Then the dialog shows only "Inbox (default)"
+    And confirming pushes to Inbox
+    And the resulting ExternalTaskLink rows record ExternalProjectId = null
+
+  Scenario: The dialog remembers the last selection per resource type
+    Given the user previously pushed a shopping list to project "2331547980"
+    And the user previously pushed a meal plan to project "9988776655"
+    When the user opens the push dialog from the shopping list page
+    Then "2331547980" is pre-selected
+    When the user opens the push dialog from the meal plan board
+    Then "9988776655" is pre-selected
+    And a remembered project that no longer appears in the resolved project list falls back to "Inbox (default)"
 
   Scenario: Relationship to MEP-035
-    Given MEP-035 eventually lands a dynamic Todoist project picker
-    When both stories are implemented
-    Then the associated-IDs quick-pick from this story remains a first-class option alongside the full Todoist project list
-    And the UI clearly distinguishes "projects you've used from this app" from "all your Todoist projects"
+    Given MEP-035 shipped Todoist token entry, Test Connection, and remove-token, but no project picker
+    When this story is implemented
+    Then the history-based quick-pick is the primary project selection mechanism
+    And it reuses the MEP-035 token resolver rather than introducing a second credential path
+    And a full live-API project dropdown remains a possible future story, out of scope here
 ```
 
 ## [MEP-037] Strip Ad / Tracking URLs on Recipe Ingest

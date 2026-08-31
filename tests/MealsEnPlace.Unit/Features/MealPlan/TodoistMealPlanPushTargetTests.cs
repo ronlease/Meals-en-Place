@@ -1,4 +1,4 @@
-// Feature: Todoist Meal Plan Push Target (MEP-029)
+// Feature: Todoist Meal Plan Push Target (MEP-029 / MEP-036)
 //
 // Scenario: ComputeDueDate places each slot on the correct calendar date relative to WeekStartDate
 // Scenario: First push creates one task per slot and records links
@@ -7,6 +7,8 @@
 // Scenario: Re-push after a slot was removed closes the remote task and deletes the link
 // Scenario: PushAsync throws InvalidOperationException when Todoist:Token is not configured
 // Scenario: PushAsync throws when the meal plan id is unknown
+// Scenario: Project override routes tasks to the specified project and records it in the link
+// Scenario: Override does not modify the static Todoist:ProjectId configuration
 
 using FluentAssertions;
 using MealsEnPlace.Api.Features.MealPlan;
@@ -206,9 +208,60 @@ public sealed class TodoistMealPlanPushTargetTests : IDisposable
             .WithMessage("*was not found*");
     }
 
-    private TodoistMealPlanPushTarget BuildSut(string? token)
+    [Fact]
+    public async Task PushAsync_WithProjectOverride_RoutesTaskToSpecifiedProjectAndRecordsItInLink()
     {
-        var options = Options.Create(new TodoistOptions { Token = token });
+        // Arrange
+        var plan = SeedPlanWithSlots(DateOnly.Parse("2026-05-04"),
+            (DayOfWeek.Monday, MealSlot.Dinner, "Beef Stew"));
+
+        TodoistTaskPayload? capturedPayload = null;
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .Callback<TodoistTaskPayload, CancellationToken>((p, _) => capturedPayload = p)
+            .ReturnsAsync("remote-a");
+
+        // Use a configured static ProjectId that the override should supersede.
+        var sut = BuildSut(token: "sample-token", staticProjectId: "static-project-id");
+
+        // Act
+        await sut.PushAsync(plan.Id, projectIdOverride: "override-project-id");
+
+        // Assert — the override must win over the static configuration.
+        capturedPayload!.ProjectId.Should().Be("override-project-id");
+        var link = await _dbContext.ExternalTaskLinks.SingleAsync();
+        link.ExternalProjectId.Should().Be("override-project-id");
+    }
+
+    [Fact]
+    public async Task PushAsync_WithProjectOverride_DoesNotModifyStaticConfiguration()
+    {
+        // Arrange
+        var plan = SeedPlanWithSlots(DateOnly.Parse("2026-05-04"),
+            (DayOfWeek.Monday, MealSlot.Dinner, "Pasta"));
+
+        _todoistMock
+            .Setup(c => c.CreateTaskAsync(It.IsAny<TodoistTaskPayload>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync("remote-a");
+
+        var staticOptions = new TodoistOptions { ProjectId = "must-not-change", Token = "sample-token" };
+        var resolver = new StaticTodoistTokenResolver("sample-token");
+        var sut = new TodoistMealPlanPushTarget(
+            _dbContext,
+            Options.Create(staticOptions),
+            _todoistMock.Object,
+            resolver);
+
+        // Act
+        await sut.PushAsync(plan.Id, projectIdOverride: "override-project-id");
+
+        // Assert — the static configuration must remain unmodified.
+        staticOptions.ProjectId.Should().Be("must-not-change");
+    }
+
+    private TodoistMealPlanPushTarget BuildSut(string? token, string? staticProjectId = null)
+    {
+        var options = Options.Create(new TodoistOptions { ProjectId = staticProjectId, Token = token });
         var resolver = new StaticTodoistTokenResolver(token);
         return new TodoistMealPlanPushTarget(_dbContext, options, _todoistMock.Object, resolver);
     }

@@ -5,11 +5,12 @@ using Microsoft.AspNetCore.Mvc;
 namespace MealsEnPlace.Api.Features.Settings;
 
 /// <summary>
-/// Settings endpoints covering the BYO Anthropic API key flow (MEP-032) and
-/// the BYO Todoist API token flow (MEP-035). Every response shape carries at
-/// most a boolean <c>Configured</c> indicator — the raw token is never returned
-/// from any endpoint and is not written to logs. A failed Test Connection
-/// call never overwrites a previously-valid stored token.
+/// Settings endpoints covering the BYO Anthropic API key flow (MEP-032), the BYO
+/// Todoist API token flow (MEP-035), and the Todoist project quick-pick history
+/// (MEP-036). Every response shape carries at most a boolean <c>Configured</c>
+/// indicator for token operations — the raw token is never returned from any endpoint
+/// and is not written to logs. A failed Test Connection call never overwrites a
+/// previously-valid stored token.
 /// </summary>
 [ApiController]
 [Route("api/v1/settings")]
@@ -17,6 +18,7 @@ namespace MealsEnPlace.Api.Features.Settings;
 public class SettingsController(
     IAnthropicTestClient anthropicTestClient,
     IClaudeTokenStore claudeTokenStore,
+    ITodoistProjectHistoryService todoistProjectHistoryService,
     ITodoistTestClient todoistTestClient,
     ITodoistTokenResolver todoistTokenResolver,
     ITodoistTokenStore todoistTokenStore) : ControllerBase
@@ -53,6 +55,25 @@ public class SettingsController(
     {
         var configured = await claudeTokenStore.HasTokenAsync(cancellationToken);
         return Ok(new ClaudeTokenStatusResponse { Configured = configured });
+    }
+
+    /// <summary>
+    /// Returns the set of Todoist project IDs previously used as push targets,
+    /// merged with live display names resolved in a single <c>GET /rest/v2/projects</c>
+    /// call. The Inbox sentinel is always present. When the Todoist call fails or no
+    /// token is configured, entries carry null display names and
+    /// <c>NamesResolved = false</c> — the endpoint never returns 500 for a Todoist
+    /// connectivity problem.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>200 with the merged project history response.</returns>
+    [HttpGet("todoist/projects/history")]
+    [ProducesResponseType(typeof(TodoistProjectHistoryResponse), StatusCodes.Status200OK)]
+    public async Task<ActionResult<TodoistProjectHistoryResponse>> GetTodoistProjectHistory(
+        CancellationToken cancellationToken = default)
+    {
+        var response = await todoistProjectHistoryService.GetProjectHistoryAsync(cancellationToken);
+        return Ok(response);
     }
 
     /// <summary>

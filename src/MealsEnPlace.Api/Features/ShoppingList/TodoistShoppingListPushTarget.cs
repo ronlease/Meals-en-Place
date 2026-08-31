@@ -26,7 +26,9 @@ public sealed class TodoistShoppingListPushTarget(
     public string ProviderName => TodoistProviderName;
 
     public async Task<ShoppingListPushResult> PushAsync(
-        Guid? mealPlanId, CancellationToken cancellationToken = default)
+        Guid? mealPlanId,
+        string? projectIdOverride = null,
+        CancellationToken cancellationToken = default)
     {
         if (!await tokenResolver.HasTokenAsync(cancellationToken))
         {
@@ -34,7 +36,9 @@ public sealed class TodoistShoppingListPushTarget(
         }
 
         var scope = mealPlanId?.ToString() ?? StandaloneScopeKey;
-        var projectId = string.IsNullOrWhiteSpace(options.Value.ProjectId) ? null : options.Value.ProjectId;
+        var projectId = !string.IsNullOrWhiteSpace(projectIdOverride)
+            ? projectIdOverride
+            : (string.IsNullOrWhiteSpace(options.Value.ProjectId) ? null : options.Value.ProjectId);
 
         var items = await LoadItemsAsync(mealPlanId, cancellationToken);
         var links = await dbContext.ExternalTaskLinks
