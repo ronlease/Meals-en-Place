@@ -302,10 +302,11 @@ export class InventoryDialogComponent implements OnInit {
       i.name.toLowerCase().includes(query)
     );
   });
+  // Reads ingredientQuery rather than the form control: a computed cannot track
+  // a FormControl, so sourcing the name from the control left this stale and the
+  // "select an ingredient" error never appeared.
   protected readonly ingredientNotResolved = computed(
-    () =>
-      !this.selectedIngredientId() &&
-      this.inventoryForm?.controls.canonicalIngredientName.value.length > 0
+    () => !this.selectedIngredientId() && this.ingredientQuery().trim().length > 0
   );
   protected readonly ingredients = signal<CanonicalIngredientDto[]>([]);
   protected readonly inventoryForm: FormGroup<InventoryForm>;
