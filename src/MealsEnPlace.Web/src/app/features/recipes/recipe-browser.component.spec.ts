@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatPaginator } from '@angular/material/paginator';
 import { By } from '@angular/platform-browser';
+import { provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
 import { PagedResult, RecipeListItemDto } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
@@ -39,20 +40,23 @@ function makeRecipe(overrides: Partial<RecipeListItemDto> = {}): RecipeListItemD
 describe('RecipeBrowserComponent', () => {
   let fixture: ComponentFixture<RecipeBrowserComponent>;
   let component: RecipeBrowserComponent;
-  let recipeServiceSpy: jasmine.SpyObj<RecipeService>;
+  let recipeServiceSpy: {
+    getRecipes: ReturnType<typeof vi.fn>;
+    matchRecipes: ReturnType<typeof vi.fn>;
+  };
 
   beforeEach(async () => {
-    recipeServiceSpy = jasmine.createSpyObj('RecipeService', [
-      'getRecipes',
-      'matchRecipes',
-    ]);
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy = { getRecipes: vi.fn(), matchRecipes: vi.fn() };
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe()], 1, 50)),
     );
 
     await TestBed.configureTestingModule({
       imports: [RecipeBrowserComponent, NoopAnimationsModule],
-      providers: [{ provide: RecipeService, useValue: recipeServiceSpy }],
+      providers: [
+        provideRouter([]),
+        { provide: RecipeService, useValue: recipeServiceSpy },
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(RecipeBrowserComponent);
@@ -79,7 +83,7 @@ describe('RecipeBrowserComponent', () => {
   // ── Page navigation ─────────────────────────────────────────────────────
 
   it('fetches page 2 when the next-page button is clicked', () => {
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe({ id: 'page-2-recipe' })], 2, 50)),
     );
 
@@ -95,7 +99,7 @@ describe('RecipeBrowserComponent', () => {
 
   it('fetches page 1 again when the previous-page button is clicked from page 2', () => {
     // Advance to page 2 first.
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe()], 2, 50)),
     );
     const paginator: MatPaginator = fixture.debugElement
@@ -104,8 +108,8 @@ describe('RecipeBrowserComponent', () => {
     paginator.nextPage();
     fixture.detectChanges();
 
-    recipeServiceSpy.getRecipes.calls.reset();
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockClear();
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe()], 1, 50)),
     );
     paginator.previousPage();
@@ -146,7 +150,7 @@ describe('RecipeBrowserComponent', () => {
   // ── Error path ──────────────────────────────────────────────────────────
 
   it('shows the error message when getRecipes fails', async () => {
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       throwError(() => new Error('network error')),
     );
     component.loadLibrary();
@@ -160,7 +164,7 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('does not leave the spinner visible after a failed request', () => {
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       throwError(() => new Error('network error')),
     );
     component.loadLibrary();
@@ -173,16 +177,16 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('re-fetches the current page when the retry button is clicked', () => {
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       throwError(() => new Error('network error')),
     );
     component.loadLibrary();
     fixture.detectChanges();
 
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe()], 1, 50)),
     );
-    recipeServiceSpy.getRecipes.calls.reset();
+    recipeServiceSpy.getRecipes.mockClear();
 
     const retryBtn: HTMLButtonElement = fixture.debugElement.query(
       By.css('.error-message button'),
@@ -195,13 +199,13 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('clears the error state and shows data after a successful retry', () => {
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       throwError(() => new Error('network error')),
     );
     component.loadLibrary();
     fixture.detectChanges();
 
-    recipeServiceSpy.getRecipes.and.returnValue(
+    recipeServiceSpy.getRecipes.mockReturnValue(
       of(makePagedResult([makeRecipe()], 1, 50)),
     );
     const retryBtn: HTMLButtonElement = fixture.debugElement.query(

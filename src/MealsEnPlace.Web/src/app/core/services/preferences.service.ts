@@ -19,6 +19,9 @@ export class PreferencesService {
 
   loadPreferences(): void {
     this.http.get<UserPreferencesResponse>(this.baseUrl).subscribe({
+      // A failed read or write leaves the current preferences in place rather
+      // than escaping as an uncaught error.
+      error: () => undefined,
       next: (prefs) => {
         this._displaySystem.set(prefs.displaySystem);
         this._autoDepleteOnConsume.set(prefs.autoDepleteOnConsume);
@@ -32,6 +35,9 @@ export class PreferencesService {
       displaySystem: this._displaySystem(),
     };
     this.http.put<UserPreferencesResponse>(this.baseUrl, request).subscribe({
+      // A failed read or write leaves the current preferences in place rather
+      // than escaping as an uncaught error.
+      error: () => undefined,
       next: (prefs) => {
         this._displaySystem.set(prefs.displaySystem);
         this._autoDepleteOnConsume.set(prefs.autoDepleteOnConsume);
@@ -43,6 +49,9 @@ export class PreferencesService {
     const next: DisplaySystem = this._displaySystem() === 'Imperial' ? 'Metric' : 'Imperial';
     const request: UpdateUserPreferencesRequest = { displaySystem: next };
     this.http.put<UserPreferencesResponse>(this.baseUrl, request).subscribe({
+      // A failed read or write leaves the current preferences in place rather
+      // than escaping as an uncaught error.
+      error: () => undefined,
       next: (prefs) => {
         this._displaySystem.set(prefs.displaySystem);
         this._autoDepleteOnConsume.set(prefs.autoDepleteOnConsume);
