@@ -198,6 +198,7 @@ describe('ShoppingListPageComponent', () => {
 
     it('is wired to the Regenerate button', () => {
       createComponent();
+      shoppingListServiceMock.generateList.mockReturnValue(of([makeItem()]));
       const regenerate = vi.spyOn(component, 'regenerate');
 
       buttonWithText('Regenerate')?.click();
