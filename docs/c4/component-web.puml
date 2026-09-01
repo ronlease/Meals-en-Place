@@ -27,9 +27,11 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(settingsPage, "Settings Page", "Angular Standalone Component", "BYO API key and Todoist token management: save, test connection, remove")
 
     ' ── Shared Dialogs ─────────────────────────────────────────
+    Component(aiDisabledBanner, "AI Disabled Banner", "Angular Standalone Component", "Persistent banner shown when no Claude API key is configured; links to Settings and can be dismissed for the session")
     Component(todoistProjectPicker, "Todoist Project Picker Dialog", "Angular Standalone Component (MAT_DIALOG)", "Pre-push project selection. Loads push-target history from the API, resolves display names, pre-selects the last-used project per resource type, and falls back to Inbox. Shows raw IDs with a hint when names cannot be resolved")
 
     ' ── Core Services ──────────────────────────────────────────
+    Component(aiAvailabilityService, "AiAvailabilityService", "Angular Service, providedIn: root", "Signal-backed 'is the Claude API key configured?' gate consumed by the AI-disabled banner and AI-dependent affordances")
     Component(settingsService, "SettingsService", "Angular Service, providedIn: root", "Claude API key and Todoist token save/test/clear, Todoist project history for push-target picker")
     Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
     Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
@@ -59,6 +61,11 @@ Rel(appShell, wasteAlertsPage, "Routes to")
 Rel(appShell, preferencesService, "Reads display system preference")
 Rel(appShell, themeService, "Toggles dark/light mode")
 Rel(appShell, todoistAvailabilityService, "Refreshes Todoist configured status on startup")
+Rel(appShell, aiAvailabilityService, "Refreshes Claude configured status on startup")
+Rel(appShell, aiDisabledBanner, "Renders above page content")
+Rel(aiDisabledBanner, aiAvailabilityService, "Reads configured / dismissed signals")
+Rel(settingsPage, aiAvailabilityService, "Updates configured status after save / remove")
+Rel(aiAvailabilityService, settingsService, "Reads Claude token status")
 
 ' ── Feature → Service relationships ────────────────────────
 Rel(inventoryPage, inventoryService, "Uses")
