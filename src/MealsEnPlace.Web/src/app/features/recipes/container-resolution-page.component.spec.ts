@@ -44,13 +44,13 @@ describe('ContainerResolutionPageComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     error: () => boolean;
     groups: () => UnresolvedGroupResponse[];
     loading: () => boolean;
     load: () => void;
     totalOccurrences: () => number;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

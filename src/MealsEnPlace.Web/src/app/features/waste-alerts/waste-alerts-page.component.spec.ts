@@ -40,11 +40,11 @@ describe('WasteAlertsPageComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     alerts: () => WasteAlertResponse[];
     error: () => boolean;
     loading: () => boolean;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

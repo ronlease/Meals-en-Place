@@ -56,7 +56,7 @@ describe('ExpirationPageComponent', () => {
 
   type ExpiringItem = InventoryItemResponse & { daysRemaining: number };
 
-  type Internals = {
+  interface Internals {
     activeFilter: {
       (): 'all' | '3days' | '7days';
       set: (value: 'all' | '3days' | '7days') => void;
@@ -65,7 +65,7 @@ describe('ExpirationPageComponent', () => {
     error: () => boolean;
     filteredItems: () => ExpiringItem[];
     loading: () => boolean;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

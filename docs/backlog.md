@@ -2159,6 +2159,7 @@ Shipped across backend, frontend, tests, and docs.
 
 ### Known gap (not introduced here)
 The Angular dialog's spec file cannot execute — the frontend has no test runner configured. Tracked as MEP-041.
+**Closed by MEP-041.** The Vitest runner is in place and this spec runs and passes unchanged.
 
 ### Business Problem
 MEP-028 and MEP-029 push shopping lists and meal plans to Todoist, targeting whichever project is configured via the `Todoist:ProjectId` user secret (or Inbox when unset). That override is static — the user has to edit the user secret and restart the app every time they want to aim pushes at a different project. The Angular "Push to Todoist" buttons on the shopping list page and meal plan board fire the push immediately, with no opportunity to choose a destination.
@@ -2445,7 +2446,7 @@ Feature: Offline Tools Test Coverage
 
 ## [MEP-041] Angular Frontend Test Infrastructure (Vitest)
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Depends on:** none
 
@@ -2510,6 +2511,53 @@ Feature: Angular Frontend Test Infrastructure
     And the decision follows the same pattern as MEP-040 (offline tools outside the gate until they clear a bar)
     And if the frontend stays outside the gate initially, the rationale and target threshold are documented
 ```
+
+### Scope decisions made during implementation
+
+**The runner is the first-party `@angular/build:unit-test` builder, not `@analogjs/vitest-angular`.**
+The AC above named Analog because that was the best option known when the story was
+written. It is the wrong one for this app: `@analogjs/vitest-angular` declares `zone.js`
+as a hard peer dependency, and this application is zoneless — Angular 22's default, with
+no `zone.js` installed and no `provideZoneChangeDetection` anywhere. Adopting Analog
+would have meant reintroducing `zone.js` solely for tests, leaving the test-time change
+detection model different from production.
+
+`@angular/build` 22.1.4 already ships a `unit-test` builder with a Vitest runner that
+supports zoneless natively. It needs the same count of devDependencies the AC
+anticipated — `vitest`, `jsdom`, `@vitest/coverage-v8` — and no `vitest.config.ts`,
+because the builder generates the Vitest configuration from the `test` target in
+`angular.json`. The tradeoff accepted: the builder is flagged `[EXPERIMENTAL]` by the
+Angular team. That is judged the smaller risk, since it is the path `ng new` scaffolds
+and it tracks the framework version directly rather than lagging it.
+
+**The frontend joined the CI coverage gate immediately at 90%, not after a ramp.**
+This departs from the MEP-040 pattern the AC pointed at. MEP-040 keeps the offline tools
+outside the gate because holding them to the bar would block unrelated dependency work on
+test debt. The frontend is different: it is user-facing, actively developed, and its
+untested surface was the reason this story exists. Deferring the gate would have shipped
+the runner and left the asymmetry in place.
+
+The threshold is enforced by `coverageThresholds.lines` on the `test` target in
+`angular.json`, so it fails locally and in CI identically, with no shell check to drift.
+The suite ships at 558 tests and 95.01% line coverage. Coverage excludes `main.ts`,
+`environments/`, `app.config.ts`, the `*.routes.ts` files, and `core/models/` — bootstrap,
+configuration, and type-only declarations, matching the exclusions the .NET gate already
+applies.
+
+**Two defects surfaced while writing the specs and were fixed here.**
+- `AiAvailabilityService.refresh` and all three `PreferencesService` writes subscribed
+  with only a `next` handler, so an API failure escaped as an uncaught error rather than
+  leaving the last known state in place. They now handle errors the way
+  `TodoistAvailabilityService` already did.
+- `InventoryDialogComponent.ingredientNotResolved` was a `computed` reading a
+  `FormControl`. A computed cannot track a `FormControl`, so it cached its first value and
+  the "select an ingredient from the list" error never appeared. It now reads
+  `ingredientQuery`, which is a real signal already kept in step by the input handlers.
+
+**The MEP-043 recipe-browser spec was ported from Jasmine to Vitest.** It used
+`jasmine.createSpyObj`, `.and.returnValue`, and `.calls.reset()`, none of which exist under
+Vitest, and it was missing the router provider its `RouterLink` usage needs. The MEP-036
+dialog spec was already Vitest-native and runs unchanged, as the AC required.
 
 ---
 

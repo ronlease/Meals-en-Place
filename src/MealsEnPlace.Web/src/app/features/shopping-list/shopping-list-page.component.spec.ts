@@ -70,12 +70,12 @@ describe('ShoppingListPageComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     activePlan: () => MealPlanResponse | null;
     items: () => ShoppingListItemResponse[];
     loading: () => boolean;
     pushing: () => boolean;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

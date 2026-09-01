@@ -45,13 +45,13 @@ describe('BulkResolveDialogComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     errorMessage: () => string | null;
     form: BulkResolveDialogComponent['form'];
     submitting: () => boolean;
     units: () => UnitOfMeasureDto[];
     unitsLoading: () => boolean;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

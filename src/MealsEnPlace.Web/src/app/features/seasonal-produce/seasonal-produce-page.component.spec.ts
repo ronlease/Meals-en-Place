@@ -39,14 +39,14 @@ describe('SeasonalProducePageComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     allWindows: () => SeasonalProduceResponse[];
     displayData: () => SeasonalProduceResponse[];
     error: () => boolean;
     inSeason: () => SeasonalProduceResponse[];
     loading: () => boolean;
     viewMode: { (): 'all' | 'in-season'; set: (value: 'all' | 'in-season') => void };
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

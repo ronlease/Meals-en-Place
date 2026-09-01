@@ -86,7 +86,7 @@ describe('SettingsPageComponent', () => {
 
   type TestResult = { message: string; success: boolean } | null;
 
-  type Internals = {
+  interface Internals {
     saving: () => boolean;
     testResult: () => TestResult;
     testing: () => boolean;
@@ -95,7 +95,7 @@ describe('SettingsPageComponent', () => {
     todoistTesting: () => boolean;
     todoistTokenInput: { (): string; set: (value: string) => void };
     tokenInput: { (): string; set: (value: string) => void };
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

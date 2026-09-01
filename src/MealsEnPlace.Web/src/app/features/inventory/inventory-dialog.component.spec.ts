@@ -77,7 +77,7 @@ describe('InventoryDialogComponent', () => {
 
   // ── Accessors for the component's protected surface ──────────────────────────
 
-  type Internals = {
+  interface Internals {
     containerForm: InventoryDialogComponent['containerForm'];
     containerReferenceDetected: () => boolean;
     filteredIngredients: () => CanonicalIngredientDto[];
@@ -88,7 +88,7 @@ describe('InventoryDialogComponent', () => {
     referenceDataLoading: () => boolean;
     showCreateNew: () => boolean;
     units: () => UnitOfMeasureDto[];
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;

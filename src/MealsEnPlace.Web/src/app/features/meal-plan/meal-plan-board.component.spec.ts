@@ -89,14 +89,14 @@ describe('MealPlanBoardComponent', () => {
     fixture.detectChanges();
   }
 
-  type Internals = {
+  interface Internals {
     consumingSlotId: () => string | null;
     error: () => boolean;
     loading: () => boolean;
     plan: () => MealPlanResponse | null;
     pushing: () => boolean;
     reordering: () => boolean;
-  };
+  }
 
   function internals(): Internals {
     return component as unknown as Internals;
