@@ -147,7 +147,10 @@ table produces silently wrong math.
 Before any PR is opened, verify the following:
 1. All README files in the repo are up-to-date
 2. Every vertical slice (feature folder) under `Features/` (API) and `features/` (Angular) has a README.md
-3. All PlantUML C4 diagrams in `docs/c4/` are up-to-date
+3. All PlantUML C4 diagrams in `docs/c4/` are up-to-date. If any `.puml` changed,
+   run `./scripts/render-c4.sh` (needs Docker running) and commit the regenerated
+   PNGs — the root README embeds them. `./scripts/render-c4.sh --check` verifies
+   without writing.
 4. All Swagger/OpenAPI docs are up-to-date (new endpoints documented, descriptions accurate)
 5. All projects build successfully (`dotnet build`, `ng build`)
 6. All tests pass (`dotnet test`)
