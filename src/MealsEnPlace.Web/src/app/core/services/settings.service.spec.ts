@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { TodoistProjectHistoryResponse } from '../models/todoist.models';
 import { SettingsService } from './settings.service';
@@ -41,9 +38,7 @@ describe('SettingsService', () => {
       service.getProjectHistory().subscribe((response) => (received = response));
 
       // A payload with every nullable key omitted, as the API actually sends it.
-      httpMock
-        .expectOne(`${TODOIST_URL}/projects/history`)
-        .flush({ projects: [] });
+      httpMock.expectOne(`${TODOIST_URL}/projects/history`).flush({ projects: [] });
 
       expect(received).toEqual({
         lastUsedMealPlanProjectId: null,

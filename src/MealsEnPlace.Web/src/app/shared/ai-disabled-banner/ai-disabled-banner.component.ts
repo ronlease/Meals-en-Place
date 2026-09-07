@@ -52,8 +52,8 @@ import { AiAvailabilityService } from '../../core/services/ai-availability.servi
         <span class="banner-message">
           AI features are disabled.
           <a routerLink="/settings">Add a Claude API key</a>
-          to enable dietary classification, recipe substitution suggestions, and
-          meal plan optimization.
+          to enable dietary classification, recipe substitution suggestions, and meal plan
+          optimization.
         </span>
         <button
           mat-icon-button

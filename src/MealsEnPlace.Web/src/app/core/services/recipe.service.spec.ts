@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import {
   BulkResolveGroupRequest,
@@ -110,9 +107,7 @@ describe('RecipeService', () => {
     it('sends the cuisine filter when supplied', () => {
       service.matchRecipes('Thai').subscribe();
 
-      const testRequest = httpMock.expectOne(
-        (candidate) => candidate.url === `${BASE_URL}/match`,
-      );
+      const testRequest = httpMock.expectOne((candidate) => candidate.url === `${BASE_URL}/match`);
       expect(testRequest.request.params.get('cuisine')).toBe('Thai');
 
       testRequest.flush(EMPTY_MATCH);
@@ -121,9 +116,7 @@ describe('RecipeService', () => {
     it('joins multiple dietary tags with a comma', () => {
       service.matchRecipes(undefined, ['Vegan', 'GlutenFree']).subscribe();
 
-      const testRequest = httpMock.expectOne(
-        (candidate) => candidate.url === `${BASE_URL}/match`,
-      );
+      const testRequest = httpMock.expectOne((candidate) => candidate.url === `${BASE_URL}/match`);
       expect(testRequest.request.params.get('dietaryTags')).toBe('Vegan,GlutenFree');
 
       testRequest.flush(EMPTY_MATCH);
@@ -132,9 +125,7 @@ describe('RecipeService', () => {
     it('omits dietaryTags when the array is empty rather than sending a blank value', () => {
       service.matchRecipes(undefined, []).subscribe();
 
-      const testRequest = httpMock.expectOne(
-        (candidate) => candidate.url === `${BASE_URL}/match`,
-      );
+      const testRequest = httpMock.expectOne((candidate) => candidate.url === `${BASE_URL}/match`);
       expect(testRequest.request.params.has('dietaryTags')).toBe(false);
 
       testRequest.flush(EMPTY_MATCH);
@@ -143,9 +134,7 @@ describe('RecipeService', () => {
     it('sends seasonalOnly=false explicitly — false is a real filter, not an absent one', () => {
       service.matchRecipes(undefined, undefined, false).subscribe();
 
-      const testRequest = httpMock.expectOne(
-        (candidate) => candidate.url === `${BASE_URL}/match`,
-      );
+      const testRequest = httpMock.expectOne((candidate) => candidate.url === `${BASE_URL}/match`);
       expect(testRequest.request.params.get('seasonalOnly')).toBe('false');
 
       testRequest.flush(EMPTY_MATCH);
@@ -154,9 +143,7 @@ describe('RecipeService', () => {
     it('sends every filter together when all three are supplied', () => {
       service.matchRecipes('Italian', ['Vegetarian'], true).subscribe();
 
-      const testRequest = httpMock.expectOne(
-        (candidate) => candidate.url === `${BASE_URL}/match`,
-      );
+      const testRequest = httpMock.expectOne((candidate) => candidate.url === `${BASE_URL}/match`);
       expect(testRequest.request.params.get('cuisine')).toBe('Italian');
       expect(testRequest.request.params.get('dietaryTags')).toBe('Vegetarian');
       expect(testRequest.request.params.get('seasonalOnly')).toBe('true');
@@ -170,9 +157,7 @@ describe('RecipeService', () => {
   it('addToShoppingList POSTs a null body to the shopping-list URL, not the recipes URL', () => {
     service.addToShoppingList('recipe-5').subscribe();
 
-    const testRequest = httpMock.expectOne(
-      '/api/v1/shopping-list/add-from-recipe/recipe-5',
-    );
+    const testRequest = httpMock.expectOne('/api/v1/shopping-list/add-from-recipe/recipe-5');
     expect(testRequest.request.method).toBe('POST');
     expect(testRequest.request.body).toBeNull();
 

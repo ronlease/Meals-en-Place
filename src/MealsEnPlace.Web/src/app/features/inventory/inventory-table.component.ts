@@ -7,15 +7,9 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import {
-  InventoryItemResponse,
-  InventoryLocation,
-} from '../../core/models/inventory.models';
+import { InventoryItemResponse, InventoryLocation } from '../../core/models/inventory.models';
 import { InventoryService } from '../../core/services/inventory.service';
-import {
-  InventoryDialogComponent,
-  InventoryDialogData,
-} from './inventory-dialog.component';
+import { InventoryDialogComponent, InventoryDialogData } from './inventory-dialog.component';
 
 @Component({
   selector: 'app-inventory-table',
@@ -103,7 +97,7 @@ import {
         </ng-container>
 
         <mat-header-row *matHeaderRowDef="displayedColumns" />
-        <mat-row *matRowDef="let row; columns: displayedColumns;" />
+        <mat-row *matRowDef="let row; columns: displayedColumns" />
       </mat-table>
     }
   `,
@@ -217,9 +211,7 @@ export class InventoryTableComponent implements OnInit {
     today.setHours(0, 0, 0, 0);
     const expiry = new Date(expiryDate);
     expiry.setHours(0, 0, 0, 0);
-    const daysRemaining = Math.ceil(
-      (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
-    );
+    const daysRemaining = Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
     if (daysRemaining < 3) return 'expiry-badge expiry-red';
     if (daysRemaining <= 7) return 'expiry-badge expiry-amber';
     return 'expiry-badge expiry-ok';
@@ -270,9 +262,7 @@ export class InventoryTableComponent implements OnInit {
       .afterClosed()
       .subscribe((result: InventoryItemResponse | null) => {
         if (result) {
-          this.items.update((list) =>
-            list.map((i) => (i.id === result.id ? result : i))
-          );
+          this.items.update((list) => list.map((i) => (i.id === result.id ? result : i)));
         }
       });
   }

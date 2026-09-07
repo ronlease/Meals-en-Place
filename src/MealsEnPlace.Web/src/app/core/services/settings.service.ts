@@ -33,21 +33,19 @@ export class SettingsService {
     // this boundary so consumers can rely on the declared `string | null` shape and
     // strict null checks behave; without this, an absent key arrives as undefined
     // and slips past every `!== null` guard downstream.
-    return this.http
-      .get<TodoistProjectHistoryResponse>(`${this.todoistUrl}/projects/history`)
-      .pipe(
-        map((response) => ({
-          lastUsedMealPlanProjectId: response.lastUsedMealPlanProjectId ?? null,
-          lastUsedShoppingListProjectId: response.lastUsedShoppingListProjectId ?? null,
-          nameResolutionError: response.nameResolutionError ?? null,
-          namesResolved: response.namesResolved ?? false,
-          projects: (response.projects ?? []).map((project) => ({
-            displayName: project.displayName ?? null,
-            isInbox: project.isInbox ?? false,
-            projectId: project.projectId ?? null,
-          })),
+    return this.http.get<TodoistProjectHistoryResponse>(`${this.todoistUrl}/projects/history`).pipe(
+      map((response) => ({
+        lastUsedMealPlanProjectId: response.lastUsedMealPlanProjectId ?? null,
+        lastUsedShoppingListProjectId: response.lastUsedShoppingListProjectId ?? null,
+        nameResolutionError: response.nameResolutionError ?? null,
+        namesResolved: response.namesResolved ?? false,
+        projects: (response.projects ?? []).map((project) => ({
+          displayName: project.displayName ?? null,
+          isInbox: project.isInbox ?? false,
+          projectId: project.projectId ?? null,
         })),
-      );
+      })),
+    );
   }
 
   getStatus(): Observable<ClaudeTokenStatusResponse> {

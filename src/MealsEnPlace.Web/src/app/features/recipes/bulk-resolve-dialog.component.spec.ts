@@ -5,10 +5,7 @@ import { of, throwError } from 'rxjs';
 import { UnitOfMeasureDto } from '../../core/models/inventory.models';
 import { RecipeService } from '../../core/services/recipe.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
-import {
-  BulkResolveDialogComponent,
-  BulkResolveDialogData,
-} from './bulk-resolve-dialog.component';
+import { BulkResolveDialogComponent, BulkResolveDialogData } from './bulk-resolve-dialog.component';
 
 describe('BulkResolveDialogComponent', () => {
   const DATA: BulkResolveDialogData = {
@@ -79,9 +76,7 @@ describe('BulkResolveDialogComponent', () => {
       createComponent();
 
       expect(internals().unitsLoading()).toBe(false);
-      expect(internals().errorMessage()).toBe(
-        'Failed to load units of measure. Close and retry.',
-      );
+      expect(internals().errorMessage()).toBe('Failed to load units of measure. Close and retry.');
       expect(fixture.nativeElement.querySelector('.error-banner')).not.toBeNull();
     });
   });
@@ -95,9 +90,7 @@ describe('BulkResolveDialogComponent', () => {
     it('names the ingredient being resolved', () => {
       createComponent();
 
-      expect(fixture.nativeElement.querySelector('h2').textContent).toContain(
-        'Diced Tomatoes',
-      );
+      expect(fixture.nativeElement.querySelector('h2').textContent).toContain('Diced Tomatoes');
     });
 
     it('quotes the source phrase verbatim', () => {
@@ -111,9 +104,7 @@ describe('BulkResolveDialogComponent', () => {
     it('states how many ingredients will change, pluralized', () => {
       createComponent();
 
-      expect(fixture.nativeElement.querySelector('.impact-banner').textContent).toContain(
-        '42',
-      );
+      expect(fixture.nativeElement.querySelector('.impact-banner').textContent).toContain('42');
       expect(fixture.nativeElement.querySelector('.impact-banner').textContent).toContain(
         'ingredients across',
       );
@@ -224,9 +215,7 @@ describe('BulkResolveDialogComponent', () => {
 
       component.submit();
 
-      expect(internals().errorMessage()).toBe(
-        'Failed to apply the resolution. Please try again.',
-      );
+      expect(internals().errorMessage()).toBe('Failed to apply the resolution. Please try again.');
     });
   });
 

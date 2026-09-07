@@ -1,5 +1,12 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
-import { AbstractControl, FormArray, FormBuilder, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import {
+  AbstractControl,
+  FormArray,
+  FormBuilder,
+  FormGroup,
+  ReactiveFormsModule,
+  Validators,
+} from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -233,7 +240,7 @@ export class RecipeCreateComponent implements OnInit {
         notes: [''],
         quantity: [1, [Validators.required, Validators.min(0)]],
         unitOfMeasureId: [null as string | null],
-      })
+      }),
     );
   }
 

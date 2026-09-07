@@ -1,10 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import {
-  ReorderedSlotDto,
-  ReorderPreviewResponse,
-} from '../../core/models/meal-plan.models';
+import { ReorderedSlotDto, ReorderPreviewResponse } from '../../core/models/meal-plan.models';
 import {
   MealPlanReorderDialogComponent,
   ReorderDialogData,
@@ -44,8 +41,9 @@ describe('MealPlanReorderDialogComponent', () => {
   }
 
   function buttonLabels(): string[] {
-    return (Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[])
-      .map((button) => button.textContent?.trim() ?? '');
+    return (
+      Array.from(fixture.nativeElement.querySelectorAll('button')) as HTMLButtonElement[]
+    ).map((button) => button.textContent?.trim() ?? '');
   }
 
   function clickButton(label: string): void {
@@ -136,9 +134,7 @@ describe('MealPlanReorderDialogComponent', () => {
     it('states the urgency window in the legend', () => {
       createComponent(WITH_CHANGES);
 
-      expect(fixture.nativeElement.querySelector('.legend').textContent).toContain(
-        'next 3 day(s)',
-      );
+      expect(fixture.nativeElement.querySelector('.legend').textContent).toContain('next 3 day(s)');
     });
 
     it('offers both Cancel and Apply reorder', () => {

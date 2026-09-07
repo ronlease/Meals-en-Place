@@ -1,11 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { Component, inject } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  MAT_DIALOG_DATA,
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatListModule, MatSelectionListChange } from '@angular/material/list';
 import { RecipeListItemDto } from '../../core/models/recipe.models';
 
@@ -48,8 +44,8 @@ export interface SwapDialogData {
       }
       @if (isPartialList) {
         <p class="partial-note">
-          Showing {{ availableRecipes.length }} of {{ data.totalCount | number }} recipes.
-          Search is not available yet — see MEP-046.
+          Showing {{ availableRecipes.length }} of {{ data.totalCount | number }} recipes. Search is
+          not available yet — see MEP-046.
         </p>
       }
     </mat-dialog-content>

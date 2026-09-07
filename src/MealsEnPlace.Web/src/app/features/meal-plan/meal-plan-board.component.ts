@@ -26,20 +26,9 @@ import {
   MealPlanReorderDialogComponent,
   ReorderDialogData,
 } from './meal-plan-reorder-dialog.component';
-import {
-  MealPlanSwapDialogComponent,
-  SwapDialogData,
-} from './meal-plan-swap-dialog.component';
+import { MealPlanSwapDialogComponent, SwapDialogData } from './meal-plan-swap-dialog.component';
 
-const DAY_ORDER = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
+const DAY_ORDER = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 const SLOT_ORDER = ['Breakfast', 'Lunch', 'Dinner', 'Snack'];
 
 /**
@@ -79,7 +68,11 @@ const RECIPE_PICKER_PAGE_SIZE = 100;
             mat-stroked-button
             (click)="pushToTodoist()"
             [disabled]="!todoistAvailability.configured() || pushing()"
-            [matTooltip]="todoistAvailability.configured() ? 'Push each slot as a scheduled Todoist task' : 'Configure Todoist:Token user secret to enable'"
+            [matTooltip]="
+              todoistAvailability.configured()
+                ? 'Push each slot as a scheduled Todoist task'
+                : 'Configure Todoist:Token user secret to enable'
+            "
           >
             <mat-icon>send</mat-icon>
             Push to Todoist
@@ -126,7 +119,9 @@ const RECIPE_PICKER_PAGE_SIZE = 100;
                 <div class="slot-label-row">
                   <span class="slot-label">{{ slot.mealSlot }}</span>
                   @if (slot.consumedAt) {
-                    <mat-icon class="consumed-icon" aria-label="Eaten" matTooltip="Marked as eaten">check_circle</mat-icon>
+                    <mat-icon class="consumed-icon" aria-label="Eaten" matTooltip="Marked as eaten"
+                      >check_circle</mat-icon
+                    >
                   }
                 </div>
                 <div class="slot-recipe">{{ slot.recipeTitle }}</div>
@@ -268,7 +263,9 @@ const RECIPE_PICKER_PAGE_SIZE = 100;
         &.consumed {
           opacity: 0.7;
 
-          .slot-recipe { text-decoration: line-through; }
+          .slot-recipe {
+            text-decoration: line-through;
+          }
         }
 
         .slot-label-row {
@@ -349,9 +346,7 @@ export class MealPlanBoardComponent implements OnInit {
       if (!p) return p;
       return {
         ...p,
-        slots: p.slots.map((s) =>
-          s.id === slotId ? { ...s, consumedAt } : s
-        ),
+        slots: p.slots.map((s) => (s.id === slotId ? { ...s, consumedAt } : s)),
       };
     });
   }
@@ -392,9 +387,7 @@ export class MealPlanBoardComponent implements OnInit {
     if (result.updated > 0) parts.push(`${result.updated} updated`);
     if (result.closed > 0) parts.push(`${result.closed} closed`);
     if (result.unchanged > 0) parts.push(`${result.unchanged} unchanged`);
-    return parts.length > 0
-      ? `Todoist: ${parts.join(', ')}.`
-      : 'Todoist: nothing to push.';
+    return parts.length > 0 ? `Todoist: ${parts.join(', ')}.` : 'Todoist: nothing to push.';
   }
 
   getSlotsForDay(day: string): MealPlanSlotResponse[] {
@@ -402,10 +395,7 @@ export class MealPlanBoardComponent implements OnInit {
     if (!p) return [];
     return p.slots
       .filter((s) => s.dayOfWeek === day)
-      .sort(
-        (a, b) =>
-          SLOT_ORDER.indexOf(a.mealSlot) - SLOT_ORDER.indexOf(b.mealSlot)
-      );
+      .sort((a, b) => SLOT_ORDER.indexOf(a.mealSlot) - SLOT_ORDER.indexOf(b.mealSlot));
   }
 
   loadActivePlan(): void {
@@ -510,21 +500,17 @@ export class MealPlanBoardComponent implements OnInit {
     const ref = this.dialog.open(MealPlanSwapDialogComponent, { data });
     ref.afterClosed().subscribe((recipeId: string | undefined) => {
       if (!recipeId) return;
-      this.mealPlanService
-        .swapSlot(slot.id, { recipeId })
-        .subscribe({
-          next: (updated) => {
-            this.plan.update((p) => {
-              if (!p) return p;
-              return {
-                ...p,
-                slots: p.slots.map((s) =>
-                  s.id === slot.id ? updated : s
-                ),
-              };
-            });
-          },
-        });
+      this.mealPlanService.swapSlot(slot.id, { recipeId }).subscribe({
+        next: (updated) => {
+          this.plan.update((p) => {
+            if (!p) return p;
+            return {
+              ...p,
+              slots: p.slots.map((s) => (s.id === slot.id ? updated : s)),
+            };
+          });
+        },
+      });
     });
   }
 
@@ -545,9 +531,13 @@ export class MealPlanBoardComponent implements OnInit {
   private showConsumeResultSnackbar(result: ConsumeMealResponse): void {
     if (result.shortIngredients.length > 0) {
       const names = result.shortIngredients
-        .map((s) => `${s.ingredientName} (short by ${s.shortBy} ${s.unitOfMeasureAbbreviation})`.trim())
+        .map((s) =>
+          `${s.ingredientName} (short by ${s.shortBy} ${s.unitOfMeasureAbbreviation})`.trim(),
+        )
         .join(', ');
-      this.snackBar.open(`Marked eaten. Inventory was short on: ${names}`, 'Dismiss', { duration: 8000 });
+      this.snackBar.open(`Marked eaten. Inventory was short on: ${names}`, 'Dismiss', {
+        duration: 8000,
+      });
     } else if (result.autoDepleteApplied) {
       this.snackBar.open('Marked eaten. Inventory updated.', 'Dismiss', { duration: 3000 });
     } else {

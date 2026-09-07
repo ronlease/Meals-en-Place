@@ -4,7 +4,7 @@ import { environment } from '../../../environments/environment';
 import {
   DisplaySystem,
   UpdateUserPreferencesRequest,
-  UserPreferencesResponse
+  UserPreferencesResponse,
 } from '../models/preferences.models';
 
 @Injectable({ providedIn: 'root' })

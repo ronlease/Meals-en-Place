@@ -64,9 +64,8 @@ export interface ReorderDialogData {
         </div>
       } @else {
         <p>
-          These slots would change day assignments. Meal occasions (Breakfast,
-          Lunch, Dinner, Snack) stay on their current meal; only the day within
-          that meal shuffles.
+          These slots would change day assignments. Meal occasions (Breakfast, Lunch, Dinner, Snack)
+          stay on their current meal; only the day within that meal shuffles.
         </p>
         <table class="changes-table">
           <thead>
@@ -94,17 +93,15 @@ export interface ReorderDialogData {
           </tbody>
         </table>
         <div class="legend">
-          Urgency window: next {{ data.preview.urgencyWindowDays }} day(s).
-          Higher urgency = more ingredients expiring soon.
+          Urgency window: next {{ data.preview.urgencyWindowDays }} day(s). Higher urgency = more
+          ingredients expiring soon.
         </div>
       }
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       @if (data.preview.hasChanges) {
         <button mat-button [mat-dialog-close]="false">Cancel</button>
-        <button mat-flat-button color="primary" [mat-dialog-close]="true">
-          Apply reorder
-        </button>
+        <button mat-flat-button color="primary" [mat-dialog-close]="true">Apply reorder</button>
       } @else {
         <button mat-flat-button [mat-dialog-close]="false">Close</button>
       }

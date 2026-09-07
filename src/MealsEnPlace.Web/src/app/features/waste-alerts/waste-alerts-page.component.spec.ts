@@ -110,9 +110,7 @@ describe('WasteAlertsPageComponent', () => {
       createComponent();
 
       wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert()]));
-      (
-        fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       expect(internals().error()).toBe(false);
@@ -187,9 +185,7 @@ describe('WasteAlertsPageComponent', () => {
 
   describe('badge wording', () => {
     it('says "Expires today" for a same-day expiry', () => {
-      wasteAlertServiceMock.getAlerts.mockReturnValue(
-        of([makeAlert({ daysUntilExpiry: 0 })]),
-      );
+      wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert({ daysUntilExpiry: 0 })]));
 
       createComponent();
 
@@ -197,9 +193,7 @@ describe('WasteAlertsPageComponent', () => {
     });
 
     it('pluralizes a multi-day countdown', () => {
-      wasteAlertServiceMock.getAlerts.mockReturnValue(
-        of([makeAlert({ daysUntilExpiry: 3 })]),
-      );
+      wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert({ daysUntilExpiry: 3 })]));
 
       createComponent();
 
@@ -207,9 +201,7 @@ describe('WasteAlertsPageComponent', () => {
     });
 
     it('uses the singular for a one-day countdown', () => {
-      wasteAlertServiceMock.getAlerts.mockReturnValue(
-        of([makeAlert({ daysUntilExpiry: 1 })]),
-      );
+      wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert({ daysUntilExpiry: 1 })]));
 
       createComponent();
 
@@ -217,9 +209,7 @@ describe('WasteAlertsPageComponent', () => {
     });
 
     it('reports how long ago a past-due item expired, as a positive number', () => {
-      wasteAlertServiceMock.getAlerts.mockReturnValue(
-        of([makeAlert({ daysUntilExpiry: -4 })]),
-      );
+      wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert({ daysUntilExpiry: -4 })]));
 
       createComponent();
 
@@ -227,9 +217,7 @@ describe('WasteAlertsPageComponent', () => {
     });
 
     it('uses the singular for an item that expired yesterday', () => {
-      wasteAlertServiceMock.getAlerts.mockReturnValue(
-        of([makeAlert({ daysUntilExpiry: -1 })]),
-      );
+      wasteAlertServiceMock.getAlerts.mockReturnValue(of([makeAlert({ daysUntilExpiry: -1 })]));
 
       createComponent();
 
@@ -254,8 +242,8 @@ describe('WasteAlertsPageComponent', () => {
 
       createComponent();
 
-      const titles = Array.from(fixture.nativeElement.querySelectorAll('mat-chip')).map(
-        (chip) => (chip as HTMLElement).textContent?.trim(),
+      const titles = Array.from(fixture.nativeElement.querySelectorAll('mat-chip')).map((chip) =>
+        (chip as HTMLElement).textContent?.trim(),
       );
       expect(titles).toEqual(['restaurant Spinach Lasagna', 'restaurant Saag Paneer']);
     });
@@ -288,7 +276,11 @@ describe('WasteAlertsPageComponent', () => {
       component.dismiss('alert-1');
 
       expect(wasteAlertServiceMock.dismissAlert).toHaveBeenCalledWith('alert-1');
-      expect(internals().alerts().map((a) => a.alertId)).toEqual(['alert-2']);
+      expect(
+        internals()
+          .alerts()
+          .map((a) => a.alertId),
+      ).toEqual(['alert-2']);
     });
 
     it('keeps the alert when the dismissal fails', () => {
@@ -306,9 +298,7 @@ describe('WasteAlertsPageComponent', () => {
       createComponent();
       const dismiss = vi.spyOn(component, 'dismiss');
 
-      (
-        fixture.nativeElement.querySelector('mat-card-actions button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('mat-card-actions button') as HTMLButtonElement).click();
 
       expect(dismiss).toHaveBeenCalledWith('alert-1');
     });

@@ -45,7 +45,11 @@ import { WasteAlertService } from '../../core/services/waste-alert.service';
         @for (alert of alerts(); track alert.alertId) {
           <mat-card class="alert-card">
             <mat-card-header>
-              <mat-icon mat-card-avatar class="alert-icon" [class]="getUrgencyClass(alert.daysUntilExpiry)">
+              <mat-icon
+                mat-card-avatar
+                class="alert-icon"
+                [class]="getUrgencyClass(alert.daysUntilExpiry)"
+              >
                 warning
               </mat-icon>
               <mat-card-title>{{ alert.canonicalIngredientName }}</mat-card-title>
@@ -57,11 +61,16 @@ import { WasteAlertService } from '../../core/services/waste-alert.service';
               <div class="expiry-info">
                 <span [class]="getExpiryBadgeClass(alert.daysUntilExpiry)">
                   @if (alert.daysUntilExpiry < 0) {
-                    Expired {{ -alert.daysUntilExpiry }} day{{ -alert.daysUntilExpiry === 1 ? '' : 's' }} ago
+                    Expired {{ -alert.daysUntilExpiry }} day{{
+                      -alert.daysUntilExpiry === 1 ? '' : 's'
+                    }}
+                    ago
                   } @else if (alert.daysUntilExpiry === 0) {
                     Expires today
                   } @else {
-                    Expires in {{ alert.daysUntilExpiry }} day{{ alert.daysUntilExpiry === 1 ? '' : 's' }}
+                    Expires in {{ alert.daysUntilExpiry }} day{{
+                      alert.daysUntilExpiry === 1 ? '' : 's'
+                    }}
                   }
                 </span>
                 <span class="expiry-date">{{ alert.expiryDate | date: 'mediumDate' }}</span>
@@ -229,9 +238,7 @@ export class WasteAlertsPageComponent implements OnInit {
     this.wasteAlertService.dismissAlert(alertId).subscribe({
       error: (err) => console.warn('Failed to dismiss waste alert', err),
       next: () => {
-        this.alerts.update((current) =>
-          current.filter((a) => a.alertId !== alertId)
-        );
+        this.alerts.update((current) => current.filter((a) => a.alertId !== alertId));
       },
     });
   }

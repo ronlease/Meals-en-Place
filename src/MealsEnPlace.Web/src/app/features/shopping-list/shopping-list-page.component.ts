@@ -19,7 +19,6 @@ import {
   TodoistProjectPickerResult,
 } from '../../shared/todoist-project-picker/todoist-project-picker-dialog.component';
 
-
 @Component({
   selector: 'app-shopping-list-page',
   standalone: true,
@@ -41,7 +40,11 @@ import {
           <button
             mat-stroked-button
             [disabled]="!todoistAvailability.configured() || pushing()"
-            [matTooltip]="todoistAvailability.configured() ? 'Push items to Todoist' : 'Configure Todoist:Token user secret to enable'"
+            [matTooltip]="
+              todoistAvailability.configured()
+                ? 'Push items to Todoist'
+                : 'Configure Todoist:Token user secret to enable'
+            "
             (click)="pushToTodoist()"
           >
             <mat-icon>send</mat-icon>
@@ -93,7 +96,7 @@ import {
         </ng-container>
 
         <mat-header-row *matHeaderRowDef="displayedColumns" />
-        <mat-row *matRowDef="let row; columns: displayedColumns;" />
+        <mat-row *matRowDef="let row; columns: displayedColumns" />
       </mat-table>
     }
   `,
@@ -197,9 +200,7 @@ export class ShoppingListPageComponent implements OnInit {
     if (result.updated > 0) parts.push(`${result.updated} updated`);
     if (result.closed > 0) parts.push(`${result.closed} closed`);
     if (result.unchanged > 0) parts.push(`${result.unchanged} unchanged`);
-    return parts.length > 0
-      ? `Todoist: ${parts.join(', ')}.`
-      : 'Todoist: nothing to push.';
+    return parts.length > 0 ? `Todoist: ${parts.join(', ')}.` : 'Todoist: nothing to push.';
   }
 
   private loadList(planId: string): void {

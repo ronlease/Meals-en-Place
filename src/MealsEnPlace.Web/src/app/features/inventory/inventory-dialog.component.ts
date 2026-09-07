@@ -1,20 +1,11 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, computed, inject, OnInit, signal } from '@angular/core';
-import {
-  FormControl,
-  FormGroup,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import {
-  MAT_DIALOG_DATA,
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -98,17 +89,24 @@ interface InventoryForm {
                 </mat-option>
               }
               @if (showCreateNew()) {
-                <mat-option [value]="inventoryForm.controls.canonicalIngredientName.value" (click)="onCreateNewIngredient()">
+                <mat-option
+                  [value]="inventoryForm.controls.canonicalIngredientName.value"
+                  (click)="onCreateNewIngredient()"
+                >
                   <mat-icon>add</mat-icon>
                   Create "{{ inventoryForm.controls.canonicalIngredientName.value }}"
                 </mat-option>
               }
             </mat-autocomplete>
-            @if (inventoryForm.controls.canonicalIngredientName.hasError('required') &&
-                 inventoryForm.controls.canonicalIngredientName.touched) {
+            @if (
+              inventoryForm.controls.canonicalIngredientName.hasError('required') &&
+              inventoryForm.controls.canonicalIngredientName.touched
+            ) {
               <mat-error>Ingredient is required</mat-error>
             }
-            @if (ingredientNotResolved() && inventoryForm.controls.canonicalIngredientName.touched) {
+            @if (
+              ingredientNotResolved() && inventoryForm.controls.canonicalIngredientName.touched
+            ) {
               <mat-error>Select an ingredient from the list or create a new one</mat-error>
             }
           </mat-form-field>
@@ -116,13 +114,7 @@ interface InventoryForm {
           <div class="row-fields">
             <mat-form-field appearance="outline" class="quantity-field">
               <mat-label>Quantity</mat-label>
-              <input
-                matInput
-                type="number"
-                formControlName="quantity"
-                min="0"
-                step="any"
-              />
+              <input matInput type="number" formControlName="quantity" min="0" step="any" />
               @if (inventoryForm.controls.quantity.hasError('required')) {
                 <mat-error>Quantity is required</mat-error>
               }
@@ -162,11 +154,7 @@ interface InventoryForm {
 
           <mat-form-field appearance="outline" class="full-width">
             <mat-label>Notes (optional)</mat-label>
-            <input
-              matInput
-              formControlName="notes"
-              placeholder="e.g. 1 can of diced tomatoes"
-            />
+            <input matInput formControlName="notes" placeholder="e.g. 1 can of diced tomatoes" />
           </mat-form-field>
         </form>
 
@@ -216,16 +204,14 @@ interface InventoryForm {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button [mat-dialog-close]="null" [disabled]="loading()">
-        Cancel
-      </button>
+      <button mat-button [mat-dialog-close]="null" [disabled]="loading()">Cancel</button>
       <button
         mat-flat-button
         color="primary"
         (click)="onSubmit()"
         [disabled]="loading() || referenceDataLoading()"
       >
-        {{ containerReferenceDetected() ? 'Declare & Save' : (data.mode === 'add' ? 'Add' : 'Save') }}
+        {{ containerReferenceDetected() ? 'Declare & Save' : data.mode === 'add' ? 'Add' : 'Save' }}
       </button>
     </mat-dialog-actions>
   `,
@@ -298,15 +284,13 @@ export class InventoryDialogComponent implements OnInit {
   protected readonly filteredIngredients = computed<CanonicalIngredientDto[]>(() => {
     const query = this.ingredientQuery().toLowerCase();
     if (!query) return this.ingredients();
-    return this.ingredients().filter((i) =>
-      i.name.toLowerCase().includes(query)
-    );
+    return this.ingredients().filter((i) => i.name.toLowerCase().includes(query));
   });
   // Reads ingredientQuery rather than the form control: a computed cannot track
   // a FormControl, so sourcing the name from the control left this stale and the
   // "select an ingredient" error never appeared.
   protected readonly ingredientNotResolved = computed(
-    () => !this.selectedIngredientId() && this.ingredientQuery().trim().length > 0
+    () => !this.selectedIngredientId() && this.ingredientQuery().trim().length > 0,
   );
   protected readonly ingredients = signal<CanonicalIngredientDto[]>([]);
   protected readonly inventoryForm: FormGroup<InventoryForm>;
@@ -315,9 +299,7 @@ export class InventoryDialogComponent implements OnInit {
   protected readonly showCreateNew = computed(() => {
     const query = this.ingredientQuery().trim();
     if (!query) return false;
-    return !this.ingredients().some(
-      (i) => i.name.toLowerCase() === query.toLowerCase()
-    );
+    return !this.ingredients().some((i) => i.name.toLowerCase() === query.toLowerCase());
   });
   protected readonly units = signal<UnitOfMeasureDto[]>([]);
 
@@ -351,10 +333,7 @@ export class InventoryDialogComponent implements OnInit {
         validators: [Validators.required],
       }),
       notes: new FormControl<string>('', { nonNullable: true }),
-      quantity: new FormControl<number | null>(null, [
-        Validators.required,
-        Validators.min(0.001),
-      ]),
+      quantity: new FormControl<number | null>(null, [Validators.required, Validators.min(0.001)]),
       unitOfMeasureId: new FormControl<string>('', {
         nonNullable: true,
         validators: [Validators.required],
@@ -398,11 +377,9 @@ export class InventoryDialogComponent implements OnInit {
       .subscribe({
         error: (err: HttpErrorResponse) => {
           this.loading.set(false);
-          this.snackBar.open(
-            err.error?.message ?? 'Failed to create ingredient.',
-            'Dismiss',
-            { duration: 4000 }
-          );
+          this.snackBar.open(err.error?.message ?? 'Failed to create ingredient.', 'Dismiss', {
+            duration: 4000,
+          });
         },
         next: (created) => {
           this.loading.set(false);
@@ -417,9 +394,7 @@ export class InventoryDialogComponent implements OnInit {
   }
 
   onIngredientInput(): void {
-    this.ingredientQuery.set(
-      this.inventoryForm.controls.canonicalIngredientName.value
-    );
+    this.ingredientQuery.set(this.inventoryForm.controls.canonicalIngredientName.value);
     this.selectedIngredientId.set(null);
   }
 
@@ -453,7 +428,7 @@ export class InventoryDialogComponent implements OnInit {
   private applyEditValues(
     mode: 'add' | 'edit',
     item: InventoryItemResponse | undefined,
-    location: InventoryLocation
+    location: InventoryLocation,
   ): void {
     if (mode === 'edit' && item) {
       const expiry = item.expiryDate ? new Date(item.expiryDate) : null;
@@ -473,16 +448,14 @@ export class InventoryDialogComponent implements OnInit {
 
   private buildAddRequest(
     declaredQuantity?: number | null,
-    declaredUnitOfMeasureId?: string | null
+    declaredUnitOfMeasureId?: string | null,
   ): AddInventoryItemRequest {
     const v = this.inventoryForm.getRawValue();
     return {
       canonicalIngredientId: this.selectedIngredientId()!,
       declaredQuantity: declaredQuantity ?? null,
       declaredUnitOfMeasureId: declaredUnitOfMeasureId ?? null,
-      expiryDate: v.expiryDate
-        ? v.expiryDate.toISOString().substring(0, 10)
-        : null,
+      expiryDate: v.expiryDate ? v.expiryDate.toISOString().substring(0, 10) : null,
       location: v.location,
       notes: v.notes,
       quantity: v.quantity!,
@@ -496,18 +469,14 @@ export class InventoryDialogComponent implements OnInit {
     this.inventoryService.addItem(request).subscribe({
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.snackBar.open(
-          err.error?.message ?? 'Failed to add item.',
-          'Dismiss',
-          { duration: 4000 }
-        );
+        this.snackBar.open(err.error?.message ?? 'Failed to add item.', 'Dismiss', {
+          duration: 4000,
+        });
       },
       next: (response) => {
         this.loading.set(false);
         if ('detectedKeyword' in response) {
-          this.containerReference.set(
-            response as ContainerReferenceDetectedResponse
-          );
+          this.containerReference.set(response as ContainerReferenceDetectedResponse);
           this.containerReferenceDetected.set(true);
         } else {
           this.snackBar.open('Item added.', undefined, { duration: 2500 });
@@ -522,9 +491,7 @@ export class InventoryDialogComponent implements OnInit {
     const v = this.inventoryForm.getRawValue();
     this.inventoryService
       .updateItem(this.data.item!.id, {
-        expiryDate: v.expiryDate
-          ? v.expiryDate.toISOString().substring(0, 10)
-          : null,
+        expiryDate: v.expiryDate ? v.expiryDate.toISOString().substring(0, 10) : null,
         location: v.location,
         notes: v.notes,
         quantity: v.quantity!,
@@ -533,11 +500,9 @@ export class InventoryDialogComponent implements OnInit {
       .subscribe({
         error: (err: HttpErrorResponse) => {
           this.loading.set(false);
-          this.snackBar.open(
-            err.error?.message ?? 'Failed to update item.',
-            'Dismiss',
-            { duration: 4000 }
-          );
+          this.snackBar.open(err.error?.message ?? 'Failed to update item.', 'Dismiss', {
+            duration: 4000,
+          });
         },
         next: (response) => {
           this.loading.set(false);
@@ -554,20 +519,16 @@ export class InventoryDialogComponent implements OnInit {
     this.inventoryService.addItem(request).subscribe({
       error: (err: HttpErrorResponse) => {
         this.loading.set(false);
-        this.snackBar.open(
-          err.error?.message ?? 'Failed to save item.',
-          'Dismiss',
-          { duration: 4000 }
-        );
+        this.snackBar.open(err.error?.message ?? 'Failed to save item.', 'Dismiss', {
+          duration: 4000,
+        });
       },
       next: (response) => {
         this.loading.set(false);
         if ('detectedKeyword' in response) {
-          this.snackBar.open(
-            'Container reference still detected. Please try again.',
-            'Dismiss',
-            { duration: 4000 }
-          );
+          this.snackBar.open('Container reference still detected. Please try again.', 'Dismiss', {
+            duration: 4000,
+          });
         } else {
           this.snackBar.open('Item added.', undefined, { duration: 2500 });
           this.dialogRef.close(response as InventoryItemResponse);

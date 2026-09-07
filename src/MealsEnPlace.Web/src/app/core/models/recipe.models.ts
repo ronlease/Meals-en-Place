@@ -120,12 +120,7 @@ export interface RecipeMatchResponse {
 // ----------------------------------------------------------------
 
 export type DietaryTag =
-  | 'Vegetarian'
-  | 'Vegan'
-  | 'Carnivore'
-  | 'LowCarb'
-  | 'GlutenFree'
-  | 'DairyFree';
+  'Vegetarian' | 'Vegan' | 'Carnivore' | 'LowCarb' | 'GlutenFree' | 'DairyFree';
 
 // ----------------------------------------------------------------
 // Container resolution (MEP-003 single + MEP-026 grouped)

@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { UserPreferencesResponse } from '../models/preferences.models';
 import { PreferencesService } from './preferences.service';
@@ -13,9 +10,7 @@ describe('PreferencesService', () => {
   let httpMock: HttpTestingController;
   let service: PreferencesService;
 
-  function makePrefs(
-    overrides: Partial<UserPreferencesResponse> = {},
-  ): UserPreferencesResponse {
+  function makePrefs(overrides: Partial<UserPreferencesResponse> = {}): UserPreferencesResponse {
     return { autoDepleteOnConsume: false, displaySystem: 'Imperial', ...overrides };
   }
 
@@ -63,9 +58,7 @@ describe('PreferencesService', () => {
       // The subscriber has no error handler, so a failure must not corrupt state.
       service.loadPreferences();
 
-      httpMock
-        .expectOne(BASE_URL)
-        .flush('boom', { status: 500, statusText: 'Server Error' });
+      httpMock.expectOne(BASE_URL).flush('boom', { status: 500, statusText: 'Server Error' });
 
       expect(service.displaySystem()).toBe('Imperial');
       expect(service.autoDepleteOnConsume()).toBe(false);
@@ -145,9 +138,7 @@ describe('PreferencesService', () => {
     it('does not flip the signal when the request fails', () => {
       service.toggleDisplaySystem();
 
-      httpMock
-        .expectOne(BASE_URL)
-        .flush('boom', { status: 500, statusText: 'Server Error' });
+      httpMock.expectOne(BASE_URL).flush('boom', { status: 500, statusText: 'Server Error' });
 
       expect(service.displaySystem()).toBe('Imperial');
     });

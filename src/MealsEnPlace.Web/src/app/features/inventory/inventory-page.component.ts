@@ -8,12 +8,7 @@ import { InventoryTableComponent } from './inventory-table.component';
 @Component({
   selector: 'app-inventory-page',
   standalone: true,
-  imports: [
-    InventoryTableComponent,
-    MatButtonModule,
-    MatIconModule,
-    MatTabsModule,
-  ],
+  imports: [InventoryTableComponent, MatButtonModule, MatIconModule, MatTabsModule],
   template: `
     <div class="page-header">
       <h1 class="page-title">Inventory</h1>
@@ -23,10 +18,7 @@ import { InventoryTableComponent } from './inventory-table.component';
       </button>
     </div>
 
-    <mat-tab-group
-      animationDuration="200ms"
-      (selectedIndexChange)="onTabChange($event)"
-    >
+    <mat-tab-group animationDuration="200ms" (selectedIndexChange)="onTabChange($event)">
       <mat-tab label="Pantry">
         <ng-template matTabContent>
           <app-inventory-table location="Pantry" />
@@ -73,9 +65,7 @@ export class InventoryPageComponent {
   private readonly tables = viewChildren(InventoryTableComponent);
 
   addItem(): void {
-    const activeTable = this.tables().find(
-      (t) => t.location() === this.activeLocation()
-    );
+    const activeTable = this.tables().find((t) => t.location() === this.activeLocation());
     activeTable?.openAddDialog();
   }
 

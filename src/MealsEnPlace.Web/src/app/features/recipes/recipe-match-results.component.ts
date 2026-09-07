@@ -3,10 +3,7 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { RouterModule } from '@angular/router';
-import {
-  RecipeMatchDto,
-  RecipeMatchResponse,
-} from '../../core/models/recipe.models';
+import { RecipeMatchDto, RecipeMatchResponse } from '../../core/models/recipe.models';
 
 @Component({
   selector: 'app-recipe-match-results',
@@ -37,8 +34,8 @@ import {
         <div class="ai-disabled-note" role="status" aria-live="polite">
           <mat-icon fontIcon="info" inline></mat-icon>
           <span>
-            AI-suggested substitutions are unavailable — add a Claude API key in
-            Settings to enable them. Deterministic matching is unchanged.
+            AI-suggested substitutions are unavailable — add a Claude API key in Settings to enable
+            them. Deterministic matching is unchanged.
           </span>
         </div>
       }
@@ -58,7 +55,10 @@ import {
                 <div class="match-meta">
                   <span>{{ recipe.cuisineType }}</span>
                   <span class="dot-sep">·</span>
-                  <span>{{ recipe.matchedIngredients.length }} / {{ totalIngredients(recipe) }} ingredients</span>
+                  <span
+                    >{{ recipe.matchedIngredients.length }} /
+                    {{ totalIngredients(recipe) }} ingredients</span
+                  >
                   <span class="dot-sep">·</span>
                   <span>{{ scorePercent(recipe.finalScore) }}%</span>
                 </div>
@@ -84,7 +84,10 @@ import {
                 <div class="match-meta">
                   <span>{{ recipe.cuisineType }}</span>
                   <span class="dot-sep">·</span>
-                  <span>{{ recipe.matchedIngredients.length }} / {{ totalIngredients(recipe) }} ingredients</span>
+                  <span
+                    >{{ recipe.matchedIngredients.length }} /
+                    {{ totalIngredients(recipe) }} ingredients</span
+                  >
                   <span class="dot-sep">·</span>
                   <span>{{ scorePercent(recipe.finalScore) }}%</span>
                 </div>
@@ -132,7 +135,10 @@ import {
                 <div class="match-meta">
                   <span>{{ recipe.cuisineType }}</span>
                   <span class="dot-sep">·</span>
-                  <span>{{ recipe.matchedIngredients.length }} / {{ totalIngredients(recipe) }} ingredients</span>
+                  <span
+                    >{{ recipe.matchedIngredients.length }} /
+                    {{ totalIngredients(recipe) }} ingredients</span
+                  >
                   <span class="dot-sep">·</span>
                   <span>{{ scorePercent(recipe.finalScore) }}%</span>
                 </div>
@@ -159,12 +165,17 @@ import {
         color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.54));
         font-size: 14px;
 
-        mat-icon { opacity: 0.5; }
+        mat-icon {
+          opacity: 0.5;
+        }
       }
 
       .error-message {
         color: #b91c1c;
-        mat-icon { opacity: 1; color: #b91c1c; }
+        mat-icon {
+          opacity: 1;
+          color: #b91c1c;
+        }
       }
 
       .ai-disabled-note {
@@ -193,9 +204,15 @@ import {
         margin: 0 0 12px;
       }
 
-      .full-match-heading { color: #166534; }
-      .near-match-heading { color: #92400e; }
-      .partial-match-heading { color: rgba(0, 0, 0, 0.54); }
+      .full-match-heading {
+        color: #166534;
+      }
+      .near-match-heading {
+        color: #92400e;
+      }
+      .partial-match-heading {
+        color: rgba(0, 0, 0, 0.54);
+      }
 
       .match-grid {
         display: grid;
@@ -209,9 +226,18 @@ import {
         border: 1px solid;
       }
 
-      .full-match { border-color: #bbf7d0; background: #f0fdf4; }
-      .near-match { border-color: #fde68a; background: #fffbeb; }
-      .partial-match { border-color: #e5e7eb; background: #f9fafb; }
+      .full-match {
+        border-color: #bbf7d0;
+        background: #f0fdf4;
+      }
+      .near-match {
+        border-color: #fde68a;
+        background: #fffbeb;
+      }
+      .partial-match {
+        border-color: #e5e7eb;
+        background: #f9fafb;
+      }
 
       .match-card-header {
         display: flex;
@@ -235,9 +261,18 @@ import {
         white-space: nowrap;
       }
 
-      .full-match-pill { background: #dcfce7; color: #166534; }
-      .near-match-pill { background: #fef3c7; color: #92400e; }
-      .partial-match-pill { background: #f3f4f6; color: rgba(0, 0, 0, 0.54); }
+      .full-match-pill {
+        background: #dcfce7;
+        color: #166534;
+      }
+      .near-match-pill {
+        background: #fef3c7;
+        color: #92400e;
+      }
+      .partial-match-pill {
+        background: #f3f4f6;
+        color: rgba(0, 0, 0, 0.54);
+      }
 
       .match-meta {
         font-size: 12px;
@@ -247,7 +282,9 @@ import {
         flex-wrap: wrap;
       }
 
-      .dot-sep { opacity: 0.4; }
+      .dot-sep {
+        opacity: 0.4;
+      }
 
       .missing-list {
         margin-top: 8px;

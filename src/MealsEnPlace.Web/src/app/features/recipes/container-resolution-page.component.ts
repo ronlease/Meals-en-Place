@@ -17,20 +17,13 @@ import {
 @Component({
   selector: 'app-container-resolution-page',
   standalone: true,
-  imports: [
-    CommonModule,
-    MatButtonModule,
-    MatIconModule,
-    MatProgressSpinnerModule,
-    MatTableModule,
-  ],
+  imports: [CommonModule, MatButtonModule, MatIconModule, MatProgressSpinnerModule, MatTableModule],
   template: `
     <div class="page-header">
       <h1 class="page-title">Container Resolution Queue</h1>
       <p class="page-subtitle">
-        Unresolved container references grouped by canonical ingredient and
-        source phrase. Declaring a net weight here applies to every recipe
-        that uses the same phrase.
+        Unresolved container references grouped by canonical ingredient and source phrase. Declaring
+        a net weight here applies to every recipe that uses the same phrase.
       </p>
     </div>
 
@@ -195,7 +188,7 @@ export class ContainerResolutionPageComponent implements OnInit {
   protected readonly groups = signal<UnresolvedGroupResponse[]>([]);
   protected readonly loading = signal(false);
   protected readonly totalOccurrences = computed(() =>
-    this.groups().reduce((sum, g) => sum + g.occurrenceCount, 0)
+    this.groups().reduce((sum, g) => sum + g.occurrenceCount, 0),
   );
 
   private readonly dialog = inject(MatDialog);
@@ -228,7 +221,7 @@ export class ContainerResolutionPageComponent implements OnInit {
         this.snackBar.open(
           `Resolved ${result.affectedCount} ingredient${result.affectedCount === 1 ? '' : 's'}.`,
           'Dismiss',
-          { duration: 4000 }
+          { duration: 4000 },
         );
         this.load();
       }

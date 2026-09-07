@@ -3,10 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatListOption, MatSelectionListChange } from '@angular/material/list';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { RecipeListItemDto } from '../../core/models/recipe.models';
-import {
-  MealPlanSwapDialogComponent,
-  SwapDialogData,
-} from './meal-plan-swap-dialog.component';
+import { MealPlanSwapDialogComponent, SwapDialogData } from './meal-plan-swap-dialog.component';
 
 describe('MealPlanSwapDialogComponent', () => {
   let component: MealPlanSwapDialogComponent;

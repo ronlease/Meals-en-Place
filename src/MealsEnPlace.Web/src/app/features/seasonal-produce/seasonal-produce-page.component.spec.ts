@@ -13,9 +13,7 @@ describe('SeasonalProducePageComponent', () => {
     getInSeason: ReturnType<typeof vi.fn>;
   };
 
-  function makeWindow(
-    overrides: Partial<SeasonalProduceResponse> = {},
-  ): SeasonalProduceResponse {
+  function makeWindow(overrides: Partial<SeasonalProduceResponse> = {}): SeasonalProduceResponse {
     return {
       ingredientId: 'ing-1',
       name: 'Asparagus',
@@ -29,9 +27,7 @@ describe('SeasonalProducePageComponent', () => {
   function createComponent(): void {
     TestBed.configureTestingModule({
       imports: [SeasonalProducePageComponent, NoopAnimationsModule],
-      providers: [
-        { provide: SeasonalProduceService, useValue: seasonalProduceServiceMock },
-      ],
+      providers: [{ provide: SeasonalProduceService, useValue: seasonalProduceServiceMock }],
     });
 
     fixture = TestBed.createComponent(SeasonalProducePageComponent);
@@ -82,9 +78,7 @@ describe('SeasonalProducePageComponent', () => {
     });
 
     it('shows the error state when the in-season fetch fails', () => {
-      seasonalProduceServiceMock.getInSeason.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      seasonalProduceServiceMock.getInSeason.mockReturnValue(throwError(() => new Error('boom')));
 
       createComponent();
 
@@ -94,9 +88,7 @@ describe('SeasonalProducePageComponent', () => {
     });
 
     it('does not request the full calendar when the in-season fetch fails', () => {
-      seasonalProduceServiceMock.getInSeason.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      seasonalProduceServiceMock.getInSeason.mockReturnValue(throwError(() => new Error('boom')));
 
       createComponent();
 
@@ -106,9 +98,7 @@ describe('SeasonalProducePageComponent', () => {
     it('keeps the usable in-season view when only the full calendar fails', () => {
       // The default view needs only the in-season list, so a failure fetching
       // the calendar must not blank the page.
-      seasonalProduceServiceMock.getAllWindows.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      seasonalProduceServiceMock.getAllWindows.mockReturnValue(throwError(() => new Error('boom')));
 
       createComponent();
 
@@ -143,7 +133,11 @@ describe('SeasonalProducePageComponent', () => {
 
       internals().viewMode.set('in-season');
 
-      expect(internals().displayData().map((item) => item.name)).toEqual(['Asparagus']);
+      expect(
+        internals()
+          .displayData()
+          .map((item) => item.name),
+      ).toEqual(['Asparagus']);
     });
 
     it('renders a row per displayed window', () => {

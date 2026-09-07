@@ -33,9 +33,7 @@ describe('ShoppingListPageComponent', () => {
     weekStartDate: '2026-09-01',
   };
 
-  function makeItem(
-    overrides: Partial<ShoppingListItemResponse> = {},
-  ): ShoppingListItemResponse {
+  function makeItem(overrides: Partial<ShoppingListItemResponse> = {}): ShoppingListItemResponse {
     return {
       canonicalIngredientName: 'Diced Tomatoes',
       category: 'Canned',
@@ -112,9 +110,7 @@ describe('ShoppingListPageComponent', () => {
     });
 
     it('renders a row per item', () => {
-      shoppingListServiceMock.getList.mockReturnValue(
-        of([makeItem(), makeItem({ id: 'sl-2' })]),
-      );
+      shoppingListServiceMock.getList.mockReturnValue(of([makeItem(), makeItem({ id: 'sl-2' })]));
 
       createComponent();
 
@@ -180,15 +176,17 @@ describe('ShoppingListPageComponent', () => {
       component.regenerate();
 
       expect(shoppingListServiceMock.generateList).toHaveBeenCalledWith('plan-1');
-      expect(internals().items().map((item) => item.id)).toEqual(['sl-new', 'sl-new-2']);
+      expect(
+        internals()
+          .items()
+          .map((item) => item.id),
+      ).toEqual(['sl-new', 'sl-new-2']);
       expect(internals().loading()).toBe(false);
     });
 
     it('keeps the previous list and clears the spinner when regeneration fails', () => {
       createComponent();
-      shoppingListServiceMock.generateList.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      shoppingListServiceMock.generateList.mockReturnValue(throwError(() => new Error('boom')));
 
       component.regenerate();
 
@@ -293,11 +291,9 @@ describe('ShoppingListPageComponent', () => {
 
       component.pushToTodoist();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Todoist: nothing to push.',
-        'Dismiss',
-        { duration: 5000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Todoist: nothing to push.', 'Dismiss', {
+        duration: 5000,
+      });
     });
 
     it('surfaces the problem detail from a failed push', () => {
@@ -310,27 +306,21 @@ describe('ShoppingListPageComponent', () => {
       component.pushToTodoist();
 
       expect(internals().pushing()).toBe(false);
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Todoist rejected the request.',
-        'Dismiss',
-        { duration: 6000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Todoist rejected the request.', 'Dismiss', {
+        duration: 6000,
+      });
     });
 
     it('falls back to a generic message when the failure carries no detail', () => {
       createComponent();
       dialogMock.open.mockReturnValue(dialogReturning({ projectId: null }));
-      shoppingListServiceMock.pushMealPlanListToTodoist.mockReturnValue(
-        throwError(() => ({})),
-      );
+      shoppingListServiceMock.pushMealPlanListToTodoist.mockReturnValue(throwError(() => ({})));
 
       component.pushToTodoist();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Push to Todoist failed.',
-        'Dismiss',
-        { duration: 6000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Push to Todoist failed.', 'Dismiss', {
+        duration: 6000,
+      });
     });
 
     it('disables the push button while Todoist is not configured', () => {

@@ -107,7 +107,9 @@ const LIBRARY_PAGE_SIZE = 25;
                     } @else {
                       <span
                         class="status-badge awaiting-badge"
-                        [matTooltip]="r.unresolvedCount + ' container reference(s) need declaration'"
+                        [matTooltip]="
+                          r.unresolvedCount + ' container reference(s) need declaration'
+                        "
                       >
                         Awaiting Resolution ({{ r.unresolvedCount }})
                       </span>
@@ -117,7 +119,7 @@ const LIBRARY_PAGE_SIZE = 25;
 
                 <mat-header-row *matHeaderRowDef="libraryColumns" />
                 <mat-row
-                  *matRowDef="let row; columns: libraryColumns;"
+                  *matRowDef="let row; columns: libraryColumns"
                   [class.awaiting-row]="!row.isFullyResolved"
                   class="clickable-row"
                   (click)="openRecipeDetail(row)"
@@ -221,12 +223,17 @@ const LIBRARY_PAGE_SIZE = 25;
         color: var(--mat-sys-on-surface-variant, rgba(0, 0, 0, 0.54));
         font-size: 14px;
 
-        mat-icon { opacity: 0.5; }
+        mat-icon {
+          opacity: 0.5;
+        }
       }
 
       .error-message {
         color: #b91c1c;
-        mat-icon { opacity: 1; color: #b91c1c; }
+        mat-icon {
+          opacity: 1;
+          color: #b91c1c;
+        }
       }
 
       .recipe-table {
@@ -293,7 +300,12 @@ const LIBRARY_PAGE_SIZE = 25;
 })
 export class RecipeBrowserComponent implements OnInit {
   readonly allDietaryTags: DietaryTag[] = [
-    'Carnivore', 'DairyFree', 'GlutenFree', 'LowCarb', 'Vegan', 'Vegetarian',
+    'Carnivore',
+    'DairyFree',
+    'GlutenFree',
+    'LowCarb',
+    'Vegan',
+    'Vegetarian',
   ];
   protected readonly currentPage = signal(1);
   protected readonly library = signal<RecipeListItemDto[]>([]);
@@ -321,7 +333,10 @@ export class RecipeBrowserComponent implements OnInit {
     this.matchError.set(false);
     this.matchLoading.set(true);
     this.recipeService
-      .matchRecipes(undefined, this.selectedDietaryTags.length > 0 ? this.selectedDietaryTags : undefined)
+      .matchRecipes(
+        undefined,
+        this.selectedDietaryTags.length > 0 ? this.selectedDietaryTags : undefined,
+      )
       .subscribe({
         error: () => {
           this.matchLoading.set(false);
