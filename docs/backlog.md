@@ -3173,3 +3173,79 @@ Feature: Recipe Search and Filtering
     And the results update to show only matching recipes
     And pagination resets to page 1 of the filtered results
 ```
+
+---
+
+## [MEP-047] Close Angular C4 Component Model Drift (PWA and Offline Units)
+
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** none
+
+### Business Problem
+The Angular component diagram (`docs/c4/component-web.puml`) currently declares 24
+Component entries, but four real units of the running application are absent:
+`NetworkStatusService`, `InstallPromptService`, `PushNotificationService`, and
+`OfflineBannerComponent`. These units ship in the build, are exercised by the test suite
+(MEP-041), and have relationships to the app shell and to each other, yet they do not appear
+in the architecture model.
+
+An inaccurate component diagram has a real, if undramatic, cost. When a developer consults
+the diagram to understand the app shell's dependency graph -- for example, before refactoring
+the toolbar or changing service-worker registration -- the missing nodes create a false
+picture of what the shell actually depends on. The developer either discovers the gap during
+implementation (wasted orientation time) or, worse, does not discover it and makes a change
+that conflicts with an undocumented relationship. The cost compounds over time: each new
+contributor who trusts the diagram inherits the same blind spot.
+
+Before adding nodes, however, the team must decide whether the three PWA services
+(`NetworkStatusService`, `InstallPromptService`, `PushNotificationService`) belong in a C4
+component diagram at all. These are infrastructure plumbing rather than domain features, and
+a reasonable architectural position is that they sit below the abstraction level the diagram
+is intended to capture. If the team reaches that conclusion, recording the decision
+explicitly (e.g., as a comment block in the PlantUML source) closes this item just as
+validly as adding the nodes would. The `OfflineBannerComponent` is a visible UI element
+rendered by the app shell and should be modelled regardless of the PWA-service decision.
+
+### Acceptance Criteria
+```gherkin
+Feature: Angular C4 Component Model Accuracy
+
+  Scenario: Decide whether PWA services belong in the component model
+    Given the web component diagram omits NetworkStatusService, InstallPromptService, and PushNotificationService
+    And these services are infrastructure plumbing rather than domain features
+    When the team evaluates their fit for a C4 component-level diagram
+    Then the decision is recorded explicitly in the PlantUML source as either new Component entries or a comment block explaining why they are intentionally excluded
+    And future contributors can find the rationale without re-investigating
+
+  Scenario: Add OfflineBannerComponent to the diagram
+    Given OfflineBannerComponent is a visible UI element rendered by the app shell
+    And it does not currently appear in the web component diagram
+    When the diagram is updated
+    Then OfflineBannerComponent appears as a Component entry
+    And a relationship shows the App Component (appShell) rendering the OfflineBannerComponent
+    And a relationship shows OfflineBannerComponent reading NetworkStatusService (if that service was included) or an annotation notes the dependency on an excluded infrastructure service
+
+  Scenario: Add PWA services to the diagram if the decision is to include them
+    Given the team decided to include PWA services in the component model
+    When the diagram is updated
+    Then NetworkStatusService, InstallPromptService, and PushNotificationService each appear as Component entries
+    And a relationship shows the App Component using InstallPromptService for the toolbar install button
+    And a relationship shows PushNotificationService depending on Angular SwPush as an external infrastructure dependency
+    And the total Component count increases to 28
+
+  Scenario: Record exclusion rationale if the decision is to omit PWA services
+    Given the team decided that PWA services are below the diagram's abstraction level
+    When the diagram is updated
+    Then a comment block in the PlantUML source lists the excluded services by name
+    And the comment explains the rationale for exclusion
+    And OfflineBannerComponent is still added per the previous scenario
+    And the total Component count increases to 25
+
+  Scenario: Regenerate C4 PNGs locally and commit them
+    Given the PlantUML source has been updated
+    When the developer runs ./scripts/render-c4.sh
+    Then the script renders updated PNGs via the Docker-hosted PlantUML renderer
+    And the updated PNGs are committed alongside the PlantUML source changes
+    And no CI workflow is expected to render them (rendering is local per the current process)
+```

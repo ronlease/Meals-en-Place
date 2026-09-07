@@ -152,12 +152,19 @@ Before any PR is opened, verify the following:
    PNGs — the root README embeds them. `./scripts/render-c4.sh --check` verifies
    without writing.
 4. All Swagger/OpenAPI docs are up-to-date (new endpoints documented, descriptions accurate)
-5. All projects build successfully (`dotnet build`, `ng build`)
-6. All tests pass (`dotnet test`)
-7. Code coverage is at least 90% (excluding EF migrations, generated code, property-only DTOs, and Program.cs)
-8. Delete any leftover `coverage-*/` and `**/TestResults/` directories before committing
+5. All projects build successfully (`dotnet build`, `ng build --configuration production`)
+6. All tests pass — `dotnet test` (API) and `npm test` from `src/MealsEnPlace.Web` (Angular)
+7. Code coverage is at least 90% on both suites:
+   - API: excluding EF migrations, generated code, property-only DTOs, and `Program.cs`
+   - Angular: `npm run test:coverage`, enforced by `coverageThresholds` in `angular.json`
+8. Delete any leftover `coverage-*/`, `**/TestResults/`, and `src/MealsEnPlace.Web/coverage/`
+   directories before committing
 9. Update `docs/backlog.md` — mark completed items as `Done`, verify no stale statuses
 10. Run `dotnet format` and fix any violations
+11. Run `npx prettier --write "src/**/*.{ts,html,scss}"` from `src/MealsEnPlace.Web` and
+    commit the result — `--check` verifies without writing. Prettier is configured by
+    `.prettierrc` (100 columns, single quotes) and is not enforced in CI, so this step is
+    the only thing keeping the frontend consistently formatted.
 
 ## Post-MVP Feature Stubs
 The following feature folders are pre-created but contain no implementation. Do not implement
