@@ -21,6 +21,9 @@ export class AiAvailabilityService {
 
   refresh(): void {
     this.settingsService.getStatus().subscribe({
+      // A status check that cannot reach the API leaves the last known value in
+      // place rather than escaping as an uncaught error.
+      error: () => undefined,
       next: (status) => {
         this._configured.set(status.configured);
         if (status.configured) {

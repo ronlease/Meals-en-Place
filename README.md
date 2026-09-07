@@ -9,7 +9,7 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 - **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
 - **Recipe catalog:** Bulk ingested offline from the Kaggle "Recipe Dataset (over 2M)" via `MealsEnPlace.Tools.Ingest` (see [CITATION.cff](CITATION.cff))
 - **External APIs:** Open Food Facts (ingredient metadata), Todoist Unified API v1 (shopping list + meal plan task push — MEP-028 / MEP-029, migrated from REST v2 in MEP-042)
-- **Testing:** xUnit, FluentAssertions, Moq
+- **Testing:** xUnit, FluentAssertions, Moq (API); Vitest via `@angular/build:unit-test` (frontend)
 
 ## Getting Started
 
@@ -44,8 +44,20 @@ Swagger docs are available at `https://localhost:7274/swagger`.
 ### Running Tests
 
 ```bash
+# API — unit and integration tests
 dotnet test
+
+# Frontend — Vitest suite
+cd src/MealsEnPlace.Web
+npm test
+
+# Frontend with the 90% line-coverage gate
+npm run test:coverage
 ```
+
+Both suites are gated in CI at 90% line coverage. See
+[src/MealsEnPlace.Web/README.md](src/MealsEnPlace.Web/README.md) for the frontend
+testing conventions.
 
 ## Project Structure
 

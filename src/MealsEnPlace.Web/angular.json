@@ -102,6 +102,26 @@
           "options": {
             "lintFilePatterns": ["src/**/*.ts", "src/**/*.html"]
           }
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "buildTarget": "MealsEnPlace.Web:build:development",
+            "tsConfig": "tsconfig.spec.json",
+            "runner": "vitest",
+            "coverageInclude": ["src/app/**/*.ts"],
+            "coverageExclude": [
+              "src/main.ts",
+              "src/environments/**",
+              "src/app/app.config.ts",
+              "src/app/**/*.routes.ts",
+              "src/app/core/models/**"
+            ],
+            "coverageReporters": ["text-summary", "html", "lcovonly"],
+            "coverageThresholds": {
+              "lines": 90
+            }
+          }
         }
       }
     }
