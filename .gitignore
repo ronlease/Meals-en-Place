@@ -59,3 +59,5 @@ src/MealsEnPlace.Tools.Ingest/data/
 src/MealsEnPlace.Tools.Ingest/data/*
 *.csv
 !docs/**/*.csv
+# Scratch directory used by scripts/render-c4.sh (removed on exit)
+.c4-render.*/

@@ -128,7 +128,14 @@ See [src/MealsEnPlace.Tools.Ingest/README.md](src/MealsEnPlace.Tools.Ingest/READ
 
 ## Architecture
 
-C4 diagrams below are rendered from [docs/c4/](docs/c4/) on every push to `main` that touches a `.puml` file (see [.github/workflows/render-c4.yml](.github/workflows/render-c4.yml)). The `.puml` sources remain the source of truth; the `.png` files are generated artifacts.
+C4 diagrams below are rendered from [docs/c4/](docs/c4/) by [`scripts/render-c4.sh`](scripts/render-c4.sh), which runs PlantUML in Docker at a pinned version. The `.puml` sources are the source of truth; the `.png` files are generated artifacts committed alongside them so they render here.
+
+After changing a `.puml`, regenerate and commit the PNGs — this is step 3 of the pre-PR checklist:
+
+```bash
+./scripts/render-c4.sh          # render and overwrite the committed PNGs
+./scripts/render-c4.sh --check  # verify the PNGs match their sources; no writes
+```
 
 ### Level 1 — System Context
 ![System Context](docs/c4/context.png)
