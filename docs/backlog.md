@@ -1251,6 +1251,25 @@ Feature: Input Sanitization Audit
 **Status:** Done
 **Priority:** Low
 
+> **Superseded in part (2026-09-07).** The GitHub Actions workflow was removed and
+> rendering moved to `scripts/render-c4.sh`, run locally as pre-PR checklist step 3.
+>
+> The workflow committed rendered PNGs directly to `main`. When the `main` ruleset was
+> tightened on 2026-08-16 to require pull requests, those pushes started being rejected
+> with `GH013: Repository rule violations found`. The job failed on every merge from
+> then on and the committed diagrams went stale for three merges without anyone
+> noticing, because the failure was in a workflow nobody was watching.
+>
+> GitHub Actions cannot be added to a ruleset bypass list — the eligible actors are
+> repository admins, write-role holders, teams, GitHub Apps, and Dependabot — so
+> keeping the workflow would have required introducing a PAT, a GitHub App, or a
+> deploy key purely to render diagrams.
+>
+> This reverses this item's "without requiring any local tooling" premise: rendering
+> now needs Docker, which the project already requires for PostgreSQL. The rest of the
+> item stands — PNGs are still committed beside their sources and still embedded in
+> the README, so nothing changes for anyone reading the repo on GitHub.
+
 ### Business Problem
 The project maintains PlantUML C4 architecture diagrams in docs/c4/ (context.puml, container.puml, component-api.puml, component-web.puml), but viewing them requires a local PlantUML installation or a compatible IDE plugin. This creates friction for anyone reviewing the repository on GitHub, where .puml files render as plain text. I need an automated GitHub Actions workflow that renders these diagrams to PNG whenever they change, so that up-to-date rendered diagrams are always available without requiring any local tooling. The README can then embed the PNG files directly for inline viewing.
 
