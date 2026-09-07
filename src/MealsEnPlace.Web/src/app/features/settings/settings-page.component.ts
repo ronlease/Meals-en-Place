@@ -141,8 +141,8 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
         <mat-card-header>
           <mat-card-title>AI (Claude API)</mat-card-title>
           <mat-card-subtitle>
-            Paste your Anthropic API key to enable AI-backed features. The key is
-            encrypted at rest and never returned by any endpoint.
+            Paste your Anthropic API key to enable AI-backed features. The key is encrypted at rest
+            and never returned by any endpoint.
           </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
@@ -199,9 +199,15 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
           </div>
 
           @if (testResult(); as result) {
-            <div class="test-result" [class.success]="result.success" [class.failure]="!result.success">
+            <div
+              class="test-result"
+              [class.success]="result.success"
+              [class.failure]="!result.success"
+            >
               @if (result.success) {
-                <span><mat-icon fontIcon="check" inline></mat-icon> Anthropic accepted the key.</span>
+                <span
+                  ><mat-icon fontIcon="check" inline></mat-icon> Anthropic accepted the key.</span
+                >
               } @else {
                 <span><mat-icon fontIcon="error" inline></mat-icon> {{ result.message }}</span>
               }
@@ -214,17 +220,16 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
         <mat-card-header>
           <mat-card-title>External Integrations</mat-card-title>
           <mat-card-subtitle>
-            Third-party providers the app can push to. Each token is encrypted at
-            rest and never returned by any endpoint.
+            Third-party providers the app can push to. Each token is encrypted at rest and never
+            returned by any endpoint.
           </mat-card-subtitle>
         </mat-card-header>
         <mat-card-content>
           <section class="integration-subsection">
             <h3>Todoist</h3>
             <p class="subsection-description">
-              Paste your Todoist personal API token to enable shopping-list and
-              meal-plan pushes. Tokens can be generated from Todoist Settings →
-              Integrations → Developer.
+              Paste your Todoist personal API token to enable shopping-list and meal-plan pushes.
+              Tokens can be generated from Todoist Settings → Integrations → Developer.
             </p>
 
             <div class="ai-row">
@@ -266,13 +271,18 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
               </button>
               <button
                 mat-stroked-button
-                [disabled]="todoistTesting() || (!todoistTokenInput().trim() && !todoistAvailability.configured())"
+                [disabled]="
+                  todoistTesting() ||
+                  (!todoistTokenInput().trim() && !todoistAvailability.configured())
+                "
                 (click)="testTodoist()"
               >
                 Test connection
               </button>
               @if (todoistAvailability.configured()) {
-                <button mat-stroked-button color="warn" (click)="removeTodoist()">Remove token</button>
+                <button mat-stroked-button color="warn" (click)="removeTodoist()">
+                  Remove token
+                </button>
               }
               @if (todoistSaving() || todoistTesting()) {
                 <mat-progress-spinner diameter="24" mode="indeterminate" />
@@ -280,9 +290,15 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
             </div>
 
             @if (todoistTestResult(); as result) {
-              <div class="test-result" [class.success]="result.success" [class.failure]="!result.success">
+              <div
+                class="test-result"
+                [class.success]="result.success"
+                [class.failure]="!result.success"
+              >
                 @if (result.success) {
-                  <span><mat-icon fontIcon="check" inline></mat-icon> Todoist accepted the token.</span>
+                  <span
+                    ><mat-icon fontIcon="check" inline></mat-icon> Todoist accepted the token.</span
+                  >
                 } @else {
                   <span><mat-icon fontIcon="error" inline></mat-icon> {{ result.message }}</span>
                 }
@@ -304,9 +320,8 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
             Auto-deplete inventory when a meal is marked eaten
           </mat-slide-toggle>
           <p class="stub-note" style="margin-top: 8px;">
-            When on, marking a meal plan slot as eaten deducts the recipe's
-            ingredients from the oldest-expiry inventory rows first. Unmarking
-            the slot restores those quantities.
+            When on, marking a meal plan slot as eaten deducts the recipe's ingredients from the
+            oldest-expiry inventory rows first. Unmarking the slot restores those quantities.
           </p>
         </mat-card-content>
       </mat-card>
@@ -338,7 +353,8 @@ export class SettingsPageComponent {
   remove(): void {
     const data: ConfirmDialogData = {
       confirmLabel: 'Remove key',
-      message: 'The stored Anthropic API key will be deleted. AI-backed features will disable until a new key is saved.',
+      message:
+        'The stored Anthropic API key will be deleted. AI-backed features will disable until a new key is saved.',
       title: 'Remove Claude API key?',
     };
     this.dialog
@@ -362,7 +378,8 @@ export class SettingsPageComponent {
   removeTodoist(): void {
     const data: ConfirmDialogData = {
       confirmLabel: 'Remove token',
-      message: 'The stored Todoist API token will be deleted. Push actions will disable until a new token is saved.',
+      message:
+        'The stored Todoist API token will be deleted. Push actions will disable until a new token is saved.',
       title: 'Remove Todoist API token?',
     };
     this.dialog
@@ -393,7 +410,9 @@ export class SettingsPageComponent {
       complete: () => this.saving.set(false),
       error: () => {
         this.saving.set(false);
-        this.snackBar.open('Could not save the token. See console for details.', 'Dismiss', { duration: 5000 });
+        this.snackBar.open('Could not save the token. See console for details.', 'Dismiss', {
+          duration: 5000,
+        });
       },
       next: (status) => {
         this.aiAvailability.setConfigured(status.configured);
@@ -414,7 +433,11 @@ export class SettingsPageComponent {
       complete: () => this.todoistSaving.set(false),
       error: () => {
         this.todoistSaving.set(false);
-        this.snackBar.open('Could not save the Todoist token. See console for details.', 'Dismiss', { duration: 5000 });
+        this.snackBar.open(
+          'Could not save the Todoist token. See console for details.',
+          'Dismiss',
+          { duration: 5000 },
+        );
       },
       next: (status) => {
         this.todoistAvailability.setConfigured(status.configured);
@@ -451,7 +474,10 @@ export class SettingsPageComponent {
       complete: () => this.todoistTesting.set(false),
       error: () => {
         this.todoistTesting.set(false);
-        this.todoistTestResult.set({ message: 'Network error contacting the server.', success: false });
+        this.todoistTestResult.set({
+          message: 'Network error contacting the server.',
+          success: false,
+        });
       },
       next: (result) =>
         this.todoistTestResult.set({

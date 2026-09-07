@@ -51,9 +51,7 @@ describe('ConfirmDialogComponent', () => {
     it('renders the supplied message', () => {
       createComponent();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'This removes the saved Claude API key.',
-      );
+      expect(fixture.nativeElement.textContent).toContain('This removes the saved Claude API key.');
     });
 
     it('labels the confirm button with the caller-supplied label', () => {

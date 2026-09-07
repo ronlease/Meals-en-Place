@@ -4,10 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import {
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { GenerateMealPlanRequest } from '../../core/models/meal-plan.models';
@@ -32,9 +29,7 @@ import { GenerateMealPlanRequest } from '../../core/models/meal-plan.models';
         <mat-label>Plan Name</mat-label>
         <input matInput [(ngModel)]="planName" placeholder="e.g., Week of March 16" />
       </mat-form-field>
-      <mat-checkbox [(ngModel)]="seasonalOnly">
-        Prefer seasonal ingredients
-      </mat-checkbox>
+      <mat-checkbox [(ngModel)]="seasonalOnly"> Prefer seasonal ingredients </mat-checkbox>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button mat-dialog-close>Cancel</button>

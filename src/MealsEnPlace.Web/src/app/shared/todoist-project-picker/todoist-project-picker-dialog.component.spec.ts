@@ -56,9 +56,7 @@ describe('TodoistProjectPickerDialogComponent', () => {
     lastUsedShoppingListProjectId: 'stale-id-no-longer-exists',
     nameResolutionError: null,
     namesResolved: true,
-    projects: [
-      { displayName: 'Inbox (default)', isInbox: true, projectId: null },
-    ],
+    projects: [{ displayName: 'Inbox (default)', isInbox: true, projectId: null }],
   };
 
   // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -94,7 +92,9 @@ describe('TodoistProjectPickerDialogComponent', () => {
       settingsServiceMock.getProjectHistory.mockReturnValue(of(INBOX_ONLY_RESPONSE));
       createComponent({ resourceType: 'shoppingList' });
 
-      const cancelButton = fixture.nativeElement.querySelector('button[mat-button]') as HTMLButtonElement;
+      const cancelButton = fixture.nativeElement.querySelector(
+        'button[mat-button]',
+      ) as HTMLButtonElement;
       cancelButton.click();
 
       expect(dialogRefMock.close).toHaveBeenCalledWith(undefined);
@@ -125,7 +125,9 @@ describe('TodoistProjectPickerDialogComponent', () => {
       createComponent({ resourceType: 'shoppingList' });
 
       fixture.detectChanges();
-      const pushButton = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLButtonElement;
+      const pushButton = fixture.nativeElement.querySelector(
+        'button[mat-flat-button]',
+      ) as HTMLButtonElement;
       expect(pushButton.disabled).toBe(false);
     });
 
@@ -137,7 +139,9 @@ describe('TodoistProjectPickerDialogComponent', () => {
       const hint = fixture.nativeElement.querySelector('.names-hint') as HTMLElement | null;
       expect(hint).not.toBeNull();
 
-      const pushButton = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLButtonElement;
+      const pushButton = fixture.nativeElement.querySelector(
+        'button[mat-flat-button]',
+      ) as HTMLButtonElement;
       expect(pushButton.disabled).toBe(false);
     });
   });
@@ -232,7 +236,9 @@ describe('TodoistProjectPickerDialogComponent', () => {
       createComponent({ resourceType: 'shoppingList' });
 
       fixture.detectChanges();
-      const pushButton = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLButtonElement;
+      const pushButton = fixture.nativeElement.querySelector(
+        'button[mat-flat-button]',
+      ) as HTMLButtonElement;
       pushButton.click();
 
       expect(dialogRefMock.close).toHaveBeenCalledWith({ projectId: '2331547980' });
@@ -243,7 +249,9 @@ describe('TodoistProjectPickerDialogComponent', () => {
       createComponent({ resourceType: 'shoppingList' });
 
       fixture.detectChanges();
-      const pushButton = fixture.nativeElement.querySelector('button[mat-flat-button]') as HTMLButtonElement;
+      const pushButton = fixture.nativeElement.querySelector(
+        'button[mat-flat-button]',
+      ) as HTMLButtonElement;
       pushButton.click();
 
       expect(dialogRefMock.close).toHaveBeenCalledWith({ projectId: null });

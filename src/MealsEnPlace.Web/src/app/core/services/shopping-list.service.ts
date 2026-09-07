@@ -14,30 +14,25 @@ export class ShoppingListService {
   generateList(mealPlanId: string): Observable<ShoppingListItemResponse[]> {
     return this.http.post<ShoppingListItemResponse[]>(
       `${this.baseUrl}/${mealPlanId}/shopping-list`,
-      {}
+      {},
     );
   }
 
   getList(mealPlanId: string): Observable<ShoppingListItemResponse[]> {
-    return this.http.get<ShoppingListItemResponse[]>(
-      `${this.baseUrl}/${mealPlanId}/shopping-list`
-    );
+    return this.http.get<ShoppingListItemResponse[]>(`${this.baseUrl}/${mealPlanId}/shopping-list`);
   }
 
   pushMealPlanListToTodoist(
     mealPlanId: string,
-    projectId: string | null
+    projectId: string | null,
   ): Observable<ShoppingListPushResult> {
     return this.http.post<ShoppingListPushResult>(
       `${this.baseUrl}/${mealPlanId}/shopping-list/push/todoist`,
-      { projectId }
+      { projectId },
     );
   }
 
   pushStandaloneListToTodoist(): Observable<ShoppingListPushResult> {
-    return this.http.post<ShoppingListPushResult>(
-      `${this.standaloneUrl}/push/todoist`,
-      {}
-    );
+    return this.http.post<ShoppingListPushResult>(`${this.standaloneUrl}/push/todoist`, {});
   }
 }

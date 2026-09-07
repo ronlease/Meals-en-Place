@@ -245,9 +245,9 @@ describe('App', () => {
   it('renders a nav link for every top-level feature', () => {
     createComponent();
 
-    const hrefs = Array.from(
-      fixture.nativeElement.querySelectorAll('mat-nav-list a'),
-    ).map((anchor) => (anchor as HTMLAnchorElement).getAttribute('href'));
+    const hrefs = Array.from(fixture.nativeElement.querySelectorAll('mat-nav-list a')).map(
+      (anchor) => (anchor as HTMLAnchorElement).getAttribute('href'),
+    );
 
     expect(hrefs).toEqual([
       '/inventory',

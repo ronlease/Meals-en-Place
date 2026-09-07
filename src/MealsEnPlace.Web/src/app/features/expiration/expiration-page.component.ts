@@ -116,7 +116,7 @@ interface ExpiringItem extends InventoryItemResponse {
         </ng-container>
 
         <mat-header-row *matHeaderRowDef="displayedColumns" />
-        <mat-row *matRowDef="let row; columns: displayedColumns;" />
+        <mat-row *matRowDef="let row; columns: displayedColumns" />
       </mat-table>
     }
   `,
@@ -265,7 +265,7 @@ export class ExpirationPageComponent implements OnInit {
             const expiry = new Date(item.expiryDate!);
             expiry.setHours(0, 0, 0, 0);
             const daysRemaining = Math.ceil(
-              (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+              (expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
             );
             return { ...item, daysRemaining };
           })

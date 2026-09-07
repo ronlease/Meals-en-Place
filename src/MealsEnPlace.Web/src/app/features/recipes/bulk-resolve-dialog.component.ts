@@ -1,18 +1,9 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Component, inject, OnInit, signal } from '@angular/core';
-import {
-  FormControl,
-  FormGroup,
-  ReactiveFormsModule,
-  Validators,
-} from '@angular/forms';
+import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
-import {
-  MAT_DIALOG_DATA,
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -65,8 +56,8 @@ interface BulkResolveForm {
         <span>
           This will update
           <strong>{{ data.occurrenceCount }}</strong>
-          ingredient{{ data.occurrenceCount === 1 ? '' : 's' }} across every
-          recipe that uses the phrase above.
+          ingredient{{ data.occurrenceCount === 1 ? '' : 's' }} across every recipe that uses the
+          phrase above.
         </span>
       </div>
 
@@ -103,7 +94,10 @@ interface BulkResolveForm {
                 </mat-option>
               }
             </mat-select>
-            @if (form.controls.unitOfMeasureId.hasError('required') && form.controls.unitOfMeasureId.touched) {
+            @if (
+              form.controls.unitOfMeasureId.hasError('required') &&
+              form.controls.unitOfMeasureId.touched
+            ) {
               <mat-error>Select a unit</mat-error>
             }
           </mat-form-field>
@@ -119,9 +113,7 @@ interface BulkResolveForm {
     </mat-dialog-content>
 
     <mat-dialog-actions align="end">
-      <button mat-button type="button" (click)="cancel()" [disabled]="submitting()">
-        Cancel
-      </button>
+      <button mat-button type="button" (click)="cancel()" [disabled]="submitting()">Cancel</button>
       <button
         mat-flat-button
         color="primary"
@@ -204,7 +196,7 @@ export class BulkResolveDialogComponent implements OnInit {
   protected readonly data = inject<BulkResolveDialogData>(MAT_DIALOG_DATA);
 
   private readonly dialogRef = inject(
-    MatDialogRef<BulkResolveDialogComponent, BulkResolveDialogResult | undefined>
+    MatDialogRef<BulkResolveDialogComponent, BulkResolveDialogResult | undefined>,
   );
   private readonly recipeService = inject(RecipeService);
   private readonly referenceDataService = inject(ReferenceDataService);
@@ -264,7 +256,7 @@ export class BulkResolveDialogComponent implements OnInit {
         error: (err: HttpErrorResponse) => {
           this.submitting.set(false);
           this.errorMessage.set(
-            err.error?.detail ?? 'Failed to apply the resolution. Please try again.'
+            err.error?.detail ?? 'Failed to apply the resolution. Please try again.',
           );
         },
         next: (response) => {

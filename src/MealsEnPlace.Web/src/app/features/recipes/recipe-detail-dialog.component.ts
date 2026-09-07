@@ -1,11 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipsModule } from '@angular/material/chips';
-import {
-  MAT_DIALOG_DATA,
-  MatDialogModule,
-  MatDialogRef,
-} from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
@@ -63,10 +59,9 @@ import { RecipeService } from '../../core/services/recipe.service';
             <mat-cell *matCellDef="let i">
               {{ i.ingredientName }}
               @if (i.notes) {
-                <mat-icon
-                  class="notes-icon"
-                  [matTooltip]="'Original: ' + i.notes"
-                >info_outline</mat-icon>
+                <mat-icon class="notes-icon" [matTooltip]="'Original: ' + i.notes"
+                  >info_outline</mat-icon
+                >
               }
             </mat-cell>
           </ng-container>
@@ -87,13 +82,15 @@ import { RecipeService } from '../../core/services/recipe.service';
               @if (i.isContainerResolved) {
                 <mat-icon class="resolved-icon">check_circle</mat-icon>
               } @else {
-                <mat-icon class="unresolved-icon" matTooltip="Needs container size declaration">warning</mat-icon>
+                <mat-icon class="unresolved-icon" matTooltip="Needs container size declaration"
+                  >warning</mat-icon
+                >
               }
             </mat-cell>
           </ng-container>
 
           <mat-header-row *matHeaderRowDef="ingredientColumns" />
-          <mat-row *matRowDef="let row; columns: ingredientColumns;" />
+          <mat-row *matRowDef="let row; columns: ingredientColumns" />
         </mat-table>
 
         @if (r.instructions) {
@@ -262,11 +259,9 @@ export class RecipeDetailDialogComponent implements OnInit {
       },
       next: (items) => {
         this.addingToList.set(false);
-        this.snackBar.open(
-          `Added ${items.length} item(s) to shopping list.`,
-          'OK',
-          { duration: 3000 }
-        );
+        this.snackBar.open(`Added ${items.length} item(s) to shopping list.`, 'OK', {
+          duration: 3000,
+        });
       },
     });
   }

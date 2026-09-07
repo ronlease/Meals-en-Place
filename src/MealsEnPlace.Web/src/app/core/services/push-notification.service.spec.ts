@@ -64,7 +64,9 @@ describe('PushNotificationService', () => {
       stubNotification('default');
       createService();
 
-      expect(() => messages$.next({ notification: { title: 'Spinach expires soon' } })).not.toThrow();
+      expect(() =>
+        messages$.next({ notification: { title: 'Spinach expires soon' } }),
+      ).not.toThrow();
       expect(console.log).toHaveBeenCalledWith('[Push] Received message:', {
         notification: { title: 'Spinach expires soon' },
       });

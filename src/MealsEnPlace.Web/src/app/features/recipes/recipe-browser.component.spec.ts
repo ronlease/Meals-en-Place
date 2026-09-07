@@ -58,16 +58,11 @@ describe('RecipeBrowserComponent', () => {
     dialogMock = { open: vi.fn() };
     snackBarMock = { open: vi.fn() };
     recipeServiceSpy = { getRecipes: vi.fn(), matchRecipes: vi.fn() };
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      of(makePagedResult([makeRecipe()], 1, 50)),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(of(makePagedResult([makeRecipe()], 1, 50)));
 
     await TestBed.configureTestingModule({
       imports: [RecipeBrowserComponent, NoopAnimationsModule],
-      providers: [
-        provideRouter([]),
-        { provide: RecipeService, useValue: recipeServiceSpy },
-      ],
+      providers: [provideRouter([]), { provide: RecipeService, useValue: recipeServiceSpy }],
     }).compileComponents();
 
     // MatDialogModule is in the component's imports and supplies its own
@@ -87,13 +82,13 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('populates the library signal with items from the paged response', () => {
-    expect((component as unknown as { library: () => RecipeListItemDto[] }).library().length).toBe(1);
+    expect((component as unknown as { library: () => RecipeListItemDto[] }).library().length).toBe(
+      1,
+    );
   });
 
   it('sets totalCount from the response', () => {
-    expect(
-      (component as unknown as { totalCount: () => number }).totalCount(),
-    ).toBe(50);
+    expect((component as unknown as { totalCount: () => number }).totalCount()).toBe(50);
   });
 
   // ── Page navigation ─────────────────────────────────────────────────────
@@ -103,9 +98,9 @@ describe('RecipeBrowserComponent', () => {
       of(makePagedResult([makeRecipe({ id: 'page-2-recipe' })], 2, 50)),
     );
 
-    const paginator: MatPaginator = fixture.debugElement
-      .query(By.directive(MatPaginator))
-      .componentInstance;
+    const paginator: MatPaginator = fixture.debugElement.query(
+      By.directive(MatPaginator),
+    ).componentInstance;
 
     paginator.nextPage();
     fixture.detectChanges();
@@ -115,19 +110,15 @@ describe('RecipeBrowserComponent', () => {
 
   it('fetches page 1 again when the previous-page button is clicked from page 2', () => {
     // Advance to page 2 first.
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      of(makePagedResult([makeRecipe()], 2, 50)),
-    );
-    const paginator: MatPaginator = fixture.debugElement
-      .query(By.directive(MatPaginator))
-      .componentInstance;
+    recipeServiceSpy.getRecipes.mockReturnValue(of(makePagedResult([makeRecipe()], 2, 50)));
+    const paginator: MatPaginator = fixture.debugElement.query(
+      By.directive(MatPaginator),
+    ).componentInstance;
     paginator.nextPage();
     fixture.detectChanges();
 
     recipeServiceSpy.getRecipes.mockClear();
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      of(makePagedResult([makeRecipe()], 1, 50)),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(of(makePagedResult([makeRecipe()], 1, 50)));
     paginator.previousPage();
     fixture.detectChanges();
 
@@ -138,12 +129,8 @@ describe('RecipeBrowserComponent', () => {
 
   it('does not render first-page or last-page buttons', () => {
     // mat-paginator's first/last buttons carry specific aria-labels.
-    const firstBtn = fixture.debugElement.query(
-      By.css('button[aria-label="First page"]'),
-    );
-    const lastBtn = fixture.debugElement.query(
-      By.css('button[aria-label="Last page"]'),
-    );
+    const firstBtn = fixture.debugElement.query(By.css('button[aria-label="First page"]'));
+    const lastBtn = fixture.debugElement.query(By.css('button[aria-label="Last page"]'));
     expect(firstBtn).toBeNull();
     expect(lastBtn).toBeNull();
   });
@@ -166,9 +153,7 @@ describe('RecipeBrowserComponent', () => {
   // ── Error path ──────────────────────────────────────────────────────────
 
   it('shows the error message when getRecipes fails', async () => {
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      throwError(() => new Error('network error')),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(throwError(() => new Error('network error')));
     component.loadLibrary();
     fixture.detectChanges();
 
@@ -180,28 +165,20 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('does not leave the spinner visible after a failed request', () => {
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      throwError(() => new Error('network error')),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(throwError(() => new Error('network error')));
     component.loadLibrary();
     fixture.detectChanges();
 
-    const spinner = fixture.debugElement.query(
-      By.css('mat-progress-spinner'),
-    );
+    const spinner = fixture.debugElement.query(By.css('mat-progress-spinner'));
     expect(spinner).toBeNull();
   });
 
   it('re-fetches the current page when the retry button is clicked', () => {
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      throwError(() => new Error('network error')),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(throwError(() => new Error('network error')));
     component.loadLibrary();
     fixture.detectChanges();
 
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      of(makePagedResult([makeRecipe()], 1, 50)),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(of(makePagedResult([makeRecipe()], 1, 50)));
     recipeServiceSpy.getRecipes.mockClear();
 
     const retryBtn: HTMLButtonElement = fixture.debugElement.query(
@@ -215,15 +192,11 @@ describe('RecipeBrowserComponent', () => {
   });
 
   it('clears the error state and shows data after a successful retry', () => {
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      throwError(() => new Error('network error')),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(throwError(() => new Error('network error')));
     component.loadLibrary();
     fixture.detectChanges();
 
-    recipeServiceSpy.getRecipes.mockReturnValue(
-      of(makePagedResult([makeRecipe()], 1, 50)),
-    );
+    recipeServiceSpy.getRecipes.mockReturnValue(of(makePagedResult([makeRecipe()], 1, 50)));
     const retryBtn: HTMLButtonElement = fixture.debugElement.query(
       By.css('.error-message button'),
     ).nativeElement;
@@ -255,13 +228,7 @@ describe('RecipeBrowserComponent', () => {
       // Unresolved recipes are excluded from matching, so the count is the call
       // to action, not decoration.
       recipeServiceSpy.getRecipes.mockReturnValue(
-        of(
-          makePagedResult(
-            [makeRecipe({ isFullyResolved: false, unresolvedCount: 3 })],
-            1,
-            1,
-          ),
-        ),
+        of(makePagedResult([makeRecipe({ isFullyResolved: false, unresolvedCount: 3 })], 1, 1)),
       );
       component.loadLibrary();
       fixture.detectChanges();
@@ -282,13 +249,7 @@ describe('RecipeBrowserComponent', () => {
 
     it('renders a chip per dietary tag', () => {
       recipeServiceSpy.getRecipes.mockReturnValue(
-        of(
-          makePagedResult(
-            [makeRecipe({ dietaryTags: ['Vegan', 'GlutenFree'] })],
-            1,
-            1,
-          ),
-        ),
+        of(makePagedResult([makeRecipe({ dietaryTags: ['Vegan', 'GlutenFree'] })], 1, 1)),
       );
       component.loadLibrary();
       fixture.detectChanges();
@@ -353,10 +314,7 @@ describe('RecipeBrowserComponent', () => {
 
       component.findMatches();
 
-      expect(recipeServiceSpy.matchRecipes).toHaveBeenCalledWith(undefined, [
-        'Vegan',
-        'LowCarb',
-      ]);
+      expect(recipeServiceSpy.matchRecipes).toHaveBeenCalledWith(undefined, ['Vegan', 'LowCarb']);
     });
 
     it('sends undefined rather than an empty array when the filter is cleared', () => {
@@ -383,9 +341,7 @@ describe('RecipeBrowserComponent', () => {
 
       component.findMatches();
 
-      expect(
-        (component as unknown as { matchError: () => boolean }).matchError(),
-      ).toBe(true);
+      expect((component as unknown as { matchError: () => boolean }).matchError()).toBe(true);
       expect(snackBarMock.open).toHaveBeenCalledWith('Failed to load matches.', 'Dismiss', {
         duration: 4000,
       });
@@ -401,9 +357,7 @@ describe('RecipeBrowserComponent', () => {
       recipeServiceSpy.matchRecipes.mockReturnValue(of(EMPTY_MATCH));
       component.findMatches();
 
-      expect(
-        (component as unknown as { matchError: () => boolean }).matchError(),
-      ).toBe(false);
+      expect((component as unknown as { matchError: () => boolean }).matchError()).toBe(false);
     });
   });
 

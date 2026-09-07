@@ -3,10 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
-import {
-  RecipeDetailDto,
-  RecipeIngredientDetailDto,
-} from '../../core/models/recipe.models';
+import { RecipeDetailDto, RecipeIngredientDetailDto } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
 import { RecipeDetailDialogComponent } from './recipe-detail-dialog.component';
 
@@ -103,9 +100,7 @@ describe('RecipeDetailDialogComponent', () => {
 
       createComponent();
 
-      expect(fixture.nativeElement.querySelector('h2').textContent).toContain(
-        'Recipe Detail',
-      );
+      expect(fixture.nativeElement.querySelector('h2').textContent).toContain('Recipe Detail');
     });
 
     it('shows an error message when the fetch fails', () => {
@@ -183,9 +178,9 @@ describe('RecipeDetailDialogComponent', () => {
 
       createComponent();
 
-      const chips = Array.from(
-        fixture.nativeElement.querySelectorAll('.meta-chip'),
-      ).map((chip) => (chip as HTMLElement).textContent?.trim());
+      const chips = Array.from(fixture.nativeElement.querySelectorAll('.meta-chip')).map((chip) =>
+        (chip as HTMLElement).textContent?.trim(),
+      );
       expect(chips).toEqual(['Italian', 'Vegetarian', 'GlutenFree', '4 servings']);
     });
 
@@ -245,9 +240,7 @@ describe('RecipeDetailDialogComponent', () => {
     it('is withheld for a recipe with unresolved container references', () => {
       // An unresolved recipe cannot produce correct quantities, so it must not
       // reach the shopping list.
-      recipeServiceMock.getRecipeDetail.mockReturnValue(
-        of(makeRecipe({ isFullyResolved: false })),
-      );
+      recipeServiceMock.getRecipeDetail.mockReturnValue(of(makeRecipe({ isFullyResolved: false })));
 
       createComponent();
 
@@ -261,11 +254,9 @@ describe('RecipeDetailDialogComponent', () => {
       component.addToShoppingList();
 
       expect(recipeServiceMock.addToShoppingList).toHaveBeenCalledWith('recipe-1');
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Added 3 item(s) to shopping list.',
-        'OK',
-        { duration: 3000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Added 3 item(s) to shopping list.', 'OK', {
+        duration: 3000,
+      });
       expect(addingToList()).toBe(false);
     });
 
@@ -275,27 +266,21 @@ describe('RecipeDetailDialogComponent', () => {
 
       component.addToShoppingList();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Added 0 item(s) to shopping list.',
-        'OK',
-        { duration: 3000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Added 0 item(s) to shopping list.', 'OK', {
+        duration: 3000,
+      });
     });
 
     it('reports a failure and clears the in-flight state', () => {
       createComponent();
-      recipeServiceMock.addToShoppingList.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      recipeServiceMock.addToShoppingList.mockReturnValue(throwError(() => new Error('boom')));
 
       component.addToShoppingList();
 
       expect(addingToList()).toBe(false);
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Failed to add to shopping list.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Failed to add to shopping list.', 'Dismiss', {
+        duration: 4000,
+      });
     });
   });
 });

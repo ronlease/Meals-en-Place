@@ -51,11 +51,9 @@ export class App implements OnInit {
     this.aiAvailability.refresh();
     this.todoistAvailability.refresh();
 
-    this.breakpointObserver
-      .observe(['(max-width: 768px)'])
-      .subscribe((result) => {
-        this.isMobile.set(result.matches);
-      });
+    this.breakpointObserver.observe(['(max-width: 768px)']).subscribe((result) => {
+      this.isMobile.set(result.matches);
+    });
   }
 
   onNavClick(): void {

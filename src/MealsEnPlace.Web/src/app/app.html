@@ -74,12 +74,7 @@
         <mat-icon matListItemIcon>compost</mat-icon>
         <span matListItemTitle>Waste Alerts</span>
       </a>
-      <a
-        mat-list-item
-        routerLink="/settings"
-        routerLinkActive="active-link"
-        (click)="onNavClick()"
-      >
+      <a mat-list-item routerLink="/settings" routerLinkActive="active-link" (click)="onNavClick()">
         <mat-icon matListItemIcon>settings</mat-icon>
         <span matListItemTitle>Settings</span>
       </a>
@@ -111,15 +106,27 @@
       <button
         mat-icon-button
         (click)="preferencesService.toggleDisplaySystem()"
-        [matTooltip]="preferencesService.displaySystem() === 'Imperial' ? 'Switch to Metric' : 'Switch to Imperial'"
-        [attr.aria-label]="preferencesService.displaySystem() === 'Imperial' ? 'Switch to Metric' : 'Switch to Imperial'"
+        [matTooltip]="
+          preferencesService.displaySystem() === 'Imperial'
+            ? 'Switch to Metric'
+            : 'Switch to Imperial'
+        "
+        [attr.aria-label]="
+          preferencesService.displaySystem() === 'Imperial'
+            ? 'Switch to Metric'
+            : 'Switch to Imperial'
+        "
       >
-        <mat-icon>{{ preferencesService.displaySystem() === 'Imperial' ? 'straighten' : 'square_foot' }}</mat-icon>
+        <mat-icon>{{
+          preferencesService.displaySystem() === 'Imperial' ? 'straighten' : 'square_foot'
+        }}</mat-icon>
       </button>
       <button
         mat-icon-button
         (click)="themeService.toggleTheme()"
-        [attr.aria-label]="themeService.isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'"
+        [attr.aria-label]="
+          themeService.isDarkMode() ? 'Switch to light mode' : 'Switch to dark mode'
+        "
       >
         <mat-icon>{{ themeService.isDarkMode() ? 'light_mode' : 'dark_mode' }}</mat-icon>
       </button>

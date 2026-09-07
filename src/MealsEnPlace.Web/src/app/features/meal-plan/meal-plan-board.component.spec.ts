@@ -166,9 +166,7 @@ describe('MealPlanBoardComponent', () => {
       createComponent();
 
       mealPlanServiceMock.getActivePlan.mockReturnValue(of(makePlan()));
-      (
-        fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       expect(internals().error()).toBe(false);
@@ -238,9 +236,7 @@ describe('MealPlanBoardComponent', () => {
   // ── Consume / unconsume ─────────────────────────────────────────────────────
 
   describe('consumeSlot', () => {
-    function consumeResult(
-      overrides: Partial<ConsumeMealResponse> = {},
-    ): ConsumeMealResponse {
+    function consumeResult(overrides: Partial<ConsumeMealResponse> = {}): ConsumeMealResponse {
       return {
         autoDepleteApplied: false,
         consumedAt: '2026-09-01T18:00:00Z',
@@ -395,9 +391,7 @@ describe('MealPlanBoardComponent', () => {
 
   describe('openSwapDialog', () => {
     it('passes the prefetched recipes and the true library total to the dialog', () => {
-      recipeServiceMock.getRecipes.mockReturnValue(
-        makeRecipePageObservable([{ id: 'r1' }], 500),
-      );
+      recipeServiceMock.getRecipes.mockReturnValue(makeRecipePageObservable([{ id: 'r1' }], 500));
       createComponent();
 
       component.openSwapDialog(makeSlot());
@@ -526,9 +520,7 @@ describe('MealPlanBoardComponent', () => {
       mealPlanServiceMock.previewReorderByExpiry.mockReturnValue(of(preview()));
       createComponent();
       dialogMock.open.mockReturnValue(dialogReturning(true));
-      mealPlanServiceMock.applyReorderByExpiry.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      mealPlanServiceMock.applyReorderByExpiry.mockReturnValue(throwError(() => new Error('boom')));
 
       component.openReorderDialog();
 
@@ -571,10 +563,7 @@ describe('MealPlanBoardComponent', () => {
 
       component.pushToTodoist();
 
-      expect(mealPlanServiceMock.pushToTodoist).toHaveBeenCalledWith(
-        'plan-1',
-        '69mF7QcCj9JmXxp8',
-      );
+      expect(mealPlanServiceMock.pushToTodoist).toHaveBeenCalledWith('plan-1', '69mF7QcCj9JmXxp8');
     });
 
     it('pushes to the Inbox when the picker returns a null project', () => {
@@ -615,11 +604,9 @@ describe('MealPlanBoardComponent', () => {
 
       component.pushToTodoist();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Todoist: nothing to push.',
-        'Dismiss',
-        { duration: 5000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Todoist: nothing to push.', 'Dismiss', {
+        duration: 5000,
+      });
     });
 
     it('surfaces the problem detail from a failed push', () => {
@@ -632,11 +619,9 @@ describe('MealPlanBoardComponent', () => {
       component.pushToTodoist();
 
       expect(internals().pushing()).toBe(false);
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Todoist token is invalid.',
-        'Dismiss',
-        { duration: 6000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Todoist token is invalid.', 'Dismiss', {
+        duration: 6000,
+      });
     });
 
     it('falls back to a generic message when the failure carries no detail', () => {
@@ -646,11 +631,9 @@ describe('MealPlanBoardComponent', () => {
 
       component.pushToTodoist();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Push to Todoist failed.',
-        'Dismiss',
-        { duration: 6000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Push to Todoist failed.', 'Dismiss', {
+        duration: 6000,
+      });
     });
 
     it('disables the push button while Todoist is not configured', () => {

@@ -71,7 +71,7 @@ type ViewMode = 'in-season' | 'all';
         </ng-container>
 
         <mat-header-row *matHeaderRowDef="displayedColumns" />
-        <mat-row *matRowDef="let row; columns: displayedColumns;" />
+        <mat-row *matRowDef="let row; columns: displayedColumns" />
       </mat-table>
     }
   `,
@@ -154,9 +154,7 @@ type ViewMode = 'in-season' | 'all';
 export class SeasonalProducePageComponent implements OnInit {
   protected readonly allWindows = signal<SeasonalProduceResponse[]>([]);
   protected readonly displayData = computed(() => {
-    return this.viewMode() === 'in-season'
-      ? this.inSeason()
-      : this.allWindows();
+    return this.viewMode() === 'in-season' ? this.inSeason() : this.allWindows();
   });
   protected readonly displayedColumns = ['name', 'peakSeasonStart', 'peakSeasonEnd'];
   protected readonly error = signal(false);

@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ShoppingListItemResponse } from '../models/shopping-list.models';
 import { ShoppingListPushResult } from '../models/todoist.models';
@@ -81,9 +78,7 @@ describe('ShoppingListService', () => {
         .pushMealPlanListToTodoist('plan-1', '69mF7QcCj9JmXxp8')
         .subscribe((result) => (received = result));
 
-      const testRequest = httpMock.expectOne(
-        `${PLANS_URL}/plan-1/shopping-list/push/todoist`,
-      );
+      const testRequest = httpMock.expectOne(`${PLANS_URL}/plan-1/shopping-list/push/todoist`);
       expect(testRequest.request.method).toBe('POST');
       expect(testRequest.request.body).toEqual({ projectId: '69mF7QcCj9JmXxp8' });
 
@@ -94,9 +89,7 @@ describe('ShoppingListService', () => {
     it('pushMealPlanListToTodoist sends a null project ID for the Inbox selection', () => {
       service.pushMealPlanListToTodoist('plan-1', null).subscribe();
 
-      const testRequest = httpMock.expectOne(
-        `${PLANS_URL}/plan-1/shopping-list/push/todoist`,
-      );
+      const testRequest = httpMock.expectOne(`${PLANS_URL}/plan-1/shopping-list/push/todoist`);
       expect(testRequest.request.body).toEqual({ projectId: null });
 
       testRequest.flush(PUSH_RESULT);

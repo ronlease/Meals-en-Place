@@ -14,9 +14,7 @@ describe('ContainerResolutionPageComponent', () => {
   let recipeServiceMock: { getUnresolvedGroups: ReturnType<typeof vi.fn> };
   let snackBarMock: { open: ReturnType<typeof vi.fn> };
 
-  function makeGroup(
-    overrides: Partial<UnresolvedGroupResponse> = {},
-  ): UnresolvedGroupResponse {
+  function makeGroup(overrides: Partial<UnresolvedGroupResponse> = {}): UnresolvedGroupResponse {
     return {
       canonicalIngredientId: 'ing-1',
       canonicalIngredientName: 'Diced Tomatoes',
@@ -94,9 +92,7 @@ describe('ContainerResolutionPageComponent', () => {
     });
 
     it('shows the error state when the fetch fails', () => {
-      recipeServiceMock.getUnresolvedGroups.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      recipeServiceMock.getUnresolvedGroups.mockReturnValue(throwError(() => new Error('boom')));
 
       createComponent();
 
@@ -106,15 +102,11 @@ describe('ContainerResolutionPageComponent', () => {
     });
 
     it('recovers when Retry is clicked', () => {
-      recipeServiceMock.getUnresolvedGroups.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      recipeServiceMock.getUnresolvedGroups.mockReturnValue(throwError(() => new Error('boom')));
       createComponent();
 
       recipeServiceMock.getUnresolvedGroups.mockReturnValue(of([makeGroup()]));
-      (
-        fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       expect(internals().error()).toBe(false);
@@ -234,9 +226,7 @@ describe('ContainerResolutionPageComponent', () => {
       createComponent();
       const openResolveDialog = vi.spyOn(component, 'openResolveDialog');
 
-      (
-        fixture.nativeElement.querySelector('.actions-cell button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('.actions-cell button') as HTMLButtonElement).click();
 
       expect(openResolveDialog).toHaveBeenCalled();
     });

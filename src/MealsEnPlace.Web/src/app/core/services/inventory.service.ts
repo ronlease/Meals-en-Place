@@ -16,11 +16,13 @@ export class InventoryService {
   private readonly http = inject(HttpClient);
 
   addItem(
-    request: AddInventoryItemRequest
+    request: AddInventoryItemRequest,
   ): Observable<InventoryItemResponse | ContainerReferenceDetectedResponse> {
-    return this.http.post<
-      InventoryItemResponse | ContainerReferenceDetectedResponse
-    >(this.baseUrl, request, { observe: 'body' });
+    return this.http.post<InventoryItemResponse | ContainerReferenceDetectedResponse>(
+      this.baseUrl,
+      request,
+      { observe: 'body' },
+    );
   }
 
   deleteItem(id: string): Observable<void> {
@@ -33,13 +35,7 @@ export class InventoryService {
     });
   }
 
-  updateItem(
-    id: string,
-    request: UpdateInventoryItemRequest
-  ): Observable<InventoryItemResponse> {
-    return this.http.put<InventoryItemResponse>(
-      `${this.baseUrl}/${id}`,
-      request
-    );
+  updateItem(id: string, request: UpdateInventoryItemRequest): Observable<InventoryItemResponse> {
+    return this.http.put<InventoryItemResponse>(`${this.baseUrl}/${id}`, request);
   }
 }

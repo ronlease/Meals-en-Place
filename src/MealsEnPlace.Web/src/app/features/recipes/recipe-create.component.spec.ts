@@ -4,10 +4,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Router, provideRouter } from '@angular/router';
 import { of, throwError } from 'rxjs';
-import {
-  CanonicalIngredientDto,
-  UnitOfMeasureDto,
-} from '../../core/models/inventory.models';
+import { CanonicalIngredientDto, UnitOfMeasureDto } from '../../core/models/inventory.models';
 import { RecipeDetailDto } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
@@ -98,12 +95,9 @@ describe('RecipeCreateComponent', () => {
   describe('initial state', () => {
     it('loads the ingredient and unit reference data', () => {
       expect(
-        (component as unknown as { ingredients: () => CanonicalIngredientDto[] })
-          .ingredients(),
+        (component as unknown as { ingredients: () => CanonicalIngredientDto[] }).ingredients(),
       ).toEqual(INGREDIENTS);
-      expect(
-        (component as unknown as { units: () => UnitOfMeasureDto[] }).units(),
-      ).toEqual(UNITS);
+      expect((component as unknown as { units: () => UnitOfMeasureDto[] }).units()).toEqual(UNITS);
     });
 
     it('starts with one blank ingredient row so the form is usable immediately', () => {

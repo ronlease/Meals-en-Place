@@ -8,7 +8,7 @@ import {
   MealPlanResponse,
   MealPlanSlotResponse,
   ReorderPreviewResponse,
-  SwapSlotRequest
+  SwapSlotRequest,
 } from '../models/meal-plan.models';
 import { MealPlanPushResult } from '../models/todoist.models';
 
@@ -20,29 +20,21 @@ export class MealPlanService {
 
   applyReorderByExpiry(
     mealPlanId: string,
-    urgencyWindowDays?: number
+    urgencyWindowDays?: number,
   ): Observable<MealPlanResponse> {
     const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
     return this.http.post<MealPlanResponse>(
       `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/apply${query}`,
-      {}
+      {},
     );
   }
 
   consumeSlot(slotId: string): Observable<ConsumeMealResponse> {
-    return this.http.post<ConsumeMealResponse>(
-      `${this.slotsUrl}/${slotId}/consume`,
-      {}
-    );
+    return this.http.post<ConsumeMealResponse>(`${this.slotsUrl}/${slotId}/consume`, {});
   }
 
-  generatePlan(
-    request: GenerateMealPlanRequest
-  ): Observable<MealPlanResponse> {
-    return this.http.post<MealPlanResponse>(
-      `${this.baseUrl}/generate`,
-      request
-    );
+  generatePlan(request: GenerateMealPlanRequest): Observable<MealPlanResponse> {
+    return this.http.post<MealPlanResponse>(`${this.baseUrl}/generate`, request);
   }
 
   getActivePlan(): Observable<MealPlanResponse> {
@@ -51,33 +43,23 @@ export class MealPlanService {
 
   previewReorderByExpiry(
     mealPlanId: string,
-    urgencyWindowDays?: number
+    urgencyWindowDays?: number,
   ): Observable<ReorderPreviewResponse> {
     const query = urgencyWindowDays ? `?urgencyWindowDays=${urgencyWindowDays}` : '';
     return this.http.post<ReorderPreviewResponse>(
       `${this.baseUrl}/${mealPlanId}/reorder-by-expiry/preview${query}`,
-      {}
+      {},
     );
   }
 
-  pushToTodoist(
-    mealPlanId: string,
-    projectId: string | null
-  ): Observable<MealPlanPushResult> {
-    return this.http.post<MealPlanPushResult>(
-      `${this.baseUrl}/${mealPlanId}/push/todoist`,
-      { projectId }
-    );
+  pushToTodoist(mealPlanId: string, projectId: string | null): Observable<MealPlanPushResult> {
+    return this.http.post<MealPlanPushResult>(`${this.baseUrl}/${mealPlanId}/push/todoist`, {
+      projectId,
+    });
   }
 
-  swapSlot(
-    slotId: string,
-    request: SwapSlotRequest
-  ): Observable<MealPlanSlotResponse> {
-    return this.http.put<MealPlanSlotResponse>(
-      `${this.baseUrl}/slots/${slotId}`,
-      request
-    );
+  swapSlot(slotId: string, request: SwapSlotRequest): Observable<MealPlanSlotResponse> {
+    return this.http.put<MealPlanSlotResponse>(`${this.baseUrl}/slots/${slotId}`, request);
   }
 
   unconsumeSlot(slotId: string): Observable<void> {

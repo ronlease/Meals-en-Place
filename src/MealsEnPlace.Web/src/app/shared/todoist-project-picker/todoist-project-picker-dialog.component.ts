@@ -116,12 +116,7 @@ const INBOX_ENTRY: TodoistProjectEntry = {
     </mat-dialog-content>
     <mat-dialog-actions align="end">
       <button mat-button (click)="dialogRef.close(undefined)">Cancel</button>
-      <button
-        mat-flat-button
-        color="primary"
-        [disabled]="loading()"
-        (click)="confirm()"
-      >
+      <button mat-flat-button color="primary" [disabled]="loading()" (click)="confirm()">
         Push
       </button>
     </mat-dialog-actions>
@@ -129,7 +124,9 @@ const INBOX_ENTRY: TodoistProjectEntry = {
 })
 export class TodoistProjectPickerDialogComponent implements OnInit {
   protected readonly data = inject<TodoistProjectPickerDialogData>(MAT_DIALOG_DATA);
-  protected readonly dialogRef = inject(MatDialogRef<TodoistProjectPickerDialogComponent, TodoistProjectPickerResult | undefined>);
+  protected readonly dialogRef = inject(
+    MatDialogRef<TodoistProjectPickerDialogComponent, TodoistProjectPickerResult | undefined>,
+  );
   protected readonly loading = signal(true);
   protected readonly namesResolved = signal(true);
   protected readonly projects = signal<TodoistProjectEntry[]>([]);

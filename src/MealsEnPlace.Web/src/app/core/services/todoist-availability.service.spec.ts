@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { TodoistAvailabilityService } from './todoist-availability.service';
 
@@ -62,9 +59,7 @@ describe('TodoistAvailabilityService', () => {
       service.setConfigured(true);
 
       service.refresh();
-      httpMock
-        .expectOne(STATUS_URL)
-        .flush('boom', { status: 500, statusText: 'Server Error' });
+      httpMock.expectOne(STATUS_URL).flush('boom', { status: 500, statusText: 'Server Error' });
 
       expect(service.configured()).toBe(false);
     });

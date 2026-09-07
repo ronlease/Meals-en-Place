@@ -440,9 +440,7 @@ describe('SettingsPageComponent', () => {
     it('reports a failed save without clearing the typed token', () => {
       createComponent();
       internals().todoistTokenInput.set('todoist-secret');
-      settingsServiceMock.saveTodoistToken.mockReturnValue(
-        throwError(() => new Error('boom')),
-      );
+      settingsServiceMock.saveTodoistToken.mockReturnValue(throwError(() => new Error('boom')));
 
       component.saveTodoist();
 
@@ -492,9 +490,7 @@ describe('SettingsPageComponent', () => {
 
     it('reports a network failure as an unsuccessful test', () => {
       createComponent();
-      settingsServiceMock.testTodoistToken.mockReturnValue(
-        throwError(() => new Error('offline')),
-      );
+      settingsServiceMock.testTodoistToken.mockReturnValue(throwError(() => new Error('offline')));
 
       component.testTodoist();
 
@@ -543,9 +539,7 @@ describe('SettingsPageComponent', () => {
     it('shows both integrations as not configured by default', () => {
       createComponent();
 
-      expect(fixture.nativeElement.querySelectorAll('.status-pill.not-configured').length).toBe(
-        2,
-      );
+      expect(fixture.nativeElement.querySelectorAll('.status-pill.not-configured').length).toBe(2);
       expect(fixture.nativeElement.querySelectorAll('.status-pill.configured').length).toBe(0);
     });
 

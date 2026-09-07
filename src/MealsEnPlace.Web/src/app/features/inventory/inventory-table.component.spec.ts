@@ -87,9 +87,7 @@ describe('InventoryTableComponent', () => {
     });
 
     it('renders a row per item', () => {
-      inventoryServiceMock.getItems.mockReturnValue(
-        of([makeItem(), makeItem({ id: 'item-2' })]),
-      );
+      inventoryServiceMock.getItems.mockReturnValue(of([makeItem(), makeItem({ id: 'item-2' })]));
 
       createComponent();
 
@@ -207,9 +205,7 @@ describe('InventoryTableComponent', () => {
 
   describe('deleteItem', () => {
     it('removes the item from the table on success', () => {
-      inventoryServiceMock.getItems.mockReturnValue(
-        of([makeItem(), makeItem({ id: 'item-2' })]),
-      );
+      inventoryServiceMock.getItems.mockReturnValue(of([makeItem(), makeItem({ id: 'item-2' })]));
       inventoryServiceMock.deleteItem.mockReturnValue(of(undefined));
       createComponent();
 

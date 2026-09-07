@@ -4,7 +4,7 @@ import { SwPush } from '@angular/service-worker';
 @Injectable({ providedIn: 'root' })
 export class PushNotificationService {
   readonly permissionState = signal<NotificationPermission>(
-    typeof Notification !== 'undefined' ? Notification.permission : 'default'
+    typeof Notification !== 'undefined' ? Notification.permission : 'default',
   );
 
   private readonly swPush = inject(SwPush);
@@ -32,8 +32,6 @@ export class PushNotificationService {
     //   serverPublicKey: 'VAPID_PUBLIC_KEY_HERE',
     // });
     // Send sub to server: POST /api/v1/push-subscriptions
-    console.log(
-      '[Push] subscribeToPush() stub — no VAPID key configured yet'
-    );
+    console.log('[Push] subscribeToPush() stub — no VAPID key configured yet');
   }
 }

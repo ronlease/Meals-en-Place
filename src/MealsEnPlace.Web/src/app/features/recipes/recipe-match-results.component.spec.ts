@@ -1,9 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
-import {
-  RecipeMatchDto,
-  RecipeMatchResponse,
-} from '../../core/models/recipe.models';
+import { RecipeMatchDto, RecipeMatchResponse } from '../../core/models/recipe.models';
 import { RecipeMatchResultsComponent } from './recipe-match-results.component';
 
 describe('RecipeMatchResultsComponent', () => {
@@ -188,9 +185,9 @@ describe('RecipeMatchResultsComponent', () => {
         }),
       });
 
-      expect(
-        fixture.nativeElement.querySelector('.full-match-heading').textContent,
-      ).toContain('Full Matches (2)');
+      expect(fixture.nativeElement.querySelector('.full-match-heading').textContent).toContain(
+        'Full Matches (2)',
+      );
     });
 
     it('renders all three tiers together', () => {
@@ -254,9 +251,7 @@ describe('RecipeMatchResultsComponent', () => {
         }),
       });
 
-      expect(fixture.nativeElement.querySelector('.missing-chip').textContent).toContain(
-        'Basil',
-      );
+      expect(fixture.nativeElement.querySelector('.missing-chip').textContent).toContain('Basil');
     });
 
     it('shows a substitution with its note', () => {

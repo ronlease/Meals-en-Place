@@ -1,8 +1,5 @@
 import { provideHttpClient } from '@angular/common/http';
-import {
-  HttpTestingController,
-  provideHttpClientTesting,
-} from '@angular/common/http/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import {
   ConsumeMealResponse,
@@ -64,9 +61,7 @@ describe('MealPlanService', () => {
 
       service.applyReorderByExpiry('plan-1').subscribe((plan) => (received = plan));
 
-      const testRequest = httpMock.expectOne(
-        `${PLANS_URL}/plan-1/reorder-by-expiry/apply`,
-      );
+      const testRequest = httpMock.expectOne(`${PLANS_URL}/plan-1/reorder-by-expiry/apply`);
       expect(testRequest.request.method).toBe('POST');
       expect(testRequest.request.body).toEqual({});
 
@@ -87,9 +82,7 @@ describe('MealPlanService', () => {
       // check, so an explicit 0 produces no query string.
       service.applyReorderByExpiry('plan-1', 0).subscribe();
 
-      httpMock
-        .expectOne(`${PLANS_URL}/plan-1/reorder-by-expiry/apply`)
-        .flush(makePlan());
+      httpMock.expectOne(`${PLANS_URL}/plan-1/reorder-by-expiry/apply`).flush(makePlan());
     });
 
     it('previewReorderByExpiry omits the query string when no urgency window is given', () => {
@@ -97,9 +90,7 @@ describe('MealPlanService', () => {
 
       service.previewReorderByExpiry('plan-2').subscribe((preview) => (received = preview));
 
-      const testRequest = httpMock.expectOne(
-        `${PLANS_URL}/plan-2/reorder-by-expiry/preview`,
-      );
+      const testRequest = httpMock.expectOne(`${PLANS_URL}/plan-2/reorder-by-expiry/preview`);
       expect(testRequest.request.method).toBe('POST');
 
       const preview: ReorderPreviewResponse = {

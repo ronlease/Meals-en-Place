@@ -12,10 +12,7 @@ import {
 } from '../../core/models/inventory.models';
 import { InventoryService } from '../../core/services/inventory.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
-import {
-  InventoryDialogComponent,
-  InventoryDialogData,
-} from './inventory-dialog.component';
+import { InventoryDialogComponent, InventoryDialogData } from './inventory-dialog.component';
 
 describe('InventoryDialogComponent', () => {
   const INGREDIENTS: CanonicalIngredientDto[] = [
@@ -137,11 +134,9 @@ describe('InventoryDialogComponent', () => {
       createComponent({ location: 'Pantry', mode: 'add' });
 
       expect(internals().referenceDataLoading()).toBe(false);
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Failed to load ingredients.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Failed to load ingredients.', 'Dismiss', {
+        duration: 4000,
+      });
     });
 
     it('reports a failed unit fetch separately from the ingredient fetch', () => {
@@ -229,7 +224,11 @@ describe('InventoryDialogComponent', () => {
 
       component.onIngredientInput();
 
-      expect(internals().filteredIngredients().map((i) => i.name)).toEqual(['Spinach']);
+      expect(
+        internals()
+          .filteredIngredients()
+          .map((i) => i.name),
+      ).toEqual(['Spinach']);
     });
 
     it('clears the resolved ingredient when the user edits the text', () => {
@@ -324,7 +323,11 @@ describe('InventoryDialogComponent', () => {
 
       component.onCreateNewIngredient();
 
-      expect(internals().ingredients().map((i) => i.id)).toContain('ing-9');
+      expect(
+        internals()
+          .ingredients()
+          .map((i) => i.id),
+      ).toContain('ing-9');
       expect(internals().ingredientNotResolved()).toBe(false);
       expect(internals().loading()).toBe(false);
     });
@@ -338,11 +341,9 @@ describe('InventoryDialogComponent', () => {
 
       component.onCreateNewIngredient();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Ingredient already exists.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Ingredient already exists.', 'Dismiss', {
+        duration: 4000,
+      });
       expect(internals().loading()).toBe(false);
     });
 
@@ -353,11 +354,9 @@ describe('InventoryDialogComponent', () => {
 
       component.onCreateNewIngredient();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Failed to create ingredient.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Failed to create ingredient.', 'Dismiss', {
+        duration: 4000,
+      });
     });
   });
 
@@ -443,11 +442,9 @@ describe('InventoryDialogComponent', () => {
       component.onSubmit();
 
       expect(dialogRefMock.close).not.toHaveBeenCalled();
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Quantity must be positive.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Quantity must be positive.', 'Dismiss', {
+        duration: 4000,
+      });
     });
 
     it('falls back to a generic add-failure message', () => {
@@ -495,9 +492,7 @@ describe('InventoryDialogComponent', () => {
       submitAndDetect();
 
       const prompt = fixture.nativeElement.querySelector('.container-reference-prompt');
-      expect(prompt.textContent).toContain(
-        'What is the net weight or volume of this container?',
-      );
+      expect(prompt.textContent).toContain('What is the net weight or volume of this container?');
     });
 
     it('relabels the confirm button to "Declare & Save"', () => {
@@ -578,11 +573,9 @@ describe('InventoryDialogComponent', () => {
 
       component.onSubmit();
 
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Unit is not compatible.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Unit is not compatible.', 'Dismiss', {
+        duration: 4000,
+      });
     });
 
     it('falls back to a generic message when the declared save fails without one', () => {
@@ -642,11 +635,9 @@ describe('InventoryDialogComponent', () => {
       component.onSubmit();
 
       expect(dialogRefMock.close).not.toHaveBeenCalled();
-      expect(snackBarMock.open).toHaveBeenCalledWith(
-        'Item no longer exists.',
-        'Dismiss',
-        { duration: 4000 },
-      );
+      expect(snackBarMock.open).toHaveBeenCalledWith('Item no longer exists.', 'Dismiss', {
+        duration: 4000,
+      });
     });
 
     it('falls back to a generic update-failure message', () => {

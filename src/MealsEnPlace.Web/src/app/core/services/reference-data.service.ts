@@ -13,19 +13,12 @@ export class ReferenceDataService {
   private readonly baseUrl = `${environment.apiUrl}/v1/referencedata`;
   private readonly http = inject(HttpClient);
 
-  createIngredient(
-    request: CreateIngredientRequest
-  ): Observable<CanonicalIngredientDto> {
-    return this.http.post<CanonicalIngredientDto>(
-      `${this.baseUrl}/ingredients`,
-      request
-    );
+  createIngredient(request: CreateIngredientRequest): Observable<CanonicalIngredientDto> {
+    return this.http.post<CanonicalIngredientDto>(`${this.baseUrl}/ingredients`, request);
   }
 
   getIngredients(): Observable<CanonicalIngredientDto[]> {
-    return this.http.get<CanonicalIngredientDto[]>(
-      `${this.baseUrl}/ingredients`
-    );
+    return this.http.get<CanonicalIngredientDto[]>(`${this.baseUrl}/ingredients`);
   }
 
   getUnits(): Observable<UnitOfMeasureDto[]> {

@@ -22,14 +22,14 @@ export class RecipeService {
   addToShoppingList(recipeId: string): Observable<ShoppingListItemResponse[]> {
     return this.http.post<ShoppingListItemResponse[]>(
       `${environment.apiUrl}/v1/shopping-list/add-from-recipe/${recipeId}`,
-      null
+      null,
     );
   }
 
   bulkResolveGroup(request: BulkResolveGroupRequest): Observable<BulkResolveGroupResponse> {
     return this.http.post<BulkResolveGroupResponse>(
       `${this.baseUrl}/unresolved-groups/resolve`,
-      request
+      request,
     );
   }
 
@@ -42,22 +42,18 @@ export class RecipeService {
   }
 
   getRecipes(page = 1, pageSize = 25): Observable<PagedResult<RecipeListItemDto>> {
-    const params = new HttpParams()
-      .set('page', page)
-      .set('pageSize', pageSize);
+    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
     return this.http.get<PagedResult<RecipeListItemDto>>(this.baseUrl, { params });
   }
 
   getUnresolvedGroups(): Observable<UnresolvedGroupResponse[]> {
-    return this.http.get<UnresolvedGroupResponse[]>(
-      `${this.baseUrl}/unresolved-groups`
-    );
+    return this.http.get<UnresolvedGroupResponse[]>(`${this.baseUrl}/unresolved-groups`);
   }
 
   matchRecipes(
     cuisine?: string,
     dietaryTags?: string[],
-    seasonalOnly?: boolean
+    seasonalOnly?: boolean,
   ): Observable<RecipeMatchResponse> {
     let params = new HttpParams();
     if (cuisine) {

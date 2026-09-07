@@ -1,10 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
-import {
-  InventoryItemResponse,
-  InventoryLocation,
-} from '../../core/models/inventory.models';
+import { InventoryItemResponse, InventoryLocation } from '../../core/models/inventory.models';
 import { InventoryService } from '../../core/services/inventory.service';
 import { ExpirationPageComponent } from './expiration-page.component';
 
@@ -112,7 +109,11 @@ describe('ExpirationPageComponent', () => {
 
       createComponent();
 
-      expect(internals().allItems().map((item) => item.id)).toEqual(['dated']);
+      expect(
+        internals()
+          .allItems()
+          .map((item) => item.id),
+      ).toEqual(['dated']);
     });
 
     it('excludes items whose expiry date is an empty string', () => {
@@ -132,11 +133,11 @@ describe('ExpirationPageComponent', () => {
 
       createComponent();
 
-      expect(internals().allItems().map((item) => item.id)).toEqual([
-        'expired',
-        'soon',
-        'later',
-      ]);
+      expect(
+        internals()
+          .allItems()
+          .map((item) => item.id),
+      ).toEqual(['expired', 'soon', 'later']);
     });
 
     it('computes days remaining relative to today', () => {
@@ -172,9 +173,7 @@ describe('ExpirationPageComponent', () => {
       createComponent();
 
       serve({ Pantry: [makeItem({ expiryDate: daysFromToday(2) })] });
-      (
-        fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement
-      ).click();
+      (fixture.nativeElement.querySelector('.error-message button') as HTMLButtonElement).click();
       fixture.detectChanges();
 
       expect(internals().error()).toBe(false);
@@ -207,10 +206,11 @@ describe('ExpirationPageComponent', () => {
 
       internals().activeFilter.set('3days');
 
-      expect(internals().filteredItems().map((item) => item.id)).toEqual([
-        'in-3',
-        'boundary-3',
-      ]);
+      expect(
+        internals()
+          .filteredItems()
+          .map((item) => item.id),
+      ).toEqual(['in-3', 'boundary-3']);
     });
 
     it('includes the boundary day in the 7-day filter', () => {
@@ -218,11 +218,11 @@ describe('ExpirationPageComponent', () => {
 
       internals().activeFilter.set('7days');
 
-      expect(internals().filteredItems().map((item) => item.id)).toEqual([
-        'in-3',
-        'boundary-3',
-        'boundary-7',
-      ]);
+      expect(
+        internals()
+          .filteredItems()
+          .map((item) => item.id),
+      ).toEqual(['in-3', 'boundary-3', 'boundary-7']);
     });
 
     it('keeps already-expired items visible under every filter', () => {
@@ -233,7 +233,11 @@ describe('ExpirationPageComponent', () => {
 
       internals().activeFilter.set('3days');
 
-      expect(internals().filteredItems().map((item) => item.id)).toEqual(['expired']);
+      expect(
+        internals()
+          .filteredItems()
+          .map((item) => item.id),
+      ).toEqual(['expired']);
     });
 
     it('renders a row per filtered item', () => {
@@ -256,9 +260,7 @@ describe('ExpirationPageComponent', () => {
     it('says nothing has an expiry date under the all filter', () => {
       createComponent();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'No items with expiry dates found.',
-      );
+      expect(fixture.nativeElement.textContent).toContain('No items with expiry dates found.');
     });
 
     it('names the 7-day window when that filter is empty', () => {
@@ -267,9 +269,7 @@ describe('ExpirationPageComponent', () => {
       internals().activeFilter.set('7days');
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'No items expiring within 7 days.',
-      );
+      expect(fixture.nativeElement.textContent).toContain('No items expiring within 7 days.');
     });
 
     it('names the 3-day window when that filter is empty', () => {
@@ -278,9 +278,7 @@ describe('ExpirationPageComponent', () => {
       internals().activeFilter.set('3days');
       fixture.detectChanges();
 
-      expect(fixture.nativeElement.textContent).toContain(
-        'No items expiring within 3 days.',
-      );
+      expect(fixture.nativeElement.textContent).toContain('No items expiring within 3 days.');
     });
   });
 
