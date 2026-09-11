@@ -3548,14 +3548,17 @@ the four junk variants by a combined total of 2.
 
 The fix belongs in the importer, not in a repair migration over existing rows. Normalizing
 tokens at ingest time prevents junk from entering the table in the first place. After the
-normalization rules are in place the user will run a full re-ingest, which replaces the
-Kaggle-originated rows with clean data. The re-ingest must not orphan or destroy
-InventoryItems or user-created CanonicalIngredients that were added through
-`POST /api/v1/referencedata/ingredients` rather than by the importer.
+normalization rules are in place the user will run a full re-ingest from a clean database.
+The re-ingest procedure is a full reset: drop and recreate the Postgres database (or
+recreate the Docker volume), apply all EF Core migrations so seed data lands, then run the
+ingest tool once. All existing data -- inventory items, user-created ingredients, recipes --
+is wiped and rebuilt from scratch.
 
 The ingest tool currently has no documented reset or re-ingest procedure (the README
 documents `--csv`, `--dry-run`, and `--max-rows` only). This story must also document the
-procedure so the user can repeat it confidently.
+full reset-and-ingest procedure so the user can repeat it confidently. The documentation
+must warn that the ingest tool does not detect previously imported recipes: running it twice
+against the same database duplicates every recipe.
 
 Semantic merging of true synonyms (e.g., "bell pepper" vs "sweet pepper") remains in
 MEP-038's domain and is out of scope here.
@@ -3626,20 +3629,18 @@ Feature: NER Token Normalization at Ingest Time
     Then no CanonicalIngredient name matches the pattern of leading or trailing punctuation or brackets
     And searching "apple" returns "apple" without "apple [", "apple.", "apple/", or "apple add" variants
 
-  Scenario: Re-ingest preserves user-created canonical ingredients
-    Given CanonicalIngredient rows created via POST /api/v1/referencedata/ingredients exist
-    And InventoryItems reference some of those user-created rows by foreign key
-    When the user runs a full re-ingest
-    Then user-created CanonicalIngredient rows are not deleted or modified
-    And InventoryItems referencing user-created rows retain their foreign key associations
-    And no orphaned InventoryItem rows exist after re-ingest
-
-  Scenario: Re-ingest procedure is documented
+  Scenario: Full database reset procedure is documented
     Given the ingest tool's README (src/MealsEnPlace.Tools.Ingest/README.md) currently has no reset or re-ingest documentation
     When MEP-049 ships
-    Then the README documents the step-by-step procedure for a clean re-ingest
-    And the procedure states whether it wipes only ingest-created rows or requires a broader reset
-    And the procedure warns about the InventoryItem and user-created ingredient preservation requirement
+    Then the README documents the step-by-step procedure: drop and recreate the Postgres database (or recreate the Docker volume), apply all EF Core migrations with "dotnet ef database update --project src/MealsEnPlace.Api" so seed data lands, then run the ingest tool once
+    And the procedure states explicitly that all existing data (inventory, recipes, user-created ingredients) is wiped
+
+  Scenario: README warns against running the ingest tool twice without resetting
+    Given the ingest tool does not detect previously imported recipes
+    When a user runs the ingest tool against a database that already contains ingested recipes
+    Then every recipe in the CSV is inserted again, duplicating the entire catalog
+    And the README states that the database must be reset before re-ingesting
+    And the README labels this as a destructive operation that cannot be undone
 ```
 
 ---
