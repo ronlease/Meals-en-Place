@@ -51,11 +51,27 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 
 Run the following commands from the repository root:
 
-```
-docker compose down -v
-docker compose up -d
+```bash
+# 1. Drop and recreate the database
+docker compose down -v && docker compose up -d
+
+# 2. Apply migrations
 dotnet ef database update --project src/MealsEnPlace.Api
+
+# 3. Dry-run first to confirm the ingest looks correct
+dotnet run --project src/MealsEnPlace.Tools.Ingest -- --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv --dry-run
+
+# 4. Run the full ingest (takes ~40 minutes on a mid-range desktop)
 dotnet run --project src/MealsEnPlace.Tools.Ingest -- --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv
+
+# 5. Fold morphological duplicates (dry-run first, then apply).
+#    The ingest creates one CanonicalIngredient per distinct NER token; the
+#    dedup pass folds plural and prep-modifier variants into a single survivor
+#    so "onion", "chopped onion", and "diced onions" map to one canonical (MEP-038).
+#    Both tools recompute RecipeReferenceCount at the end so the autocomplete
+#    search ranking is correct after each step.
+dotnet run --project src/MealsEnPlace.Tools.Dedup -- --dry-run
+dotnet run --project src/MealsEnPlace.Tools.Dedup
 ```
 
 `dotnet ef database update` applies all migrations so seed data (units of measure, seasonality

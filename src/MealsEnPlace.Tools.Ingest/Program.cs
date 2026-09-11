@@ -233,8 +233,9 @@ if (batchRecipeCount > 0)
 
 // Backfill RecipeReferenceCount for all CanonicalIngredients in one UPDATE so the
 // stored count is accurate after a bulk ingest.  The same SQL runs in the migration
-// for any database that predates this column.  Skipped in dry-run mode because no
-// RecipeIngredient rows were written.
+// for any database that predates this column, and in CanonicalIngredientDedupRunner
+// (MealsEnPlace.Tools.Dedup) after a fold pass.  If the SQL changes, update all three
+// copies.  Skipped in dry-run mode because no RecipeIngredient rows were written.
 if (!options.DryRun)
 {
     await dbContext.Database.ExecuteSqlRawAsync(

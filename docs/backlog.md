@@ -3550,10 +3550,29 @@ at the edges, so `'apple'` kept its wrapping quotes -- edge stripping now remove
 
 Verification: 115 ingest-scoped unit tests pass; `NerTokenNormalizer` and
 `CanonicalIngredientRegistry` at 100% line coverage. A 20,000-row dry run against the
-user's CSV completed and reported 39 normalized / 26 rejected tokens. The README documents
-the full database reset procedure (drop/recreate database or Docker volume, apply EF
-migrations, ingest once) and the double-run duplication warning. The two "full re-ingest"
-acceptance scenarios are verified by the user's actual re-ingest, which is being run next.
+user's CSV completed and reported 39 normalized / 26 rejected tokens.
+
+Full re-ingest verification (2026-09-10, 42 minutes): 2,231,142 rows read, 588,044
+Recipes1M rows skipped, 1,643,098 recipes ingested, 143,107 canonical ingredients created,
+14,833 NER tokens normalized, 31,131 rejected, reference counts backfilled, zero stderr
+output. Post-ingest checks: 0 canonical names with a non-alphanumeric leading or trailing
+character; the "apple" search returns Apples, apple, apple cider vinegar, applesauce, apple
+juice, apple cider first with none of the punctuation variants present.
+
+Scope decision during verification: the reset procedure was missing the MEP-038 Dedup tool
+(`src/MealsEnPlace.Tools.Dedup`) as a final step. The dedup tool is a separate offline pass
+that folds plural and prep-modifier variants (e.g., "Apples" into "apple"); it is not part
+of the ingest, so a fresh ingest lands at ~143k canonical rows until the dedup runs. A dry
+run on the new database projected 15,261 fold groups, 25,289 loser rows, and 2,931,374
+RecipeIngredient reassignments. The dedup tool has also been updated on this branch to
+recompute `RecipeReferenceCount` at the end of a live run, mirroring the ingest tool. The
+README now documents the full procedure as: reset database, apply migrations, run ingest,
+run dedup dry-run to review, run dedup live. Both tools recompute reference counts.
+
+Follow-on candidate (not a new item): 3,640 names still contain internal punctuation such
+as "parmesan/romano", "chili_powder", "preserves(blueberry", "oreo® cookies", and
+stopword-free fragments like "a crowd" and "type fruit" survive because only trailing
+connectives are stripped.
 
 ### Business Problem
 The Kaggle bulk ingest (MEP-026) feeds every NER-column token through
@@ -3657,8 +3676,9 @@ Feature: NER Token Normalization at Ingest Time
   Scenario: Full database reset procedure is documented
     Given the ingest tool's README (src/MealsEnPlace.Tools.Ingest/README.md) currently has no reset or re-ingest documentation
     When MEP-049 ships
-    Then the README documents the step-by-step procedure: drop and recreate the Postgres database (or recreate the Docker volume), apply all EF Core migrations with "dotnet ef database update --project src/MealsEnPlace.Api" so seed data lands, then run the ingest tool once
+    Then the README documents the step-by-step procedure: drop and recreate the Postgres database (or recreate the Docker volume), apply all EF Core migrations with "dotnet ef database update --project src/MealsEnPlace.Api" so seed data lands, run the ingest tool once, run the MEP-038 Dedup tool with --dry-run to review projected folds, then run the Dedup tool live
     And the procedure states explicitly that all existing data (inventory, recipes, user-created ingredients) is wiped
+    And both the ingest and dedup tools recompute RecipeReferenceCount at the end of a live run
 
   Scenario: README warns against running the ingest tool twice without resetting
     Given the ingest tool does not detect previously imported recipes

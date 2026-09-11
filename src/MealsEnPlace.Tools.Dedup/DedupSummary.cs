@@ -26,6 +26,8 @@ internal sealed class DedupSummary
 
     public int RecipeIngredientFksReassigned { get; set; }
 
+    public bool RecipeReferenceCountBackfilled { get; set; }
+
     public int SeasonalityWindowFksReassigned { get; set; }
 
     public int ShoppingListItemFksReassigned { get; set; }
@@ -61,6 +63,9 @@ internal sealed class DedupSummary
               SeasonalityWindow:           {SeasonalityWindowFksReassigned:N0}
               ConsumeAuditEntry:           {ConsumeAuditEntryFksReassigned:N0}
               Total:                       {TotalFksReassigned:N0}
+
+            Post-fold
+              Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run or non-Postgres provider)")}
 
             Timing
               Elapsed:                     {Elapsed:c}

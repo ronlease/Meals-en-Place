@@ -27,10 +27,13 @@ MealsEnPlace.Tools.Dedup [--dry-run]
 4. **Picks a survivor** per group: shortest name wins, ties broken by highest reference count, final tie broken alphabetically.
 5. **Applies the fold** (unless `--dry-run`): for each loser row, insert a `CanonicalIngredientAlias` capturing the folded name, bulk-`UPDATE` every child-table FK to point at the survivor via `ExecuteUpdateAsync`, then `DELETE` the loser row.
 6. **Batches work** in groups of `DedupConstants.FoldGroupBatchSize` per transaction so a failure mid-run doesn't leave the database half-applied.
+7. **Backfills `RecipeReferenceCount`** after the fold via a single `UPDATE … FROM (SELECT … GROUP BY …)` statement so the denormalized autocomplete ranking column correctly reflects the FK reassignments just applied (the column was introduced alongside MEP-048 ingredient search; the ingest tool runs the same backfill at end-of-ingest).
 
 Folds are non-destructive in the sense that the original canonical name is preserved in the `CanonicalIngredientAliases` table. A future story could offer a one-click "unfold" based on that row.
 
 ## Recommended workflow
+
+Run this tool after every fresh ingest (see `src/MealsEnPlace.Tools.Ingest/README.md`). The ingest creates one `CanonicalIngredient` row per distinct NER token; the dedup pass is what folds plural and prep-modifier variants into a single survivor.
 
 ```bash
 # 1. Always dry-run first

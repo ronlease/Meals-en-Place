@@ -3,6 +3,8 @@
 // Scenario: TotalFksReassigned sums the five per-table counters
 // Scenario: Format renders all counters, the DRY RUN banner, and elapsed timing
 // Scenario: Format's LIVE banner appears when DryRun is false
+// Scenario: Format shows "yes" when RecipeReferenceCountBackfilled is true
+// Scenario: Format shows the skipped message when RecipeReferenceCountBackfilled is false
 
 using FluentAssertions;
 using MealsEnPlace.Tools.Dedup;
@@ -57,5 +59,27 @@ public class DedupSummaryTests
 
         rendered.Should().Contain("LIVE");
         rendered.Should().NotContain("DRY RUN");
+    }
+
+    [Fact]
+    public void Format_RecipeReferenceCountBackfilledTrue_RendersYes()
+    {
+        var summary = new DedupSummary { RecipeReferenceCountBackfilled = true };
+        summary.StopTimer();
+
+        var rendered = summary.Format(new DedupOptions { DryRun = false });
+
+        rendered.Should().Contain("yes");
+    }
+
+    [Fact]
+    public void Format_RecipeReferenceCountBackfilledFalse_RendersSkippedMessage()
+    {
+        var summary = new DedupSummary { RecipeReferenceCountBackfilled = false };
+        summary.StopTimer();
+
+        var rendered = summary.Format(new DedupOptions { DryRun = false });
+
+        rendered.Should().Contain("skipped");
     }
 }

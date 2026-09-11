@@ -22,6 +22,24 @@ internal sealed class CanonicalIngredientDedupRunner
 {
     private readonly CanonicalNameNormalizer _normalizer;
 
+    // Postgres-only UPDATE ... FROM syntax.  The same SQL runs in
+    // MealsEnPlace.Tools.Ingest/Program.cs at end-of-ingest; duplicated here
+    // to keep both tool projects self-contained.  If the SQL changes, update
+    // both copies.
+    private const string BackfillSql =
+        """
+        UPDATE "CanonicalIngredients" c
+        SET "RecipeReferenceCount" = s.cnt
+        FROM (
+            SELECT "CanonicalIngredientId", COUNT(*)::integer AS cnt
+            FROM "RecipeIngredients"
+            GROUP BY "CanonicalIngredientId"
+        ) s
+        WHERE s."CanonicalIngredientId" = c."Id"
+        """;
+
+    private const string NpgsqlProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
+
     public CanonicalIngredientDedupRunner(CanonicalNameNormalizer normalizer)
     {
         _normalizer = normalizer;
@@ -54,6 +72,16 @@ internal sealed class CanonicalIngredientDedupRunner
         {
             var batch = foldGroups.Skip(i).Take(DedupConstants.FoldGroupBatchSize).ToList();
             await ApplyBatchAsync(dbContext, batch, summary, cancellationToken);
+        }
+
+        // Backfill the denormalized RecipeReferenceCount column so autocomplete ranking
+        // reflects the FK reassignments just applied.  Guarded to Npgsql because the
+        // UPDATE ... FROM syntax is Postgres-specific and is not supported by the SQLite
+        // provider used in the runner's unit tests.
+        if (dbContext.Database.ProviderName == NpgsqlProviderName)
+        {
+            await dbContext.Database.ExecuteSqlRawAsync(BackfillSql, cancellationToken);
+            summary.RecipeReferenceCountBackfilled = true;
         }
     }
 
