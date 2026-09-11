@@ -1,8 +1,6 @@
-import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, OnInit, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -22,6 +20,7 @@ import {
 } from '../../core/models/inventory.models';
 import { InventoryService } from '../../core/services/inventory.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
+import { IngredientAutocompleteComponent } from '../../shared/ingredient-autocomplete/ingredient-autocomplete.component';
 
 export interface InventoryDialogData {
   item?: InventoryItemResponse;
@@ -35,7 +34,7 @@ interface ContainerForm {
 }
 
 interface InventoryForm {
-  canonicalIngredientName: FormControl<string>;
+  canonicalIngredient: FormControl<CanonicalIngredientDto | null>;
   expiryDate: FormControl<Date | null>;
   location: FormControl<InventoryLocation>;
   notes: FormControl<string>;
@@ -47,8 +46,7 @@ interface InventoryForm {
   selector: 'app-inventory-dialog',
   standalone: true,
   imports: [
-    CommonModule,
-    MatAutocompleteModule,
+    IngredientAutocompleteComponent,
     MatButtonModule,
     MatDatepickerModule,
     MatDialogModule,
@@ -69,47 +67,23 @@ interface InventoryForm {
         </div>
       } @else {
         <form [formGroup]="inventoryForm" class="dialog-form">
-          <mat-form-field appearance="outline" class="full-width">
-            <mat-label>Ingredient</mat-label>
-            <input
-              matInput
-              formControlName="canonicalIngredientName"
-              placeholder="e.g. Diced Tomatoes"
-              [matAutocomplete]="ingredientAuto"
-              (input)="onIngredientInput()"
-            />
-            <mat-autocomplete
-              #ingredientAuto="matAutocomplete"
-              (optionSelected)="onIngredientSelected($event.option.value)"
+          <app-ingredient-autocomplete
+            formControlName="canonicalIngredient"
+            [allowCreate]="true"
+            [defaultUnitOfMeasureId]="units().length ? units()[0].id : null"
+          />
+          @if (
+            inventoryForm.controls.canonicalIngredient.touched &&
+            inventoryForm.controls.canonicalIngredient.value === null &&
+            !inventoryForm.controls.canonicalIngredient.dirty
+          ) {
+            <mat-error class="field-error">Ingredient is required</mat-error>
+          }
+          @if (ingredientNotResolved() && inventoryForm.controls.canonicalIngredient.touched) {
+            <mat-error class="field-error"
+              >Select an ingredient from the list or create a new one</mat-error
             >
-              @for (ingredient of filteredIngredients(); track ingredient.id) {
-                <mat-option [value]="ingredient.name">
-                  {{ ingredient.name }}
-                  <span class="category-hint">{{ ingredient.category }}</span>
-                </mat-option>
-              }
-              @if (showCreateNew()) {
-                <mat-option
-                  [value]="inventoryForm.controls.canonicalIngredientName.value"
-                  (click)="onCreateNewIngredient()"
-                >
-                  <mat-icon>add</mat-icon>
-                  Create "{{ inventoryForm.controls.canonicalIngredientName.value }}"
-                </mat-option>
-              }
-            </mat-autocomplete>
-            @if (
-              inventoryForm.controls.canonicalIngredientName.hasError('required') &&
-              inventoryForm.controls.canonicalIngredientName.touched
-            ) {
-              <mat-error>Ingredient is required</mat-error>
-            }
-            @if (
-              ingredientNotResolved() && inventoryForm.controls.canonicalIngredientName.touched
-            ) {
-              <mat-error>Select an ingredient from the list or create a new one</mat-error>
-            }
-          </mat-form-field>
+          }
 
           <div class="row-fields">
             <mat-form-field appearance="outline" class="quantity-field">
@@ -241,10 +215,11 @@ interface InventoryForm {
         flex: 1;
       }
 
-      .category-hint {
-        color: var(--mat-sys-on-surface-variant);
-        font-size: 11px;
-        margin-left: 8px;
+      .field-error {
+        font-size: 12px;
+        color: var(--mat-sys-error);
+        margin-top: -8px;
+        margin-bottom: 4px;
       }
 
       .container-reference-prompt {
@@ -281,33 +256,14 @@ export class InventoryDialogComponent implements OnInit {
   protected readonly containerReference = signal<ContainerReferenceDetectedResponse | null>(null);
   protected readonly containerReferenceDetected = signal(false);
   protected readonly data: InventoryDialogData = inject(MAT_DIALOG_DATA);
-  protected readonly filteredIngredients = computed<CanonicalIngredientDto[]>(() => {
-    const query = this.ingredientQuery().toLowerCase();
-    if (!query) return this.ingredients();
-    return this.ingredients().filter((i) => i.name.toLowerCase().includes(query));
-  });
-  // Reads ingredientQuery rather than the form control: a computed cannot track
-  // a FormControl, so sourcing the name from the control left this stale and the
-  // "select an ingredient" error never appeared.
-  protected readonly ingredientNotResolved = computed(
-    () => !this.selectedIngredientId() && this.ingredientQuery().trim().length > 0,
-  );
-  protected readonly ingredients = signal<CanonicalIngredientDto[]>([]);
   protected readonly inventoryForm: FormGroup<InventoryForm>;
   protected readonly loading = signal(false);
   protected readonly referenceDataLoading = signal(true);
-  protected readonly showCreateNew = computed(() => {
-    const query = this.ingredientQuery().trim();
-    if (!query) return false;
-    return !this.ingredients().some((i) => i.name.toLowerCase() === query.toLowerCase());
-  });
   protected readonly units = signal<UnitOfMeasureDto[]>([]);
 
   private readonly dialogRef = inject(MatDialogRef<InventoryDialogComponent>);
-  private readonly ingredientQuery = signal('');
   private readonly inventoryService = inject(InventoryService);
   private readonly referenceDataService = inject(ReferenceDataService);
-  private readonly selectedIngredientId = signal<string | null>(null);
   private readonly snackBar = inject(MatSnackBar);
 
   constructor() {
@@ -323,8 +279,7 @@ export class InventoryDialogComponent implements OnInit {
     });
 
     this.inventoryForm = new FormGroup<InventoryForm>({
-      canonicalIngredientName: new FormControl<string>('', {
-        nonNullable: true,
+      canonicalIngredient: new FormControl<CanonicalIngredientDto | null>(null, {
         validators: [Validators.required],
       }),
       expiryDate: new FormControl<Date | null>(null),
@@ -341,69 +296,27 @@ export class InventoryDialogComponent implements OnInit {
     });
   }
 
+  // Returns true when the user typed text but did not pick an option from the list.
+  // Used to surface "Select an ingredient…" and is mutually exclusive with "required":
+  // required only fires when the control is untouched (never typed into).
+  protected ingredientNotResolved(): boolean {
+    const ctrl = this.inventoryForm.controls.canonicalIngredient;
+    return ctrl.value === null && ctrl.dirty;
+  }
+
   ngOnInit(): void {
     const { item, location, mode } = this.data;
-
-    this.referenceDataService.getIngredients().subscribe({
-      next: (ingredients) => {
-        this.ingredients.set(ingredients);
-        this.referenceDataService.getUnits().subscribe({
-          next: (units) => {
-            this.units.set(units);
-            this.referenceDataLoading.set(false);
-            this.applyEditValues(mode, item, location);
-          },
-          error: () => {
-            this.referenceDataLoading.set(false);
-            this.snackBar.open('Failed to load units.', 'Dismiss', { duration: 4000 });
-          },
-        });
-      },
+    this.referenceDataService.getUnits().subscribe({
       error: () => {
         this.referenceDataLoading.set(false);
-        this.snackBar.open('Failed to load ingredients.', 'Dismiss', { duration: 4000 });
+        this.snackBar.open('Failed to load units.', 'Dismiss', { duration: 4000 });
+      },
+      next: (units) => {
+        this.units.set(units);
+        this.referenceDataLoading.set(false);
+        this.applyEditValues(mode, item, location);
       },
     });
-  }
-
-  onCreateNewIngredient(): void {
-    const name = this.inventoryForm.controls.canonicalIngredientName.value.trim();
-    if (!name) return;
-
-    const defaultUnitOfMeasureId = this.units()[0]?.id ?? '';
-    this.loading.set(true);
-    this.referenceDataService
-      .createIngredient({ category: 'Other', defaultUnitOfMeasureId, name })
-      .subscribe({
-        error: (err: HttpErrorResponse) => {
-          this.loading.set(false);
-          this.snackBar.open(err.error?.message ?? 'Failed to create ingredient.', 'Dismiss', {
-            duration: 4000,
-          });
-        },
-        next: (created) => {
-          this.loading.set(false);
-          this.ingredients.update((list) => [...list, created]);
-          this.selectedIngredientId.set(created.id);
-          this.inventoryForm.controls.canonicalIngredientName.setValue(created.name);
-          this.snackBar.open(`Created ingredient "${created.name}".`, undefined, {
-            duration: 2500,
-          });
-        },
-      });
-  }
-
-  onIngredientInput(): void {
-    this.ingredientQuery.set(this.inventoryForm.controls.canonicalIngredientName.value);
-    this.selectedIngredientId.set(null);
-  }
-
-  onIngredientSelected(name: string): void {
-    const match = this.ingredients().find((i) => i.name === name);
-    if (match) {
-      this.selectedIngredientId.set(match.id);
-      this.ingredientQuery.set('');
-    }
   }
 
   onSubmit(): void {
@@ -418,7 +331,7 @@ export class InventoryDialogComponent implements OnInit {
     if (this.inventoryForm.invalid) return;
 
     if (this.data.mode === 'add') {
-      if (!this.selectedIngredientId()) return;
+      if (!this.inventoryForm.controls.canonicalIngredient.value) return;
       this.submitAdd();
     } else {
       this.submitEdit();
@@ -432,15 +345,22 @@ export class InventoryDialogComponent implements OnInit {
   ): void {
     if (mode === 'edit' && item) {
       const expiry = item.expiryDate ? new Date(item.expiryDate) : null;
+      // Construct a minimal CanonicalIngredientDto for writeValue so that the
+      // autocomplete displays the ingredient name without firing a search.
+      const ingredientDto: CanonicalIngredientDto = {
+        category: '',
+        defaultUnitOfMeasureId: item.unitOfMeasureId,
+        id: item.canonicalIngredientId,
+        name: item.canonicalIngredientName,
+      };
       this.inventoryForm.setValue({
-        canonicalIngredientName: item.canonicalIngredientName,
+        canonicalIngredient: ingredientDto,
         expiryDate: expiry,
         location: item.location,
         notes: item.notes ?? '',
         quantity: item.quantity,
         unitOfMeasureId: item.unitOfMeasureId,
       });
-      this.selectedIngredientId.set(item.canonicalIngredientId);
     } else {
       this.inventoryForm.controls.location.setValue(location);
     }
@@ -452,7 +372,7 @@ export class InventoryDialogComponent implements OnInit {
   ): AddInventoryItemRequest {
     const v = this.inventoryForm.getRawValue();
     return {
-      canonicalIngredientId: this.selectedIngredientId()!,
+      canonicalIngredientId: v.canonicalIngredient!.id,
       declaredQuantity: declaredQuantity ?? null,
       declaredUnitOfMeasureId: declaredUnitOfMeasureId ?? null,
       expiryDate: v.expiryDate ? v.expiryDate.toISOString().substring(0, 10) : null,

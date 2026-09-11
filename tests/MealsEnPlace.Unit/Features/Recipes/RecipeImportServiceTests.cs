@@ -15,6 +15,18 @@
 //   When CreateRecipeAsync is called
 //   Then the RecipeIngredient has IsContainerResolved = false
 //
+// Scenario: CreateRecipeAsync increments RecipeReferenceCount for each referenced canonical ingredient
+//   Given a recipe with two RecipeIngredient rows for the same canonical ingredient and one row for a second
+//   When CreateRecipeAsync is called
+//   Then the first canonical ingredient's RecipeReferenceCount is incremented by 2
+//   And the second canonical ingredient's RecipeReferenceCount is incremented by 1
+//
+// Scenario: CreateRecipeAsync with zero ingredients does not change any RecipeReferenceCount
+//   Given canonical ingredients exist with known RecipeReferenceCounts
+//   And the CreateRecipeRequest has an empty Ingredients list
+//   When CreateRecipeAsync is called
+//   Then no canonical ingredient's RecipeReferenceCount is changed
+//
 // Scenario: CreateRecipeAsync handles Claude dietary classification failure gracefully
 //   Given Claude.ClassifyDietaryTagsAsync throws an exception
 //   When CreateRecipeAsync is called
@@ -246,6 +258,109 @@ public class RecipeImportServiceTests : IDisposable
         var ingredient = await _dbContext.RecipeIngredients.AsNoTracking()
             .FirstAsync(ri => ri.RecipeId == result.Id);
         ingredient.IsContainerResolved.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task CreateRecipeAsync_TwoRowsForSameCanonicalAndOneForAnother_IncrementsCountsCorrectly()
+    {
+        // Arrange — one canonical ingredient appears twice in the recipe; a second appears once.
+        // Both start at RecipeReferenceCount = 0 (the default).
+        var doubleIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Grain,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Egg"
+        };
+        var singleIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Spice,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Salt"
+        };
+        _dbContext.CanonicalIngredients.AddRange(doubleIngredient, singleIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "American",
+            Ingredients =
+            [
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = doubleIngredient.Id,
+                    Notes = "egg in batter",
+                    Quantity = 2m,
+                    UnitOfMeasureId = EachUnitOfMeasureId
+                },
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = doubleIngredient.Id,
+                    Notes = "egg wash",
+                    Quantity = 1m,
+                    UnitOfMeasureId = EachUnitOfMeasureId
+                },
+                new CreateRecipeIngredientRequest
+                {
+                    CanonicalIngredientId = singleIngredient.Id,
+                    Quantity = 5m,
+                    UnitOfMeasureId = GramUnitOfMeasureId
+                }
+            ],
+            Instructions = "Combine and bake.",
+            ServingCount = 4,
+            Title = "Egg Bake"
+        };
+
+        // Act
+        await _sut.CreateRecipeAsync(request);
+
+        // Assert — double-referenced canonical gets +2; single-referenced gets +1
+        var updatedDouble = await _dbContext.CanonicalIngredients
+            .AsNoTracking()
+            .FirstAsync(c => c.Id == doubleIngredient.Id);
+        updatedDouble.RecipeReferenceCount.Should().Be(2);
+
+        var updatedSingle = await _dbContext.CanonicalIngredients
+            .AsNoTracking()
+            .FirstAsync(c => c.Id == singleIngredient.Id);
+        updatedSingle.RecipeReferenceCount.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task CreateRecipeAsync_ZeroIngredients_DoesNotChangeAnyRecipeReferenceCount()
+    {
+        // Arrange — seed a canonical ingredient with a known starting count
+        var existingIngredient = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Produce,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Basil",
+            RecipeReferenceCount = 42
+        };
+        _dbContext.CanonicalIngredients.Add(existingIngredient);
+        await _dbContext.SaveChangesAsync();
+
+        // A recipe with no ingredients — Ingredients list is intentionally empty
+        var request = new CreateRecipeRequest
+        {
+            CuisineType = "Italian",
+            Ingredients = [],
+            Instructions = "No ingredients required.",
+            ServingCount = 2,
+            Title = "Empty Recipe"
+        };
+
+        // Act
+        await _sut.CreateRecipeAsync(request);
+
+        // Assert — count must remain at 42; no increments from a zero-ingredient recipe
+        var reloaded = await _dbContext.CanonicalIngredients
+            .AsNoTracking()
+            .FirstAsync(c => c.Id == existingIngredient.Id);
+        reloaded.RecipeReferenceCount.Should().Be(42);
     }
 
     [Fact]

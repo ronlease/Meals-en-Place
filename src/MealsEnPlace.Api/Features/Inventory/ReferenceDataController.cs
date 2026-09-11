@@ -86,32 +86,7 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
         await db.SaveChangesAsync(cancellationToken);
 
         var dto = MapIngredient(ingredient);
-        return CreatedAtAction(nameof(ListIngredients), dto);
-    }
-
-    /// <summary>
-    /// Returns all canonical ingredients, ordered by name.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>200 with the list of <see cref="CanonicalIngredientDto"/> records.</returns>
-    [HttpGet("ingredients")]
-    [ProducesResponseType(typeof(IReadOnlyList<CanonicalIngredientDto>), StatusCodes.Status200OK)]
-    public async Task<ActionResult<IReadOnlyList<CanonicalIngredientDto>>> ListIngredients(
-        CancellationToken cancellationToken)
-    {
-        var ingredients = await db.CanonicalIngredients
-            .AsNoTracking()
-            .OrderBy(c => c.Name)
-            .Select(c => new CanonicalIngredientDto
-            {
-                Category = c.Category,
-                DefaultUnitOfMeasureId = c.DefaultUnitOfMeasureId,
-                Id = c.Id,
-                Name = c.Name
-            })
-            .ToListAsync(cancellationToken);
-
-        return Ok(ingredients);
+        return CreatedAtAction(nameof(SearchIngredients), dto);
     }
 
     /// <summary>
@@ -137,6 +112,71 @@ public class ReferenceDataController(MealsEnPlaceDbContext db) : ControllerBase
             .ToListAsync(cancellationToken);
 
         return Ok(units);
+    }
+
+    /// <summary>
+    /// Searches canonical ingredients by name and returns at most <paramref name="limit"/> results.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The <paramref name="search"/> term is matched case-insensitively as a substring of the
+    /// ingredient name.  Results are ranked by three criteria in order:
+    /// (1) prefix matches first, (2) descending recipe reference count
+    /// (<see cref="MealsEnPlace.Api.Models.Entities.CanonicalIngredient.RecipeReferenceCount"/>)
+    /// so that heavily-used ingredients surface above low-quality fragments, (3) name
+    /// ascending for ties.
+    /// </para>
+    /// <para>
+    /// A blank or whitespace <paramref name="search"/> value returns an empty array immediately
+    /// without querying the database.  Callers should only send a request once the user has
+    /// typed at least one non-whitespace character.
+    /// </para>
+    /// <para>
+    /// The <paramref name="limit"/> parameter is clamped server-side to the range [1, 50].
+    /// </para>
+    /// </remarks>
+    /// <param name="search">
+    /// The term to search for within ingredient names.  Blank or whitespace returns an empty list.
+    /// </param>
+    /// <param name="limit">
+    /// Maximum number of results to return.  Defaults to 20; clamped to the range [1, 50].
+    /// </param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>
+    /// 200 with a (possibly empty) array of <see cref="CanonicalIngredientDto"/> records.
+    /// </returns>
+    [HttpGet("ingredients")]
+    [ProducesResponseType(typeof(IReadOnlyList<CanonicalIngredientDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<CanonicalIngredientDto>>> SearchIngredients(
+        [FromQuery] string? search = null,
+        [FromQuery] int limit = 20,
+        CancellationToken cancellationToken = default)
+    {
+        // Blank or whitespace search returns an empty list without touching the database.
+        // Returning the full table on an empty query would load 120,000+ rows into the browser.
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return Ok(Array.Empty<CanonicalIngredientDto>());
+        }
+
+        limit = Math.Clamp(limit, 1, 50);
+
+        var ingredients = await IngredientSearchHelper
+            .ApplySearch(
+                db.CanonicalIngredients.AsNoTracking(),
+                db.Database.ProviderName ?? string.Empty,
+                search.Trim(),
+                limit)
+            .Select(c => new CanonicalIngredientDto
+            {
+                Category = c.Category,
+                DefaultUnitOfMeasureId = c.DefaultUnitOfMeasureId,
+                Id = c.Id,
+                Name = c.Name
+            })
+            .ToListAsync(cancellationToken);
+
+        return Ok(ingredients);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

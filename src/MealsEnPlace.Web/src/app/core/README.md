@@ -13,7 +13,7 @@ Application-wide services and models, all `providedIn: 'root'`.
 | `PreferencesService` | Display system preference (Imperial/Metric) with backend sync. |
 | `PushNotificationService` | Stub service wiring `SwPush` for future push notifications. |
 | `RecipeService` | Recipe library, import, matching, detail, and add-to-shopping-list. |
-| `ReferenceDataService` | Canonical ingredients and units of measure for form dropdowns. |
+| `ReferenceDataService` | Server-side ingredient search (`searchIngredients(term, limit)`) and units of measure for form dropdowns. The full ingredient list is never pre-loaded. |
 | `SeasonalProduceService` | In-season and full-calendar produce queries (Zone 7a). |
 | `ShoppingListService` | Generate and fetch shopping lists from meal plan gaps. |
 | `ThemeService` | Dark/light mode toggle with `localStorage` persistence. |

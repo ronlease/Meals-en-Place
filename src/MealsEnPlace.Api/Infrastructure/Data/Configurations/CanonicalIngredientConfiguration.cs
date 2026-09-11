@@ -34,6 +34,10 @@ public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<Canonic
             .IsRequired()
             .HasMaxLength(200);
 
+        builder.Property(ci => ci.RecipeReferenceCount)
+            .IsRequired()
+            .HasDefaultValue(0);
+
         builder.HasIndex(ci => ci.Name).IsUnique();
 
         builder.HasOne(ci => ci.DefaultUnitOfMeasure)
@@ -49,70 +53,80 @@ public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<Canonic
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = ApplesId,
-                Name = "Apples"
+                Name = "Apples",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = AsparagusId,
-                Name = "Asparagus"
+                Name = "Asparagus",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = BroccoliId,
-                Name = "Broccoli"
+                Name = "Broccoli",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = CornId,
-                Name = "Corn"
+                Name = "Corn",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = KaleId,
-                Name = "Kale"
+                Name = "Kale",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = PeachesId,
-                Name = "Peaches"
+                Name = "Peaches",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = PumpkinId,
-                Name = "Pumpkin"
+                Name = "Pumpkin",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = StrawberriesId,
-                Name = "Strawberries"
+                Name = "Strawberries",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = TomatoesId,
-                Name = "Tomatoes"
+                Name = "Tomatoes",
+                RecipeReferenceCount = 0
             },
             new CanonicalIngredient
             {
                 Category = IngredientCategory.Produce,
                 DefaultUnitOfMeasureId = UnitOfMeasureConfiguration.EachId,
                 Id = ZucchiniId,
-                Name = "Zucchini"
+                Name = "Zucchini",
+                RecipeReferenceCount = 0
             }
         );
     }

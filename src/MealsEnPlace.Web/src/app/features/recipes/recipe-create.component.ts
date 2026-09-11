@@ -7,7 +7,6 @@ import {
   ReactiveFormsModule,
   Validators,
 } from '@angular/forms';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -20,9 +19,10 @@ import { CanonicalIngredientDto, UnitOfMeasureDto } from '../../core/models/inve
 import { CreateRecipeRequest } from '../../core/models/recipe.models';
 import { RecipeService } from '../../core/services/recipe.service';
 import { ReferenceDataService } from '../../core/services/reference-data.service';
+import { IngredientAutocompleteComponent } from '../../shared/ingredient-autocomplete/ingredient-autocomplete.component';
 
 interface RecipeIngredientFormValue {
-  canonicalIngredientId: string;
+  canonicalIngredient: CanonicalIngredientDto | null;
   notes: string | null;
   quantity: number;
   unitOfMeasureId: string | null;
@@ -32,7 +32,7 @@ interface RecipeIngredientFormValue {
   selector: 'app-recipe-create',
   standalone: true,
   imports: [
-    MatAutocompleteModule,
+    IngredientAutocompleteComponent,
     MatButtonModule,
     MatFormFieldModule,
     MatIconModule,
@@ -68,14 +68,9 @@ interface RecipeIngredientFormValue {
 
       @for (ig of ingredientControls.controls; track $index; let i = $index) {
         <div class="ingredient-row" [formGroup]="asFormGroup(ig)">
-          <mat-form-field appearance="outline" class="ingredient-field">
-            <mat-label>Ingredient</mat-label>
-            <mat-select formControlName="canonicalIngredientId" required>
-              @for (ing of ingredients(); track ing.id) {
-                <mat-option [value]="ing.id">{{ ing.name }}</mat-option>
-              }
-            </mat-select>
-          </mat-form-field>
+          <div class="ingredient-field">
+            <app-ingredient-autocomplete formControlName="canonicalIngredient" />
+          </div>
 
           <mat-form-field appearance="outline" class="qty-field">
             <mat-label>Qty</mat-label>
@@ -211,7 +206,6 @@ interface RecipeIngredientFormValue {
   ],
 })
 export class RecipeCreateComponent implements OnInit {
-  protected readonly ingredients = signal<CanonicalIngredientDto[]>([]);
   protected readonly saving = signal(false);
   protected readonly units = signal<UnitOfMeasureDto[]>([]);
 
@@ -236,7 +230,7 @@ export class RecipeCreateComponent implements OnInit {
   addIngredient(): void {
     this.ingredientControls.push(
       this.fb.group({
-        canonicalIngredientId: ['', Validators.required],
+        canonicalIngredient: [null as CanonicalIngredientDto | null, Validators.required],
         notes: [''],
         quantity: [1, [Validators.required, Validators.min(0)]],
         unitOfMeasureId: [null as string | null],
@@ -253,9 +247,6 @@ export class RecipeCreateComponent implements OnInit {
   }
 
   ngOnInit(): void {
-    this.referenceDataService.getIngredients().subscribe({
-      next: (data) => this.ingredients.set(data),
-    });
     this.referenceDataService.getUnits().subscribe({
       next: (data) => this.units.set(data),
     });
@@ -270,7 +261,7 @@ export class RecipeCreateComponent implements OnInit {
     const request: CreateRecipeRequest = {
       cuisineType: val.cuisineType || '',
       ingredients: ((val.ingredients ?? []) as RecipeIngredientFormValue[]).map((i) => ({
-        canonicalIngredientId: i.canonicalIngredientId,
+        canonicalIngredientId: i.canonicalIngredient?.id ?? '',
         notes: i.notes || null,
         quantity: i.quantity,
         unitOfMeasureId: i.unitOfMeasureId || null,

@@ -57,6 +57,28 @@ public sealed class RecipeImportService(
         }
 
         dbContext.Recipes.Add(recipe);
+
+        // Increment RecipeReferenceCount for each referenced CanonicalIngredient
+        // in the same SaveChanges call so the stored count stays consistent with
+        // the new RecipeIngredient rows.  One recipe may reference the same canonical
+        // ingredient more than once (e.g., "egg" in batter and in glaze), so group
+        // by canonical id and add the full per-canonical count in one step.
+        var countsByCanonicalId = recipe.RecipeIngredients
+            .GroupBy(ri => ri.CanonicalIngredientId)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        if (countsByCanonicalId.Count > 0)
+        {
+            var canonicalsToUpdate = await dbContext.CanonicalIngredients
+                .Where(c => countsByCanonicalId.Keys.Contains(c.Id))
+                .ToListAsync(cancellationToken);
+
+            foreach (var canonical in canonicalsToUpdate)
+            {
+                canonical.RecipeReferenceCount += countsByCanonicalId[canonical.Id];
+            }
+        }
+
         await dbContext.SaveChangesAsync(cancellationToken);
 
         // MEP-032: skip dietary classification entirely when no Claude key is

@@ -2992,9 +2992,19 @@ Feature: Keyset Pagination for Deep Recipe Pages
 
 ## [MEP-045] Paginate GET /api/v1/inventory/ingredients
 
-**Status:** Backlog
+**Status:** Superseded by MEP-048
 **Priority:** Medium
 **Depends on:** MEP-043 (introduced the `PagedResult<T>` helper this story reuses)
+
+### Supersession Note
+MEP-048 replaces this item. The core goal -- eliminating the unbounded full-table dump
+from `GET /api/v1/referencedata/ingredients` -- is achieved by a bounded typed-search
+endpoint (search + limit parameters, blank search returns empty) rather than offset
+pagination. Offset pagination is the wrong shape for an autocomplete: the user never pages
+through canonical ingredients; they type a name fragment and pick from a short result list.
+Additionally, this item cited the wrong route (`/api/v1/inventory/ingredients`; the real
+route is `/api/v1/referencedata/ingredients`) and a stale row count (146,584; the table
+holds 120,505 rows as of 2026-09-10).
 
 ### Business Problem
 MEP-043's sibling-endpoint audit identified `GET /api/v1/inventory/ingredients` as the
@@ -3248,6 +3258,388 @@ Feature: Angular C4 Component Model Accuracy
     Then the script renders updated PNGs via the Docker-hosted PlantUML renderer
     And the updated PNGs are committed alongside the PlantUML source changes
     And no CI workflow is expected to render them (rendering is local per the current process)
+```
+
+---
+
+## [MEP-048] Server-Side Ingredient Search for the Inventory Dialog Autocomplete
+
+**Status:** Done
+**Priority:** High
+**Depends on:** none
+
+### Business Problem
+The "Add Item" inventory dialog is effectively unusable. When the dialog opens, it calls
+`GET /api/v1/referencedata/ingredients`, which returns every row in the
+`CanonicalIngredients` table -- currently 120,505 rows, roughly 15 MB of JSON -- with no
+LIMIT clause. The download alone is slow, but the real damage happens in the browser: the
+autocomplete's `filteredIngredients` computed returns the full list when the query string
+is empty, so focusing the Ingredient field causes Angular Material to render approximately
+120,000 `mat-option` elements. Every keystroke then runs an unthrottled, undebounced
+substring scan over all 120,505 names and re-renders the matching options. The result is
+seconds-long freezes on every keypress, making it impossible to search for an ingredient
+at a normal typing speed. A secondary issue is that the units request is chained
+sequentially after the ingredients request instead of running in parallel, adding
+unnecessary latency even before the autocomplete problem kicks in.
+
+This item supersedes MEP-045, which proposed offset pagination for the same endpoint.
+Offset pagination is the wrong shape for an autocomplete -- the user never pages through
+canonical ingredients; they type a name fragment and pick from a short result list.
+
+The inventory dialog is not the only consumer. The recipe create page
+(`recipe-create.component.ts`) renders a `mat-select` per ingredient row over the same
+full 120,505-row list, producing the same performance collapse. Because the new endpoint
+returns an empty array for a blank search, that select would become empty if left
+untouched. The fix is a shared standalone `IngredientAutocompleteComponent` (in
+`src/app/shared/ingredient-autocomplete/`) implementing `ControlValueAccessor` with an
+optional `allowCreate` input. The inventory dialog uses it with create enabled; the recipe
+create page replaces its per-row `mat-select` with the same component, create disabled.
+Debounce, minimum-length gating, and stale-request cancellation live in the shared
+component -- one implementation, two consumers.
+
+Follow-on candidate (out of scope here): many Kaggle-ingested canonical ingredient names
+are low-quality junk strings ("a crowd", "type fruit", "bottles wegmans chili sauce") that
+clutter search results and should be cleaned up in a separate data-quality pass. MEP-049
+addresses the root cause -- noisy NER tokens entering CanonicalIngredients uncleaned at
+ingest time -- and requires a full re-ingest to replace the affected rows.
+
+### Scope decisions made during implementation
+
+**Search results are ranked by a stored recipe-reference count, not a live correlated
+COUNT.** The initial ordering -- prefix match first, then name ascending -- surfaced junk
+at the top of results: "apple", "apple [", "apple.", "apple/", "apple add", because
+punctuation sorts before letters. Ranking by how many recipes reference each ingredient
+pushes well-known ingredients to the top, but a live `COUNT` correlated against the
+13,635,157-row `RecipeIngredients` table was measured at 2,900 ms for the search term
+"ch" (20,697 candidates) versus 104 ms without it. The count is therefore stored.
+
+A new column `CanonicalIngredients.RecipeReferenceCount` (`int`, `NOT NULL`, default 0)
+is added by an explicit EF Core migration that also backfills the value from
+`RecipeIngredients` in a single `UPDATE ... FROM` statement. The migration must be applied
+manually with `dotnet ef database update` before testing; it is not auto-applied at
+startup.
+
+Search ordering is: prefix match first, then `RecipeReferenceCount` descending, then
+`Name` ascending, then `Take(limit)`. This means "pineapple" (67,693 references) still
+ranks below "apple" (38,510 references) for the search term "apple" because prefix match
+wins the first tiebreaker.
+
+The count is incremented by `RecipeImportService` when a recipe is created through the
+API (by the number of `RecipeIngredient` rows per canonical ingredient), and recomputed
+once at the end of a Kaggle ingest run by `MealsEnPlace.Tools.Ingest`. There is no recipe
+delete endpoint today; if one is added it must decrement the count.
+
+**Verification.** On a clone of the user's database (120,506 canonical ingredients,
+13,635,157 recipe ingredients) the migration applied cleanly and backfilled 118,072 rows.
+The ranked search runs in 92 ms for "ch", 86 ms for "sa", and 92 ms for "apple" (versus
+2,900 ms with the earlier correlated-count approach). The term "apple" now returns apple,
+apple cider vinegar, applesauce, apple juice, apple cider as the first five results.
+API suite: 646 unit + 18 integration tests pass, 90.8% line coverage. Angular suite: 585
+tests pass, 94.6% line coverage. A defect QA caught before close: a failed search request
+put the `rxResource` into an error state that threw in the template; the stream now
+catches errors and degrades to an empty result set. Users must run
+`dotnet ef database update` to apply the new migration before using this feature.
+
+### Acceptance Criteria
+```gherkin
+Feature: Server-Side Ingredient Search for Inventory Dialog Autocomplete
+
+  Scenario: Bounded search replaces unbounded list
+    Given the CanonicalIngredients table contains 120,505 rows
+    When I call GET /api/v1/referencedata/ingredients with search="chick" and limit=20
+    Then the response contains at most 20 ingredient items
+    And the response is a plain array of CanonicalIngredientDto (no PagedResult envelope)
+    And the SQL query includes a LIMIT clause and never loads the full table
+
+  Scenario: Blank or whitespace search returns an empty list
+    Given the CanonicalIngredients table contains 120,505 rows
+    When I call GET /api/v1/referencedata/ingredients with search="" or search="   "
+    Then the response is an empty array with HTTP 200
+    And no database query executes against the CanonicalIngredients table
+
+  Scenario: Limit parameter is clamped to a safe range
+    Given a caller requests GET /api/v1/referencedata/ingredients with search="rice" and limit=500
+    When the server processes the request
+    Then the limit is clamped to 50
+    And the response contains at most 50 items
+
+  Scenario: Default limit is applied when limit is omitted
+    Given a caller requests GET /api/v1/referencedata/ingredients with search="butter" and no limit parameter
+    When the server processes the request
+    Then the server uses a default limit of 20
+    And the response contains at most 20 items
+
+  Scenario: Search is case-insensitive
+    Given a canonical ingredient named "Chicken Breast" exists
+    When I search with search="chicken breast"
+    Then "Chicken Breast" appears in the results
+
+  Scenario: Prefix matches are ranked before substring matches
+    Given canonical ingredients "Garlic" and "Roasted Garlic Hummus" exist
+    When I search with search="garlic"
+    Then "Garlic" appears before "Roasted Garlic Hummus" in the results
+
+  Scenario: Results use database-side DTO projection
+    Given the endpoint queries the CanonicalIngredients table
+    When the query executes
+    Then the SQL projects only the fields needed by CanonicalIngredientDto
+    And no full entity materialization occurs
+
+  Scenario: Swagger documentation reflects the new parameters
+    Given the OpenAPI spec is generated by Swashbuckle
+    When a developer inspects the spec for GET /api/v1/referencedata/ingredients
+    Then the search (string) and limit (integer, default 20, range 1-50) query parameters are documented
+    And the endpoint description explains that blank search returns an empty list
+
+  Scenario: POST endpoint and units endpoint are unchanged
+    Given POST /api/v1/referencedata/ingredients exists for creating new ingredients
+    And GET /api/v1/referencedata/units exists for listing units of measure
+    When the search parameters are added to the GET ingredients endpoint
+    Then the POST endpoint behavior is unaffected
+    And the GET units endpoint behavior is unaffected
+
+  Scenario: Angular dialog debounces ingredient search input
+    Given the user opens the "Add Item" inventory dialog
+    When the user types "chi" into the ingredient autocomplete field
+    Then the dialog waits 250 ms after the last keystroke before sending a search request
+    And typing additional characters within the 250 ms window resets the debounce timer
+    And no request is sent until the debounced input stabilizes
+
+  Scenario: Minimum character threshold prevents trivial searches
+    Given the user opens the "Add Item" inventory dialog
+    When the user types a single character "c" into the ingredient autocomplete field
+    Then no search request is sent to the API
+    When the user types a second character making the input "ch"
+    Then a search request is sent after the debounce period
+
+  Scenario: Stale in-flight requests are cancelled
+    Given the user types "chi" and a search request is in flight
+    When the user continues typing to "chic" before the first request returns
+    Then the first request is cancelled
+    And only the result of the "chic" search is displayed
+
+  Scenario: Loading indicator appears during search
+    Given the user has typed "chick" and the debounce period has elapsed
+    When the search request is in flight
+    Then a loading indicator appears in the autocomplete dropdown
+    When the results arrive
+    Then the loading indicator is replaced by the matching ingredient options
+
+  Scenario: Create-new option derives from debounced query and search results
+    Given the user types "Dragon Fruit" into the ingredient autocomplete
+    And the search returns no exact match
+    When the autocomplete results are displayed
+    Then a "Create Dragon Fruit" option appears at the end of the list
+    And the option text reflects the debounced query, not a stale value
+
+  Scenario: Edit mode pre-fills ingredient name and selected ID
+    Given I am editing an existing inventory item with ingredient "Olive Oil" (ID 42)
+    When the edit dialog opens
+    Then the ingredient autocomplete field displays "Olive Oil"
+    And the selected ingredient ID is 42
+    And no initial search request fires until the user modifies the input
+
+  Scenario: Units load in parallel with dialog initialization
+    Given the user opens the "Add Item" inventory dialog
+    When the dialog initializes
+    Then the units of measure request fires immediately, in parallel with initial rendering
+    And the units request is not chained after any ingredient request
+    And units are available for selection as soon as their response arrives
+
+  Scenario: Ingredient selection validation still works
+    Given the user has typed into the ingredient autocomplete
+    When the user submits the form without selecting an ingredient from the list
+    Then the form shows a validation error requiring an ingredient selection
+    And the form cannot be submitted until a valid ingredient is selected
+
+  Scenario: Recipe create rows use the shared autocomplete instead of a full-list select
+    Given the user is on the recipe create page
+    And each ingredient row previously rendered a mat-select over all 120,505 canonical ingredients
+    When the page loads
+    Then each ingredient row renders the shared IngredientAutocompleteComponent instead
+    And the allowCreate input is disabled on the recipe create page
+    And no mat-select over the full ingredient list exists anywhere on the page
+
+  Scenario: Selecting an ingredient in a recipe row sets that row's canonical ingredient ID
+    Given the user is editing an ingredient row on the recipe create page
+    When the user types "basil" into the shared autocomplete and selects "Fresh Basil" from the results
+    Then the row's canonicalIngredientId is set to the ID of "Fresh Basil"
+    And the autocomplete displays "Fresh Basil" as the selected value
+
+  Scenario: Shared component is the single owner of search behaviour
+    Given the IngredientAutocompleteComponent is a standalone Angular component implementing ControlValueAccessor
+    When the inventory dialog and the recipe create page both use it
+    Then debounce timing (250 ms), minimum character threshold (2), and stale-request cancellation are implemented only in the shared component
+    And neither consumer duplicates any of that logic
+
+  Scenario: No remaining caller requests the full ingredient list
+    Given the shared IngredientAutocompleteComponent replaces all previous ingredient selection controls
+    When every consumer of GET /api/v1/referencedata/ingredients is accounted for
+    Then no frontend component calls the endpoint without a non-blank search parameter
+    And the old ReferenceDataService.getIngredients() method that fetched the full list is removed or unreachable
+
+  Scenario: Prefix match beats higher reference count
+    Given canonical ingredients "Apple" (38,510 recipe references) and "Pineapple" (67,693 recipe references) exist
+    When I search with search="apple"
+    Then "Apple" appears before "Pineapple" in the results
+    Because "Apple" is a prefix match and "Pineapple" is a substring match
+
+  Scenario: Higher reference count ranks first within the prefix-match group
+    Given canonical ingredients "Chicken Breast" (85,000 recipe references) and "Chicken Feet" (1,200 recipe references) both start with "chicken"
+    When I search with search="chicken"
+    Then "Chicken Breast" appears before "Chicken Feet" in the results
+    Because both are prefix matches and "Chicken Breast" has a higher RecipeReferenceCount
+
+  Scenario: Name breaks ties when reference counts are equal
+    Given canonical ingredients "Basil" and "Bay Leaf" both have 5,000 recipe references and both start with "ba"
+    When I search with search="ba"
+    Then "Basil" appears before "Bay Leaf" in the results
+    Because both are prefix matches with equal RecipeReferenceCount and "Basil" sorts before "Bay Leaf" alphabetically
+
+  Scenario: Migration backfills RecipeReferenceCount from existing RecipeIngredients
+    Given the CanonicalIngredients table has 120,505 rows with RecipeReferenceCount defaulting to 0
+    And the RecipeIngredients table contains 13,635,157 rows
+    When the EF Core migration runs via "dotnet ef database update"
+    Then every CanonicalIngredient's RecipeReferenceCount is set to the number of RecipeIngredient rows referencing it
+    And canonical ingredients with no recipe references retain a count of 0
+
+  Scenario: API recipe import increments RecipeReferenceCount
+    Given a canonical ingredient "Saffron" has a RecipeReferenceCount of 412
+    When a new recipe is imported through POST /api/v1/recipes with 1 RecipeIngredient referencing "Saffron"
+    Then "Saffron" RecipeReferenceCount increases to 413
+
+  Scenario: Kaggle ingest recomputes RecipeReferenceCount at end of run
+    Given the MealsEnPlace.Tools.Ingest tool has finished inserting all recipes from a Kaggle dataset
+    When the ingest run completes
+    Then RecipeReferenceCount is recomputed for every CanonicalIngredient from the full RecipeIngredients table
+    And the counts reflect the complete post-ingest state, not incremental updates
+
+  Scenario: Search completes well under one second on the full table
+    Given the CanonicalIngredients table contains 120,505 rows with a populated RecipeReferenceCount column
+    And the RecipeIngredients table contains 13,635,157 rows
+    When I search with search="ch" (a broad term matching thousands of candidates)
+    Then the response returns in under 500 ms
+    And the query uses the stored RecipeReferenceCount rather than a live correlated COUNT
+```
+
+---
+
+## [MEP-049] NER Token Normalization at Ingest Time
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-026 (the Kaggle ingest pipeline this story modifies), MEP-048 (the search that exposed the junk rows)
+
+### Business Problem
+The Kaggle bulk ingest (MEP-026) feeds every NER-column token through
+`CanonicalIngredientRegistry.GetOrCreate`, which trims whitespace and truncates at 200
+characters but applies no further normalization. The Kaggle NER column is noisy: tokens
+arrive with leading or trailing punctuation, dangling brackets, embedded slashes, trailing
+connectives ("apple and", "apple add"), and fragments that contain no letters at all ("a
+crowd", "and", "type fruit"). Each noisy token becomes its own CanonicalIngredient row.
+
+After MEP-038's morphological deduplication pass the table holds 120,505 rows. Of those,
+1,480 names have leading or trailing punctuation or brackets; 6,381 names contain a character
+other than letters, spaces, apostrophes, or hyphens; and 2,434 rows are referenced by zero
+RecipeIngredients (1,902 of those are in the punctuation set). The MEP-048 ingredient search
+makes the problem user-visible: searching "apple" shows "apple", "apple [", "apple.",
+"apple/", and "apple add" side by side. "apple" is referenced by 38,510 RecipeIngredients;
+the four junk variants by a combined total of 2.
+
+The fix belongs in the importer, not in a repair migration over existing rows. Normalizing
+tokens at ingest time prevents junk from entering the table in the first place. After the
+normalization rules are in place the user will run a full re-ingest, which replaces the
+Kaggle-originated rows with clean data. The re-ingest must not orphan or destroy
+InventoryItems or user-created CanonicalIngredients that were added through
+`POST /api/v1/referencedata/ingredients` rather than by the importer.
+
+The ingest tool currently has no documented reset or re-ingest procedure (the README
+documents `--csv`, `--dry-run`, and `--max-rows` only). This story must also document the
+procedure so the user can repeat it confidently.
+
+Semantic merging of true synonyms (e.g., "bell pepper" vs "sweet pepper") remains in
+MEP-038's domain and is out of scope here.
+
+### Acceptance Criteria
+```gherkin
+Feature: NER Token Normalization at Ingest Time
+
+  Scenario: Leading and trailing punctuation and brackets are stripped
+    Given a Kaggle NER token "apple ["
+    When the normalization step runs
+    Then the normalized value is "apple"
+    And the CanonicalIngredient row is stored with name "apple"
+
+  Scenario: Trailing punctuation variants collapse to the base name
+    Given Kaggle NER tokens "apple.", "apple/", and "apple"
+    When each token is normalized and passed to GetOrCreate
+    Then all three resolve to the same CanonicalIngredient row with name "apple"
+
+  Scenario: Internal whitespace is collapsed
+    Given a Kaggle NER token "  red   bell   pepper  "
+    When the normalization step runs
+    Then the normalized value is "red bell pepper"
+
+  Scenario: Trailing connective is stripped rather than rejecting the token
+    Given Kaggle NER tokens "apple and" and "apple add"
+    When the normalization step runs
+    Then both normalize to "apple"
+    And both resolve to the same CanonicalIngredient row as a plain "apple" token
+
+  Scenario: Token normalizing to empty is rejected
+    Given a Kaggle NER token consisting only of punctuation (e.g., "[", "//")
+    When the normalization step runs
+    Then the token is rejected
+    And no CanonicalIngredient row is created for it
+    And the raw ingredient falls back to the next-best NER match or existing unknown handling
+
+  Scenario: Token containing no letters is rejected
+    Given a Kaggle NER token "1/2" or "3.5"
+    When the normalization step runs
+    Then the token is rejected because it contains no alphabetic characters
+    And no CanonicalIngredient row is created for it
+
+  Scenario: Stopword-only token is rejected
+    Given a Kaggle NER token "and" or "a" or "of the" or "for" or "with"
+    When the normalization step runs
+    Then the token is rejected because it consists entirely of English stopwords or connectives
+    And no CanonicalIngredient row is created for it
+    And the stopword list includes at minimum: a, an, the, and, or, of, for, with, to, add, plus
+
+  Scenario: Normalization rules are pure functions with unit tests
+    Given the normalization logic is implemented as pure functions
+    When the unit test suite in tests/MealsEnPlace.Unit/Tools/Ingest runs
+    Then the five apple examples ("apple", "apple [", "apple.", "apple/", "apple add") all normalize to "apple"
+    And edge cases for empty, no-letter, and stopword-only tokens are covered
+    And the tests are independent of database state
+
+  Scenario: Ingest summary reports normalization and rejection counts
+    Given a full Kaggle ingest completes
+    When the summary is printed
+    Then it reports the count of tokens that were normalized (original differed from stored value)
+    And the count of tokens that were rejected (did not produce a CanonicalIngredient row)
+
+  Scenario: Full re-ingest produces no punctuation-fragment ingredient names
+    Given the normalization rules are deployed in CanonicalIngredientRegistry
+    And the user runs a full re-ingest against the Kaggle CSV
+    When the ingest completes
+    Then no CanonicalIngredient name matches the pattern of leading or trailing punctuation or brackets
+    And searching "apple" returns "apple" without "apple [", "apple.", "apple/", or "apple add" variants
+
+  Scenario: Re-ingest preserves user-created canonical ingredients
+    Given CanonicalIngredient rows created via POST /api/v1/referencedata/ingredients exist
+    And InventoryItems reference some of those user-created rows by foreign key
+    When the user runs a full re-ingest
+    Then user-created CanonicalIngredient rows are not deleted or modified
+    And InventoryItems referencing user-created rows retain their foreign key associations
+    And no orphaned InventoryItem rows exist after re-ingest
+
+  Scenario: Re-ingest procedure is documented
+    Given the ingest tool's README (src/MealsEnPlace.Tools.Ingest/README.md) currently has no reset or re-ingest documentation
+    When MEP-049 ships
+    Then the README documents the step-by-step procedure for a clean re-ingest
+    And the procedure states whether it wipes only ingest-created rows or requires a broader reset
+    And the procedure warns about the InventoryItem and user-created ingredient preservation requirement
 ```
 
 ---

@@ -30,6 +30,9 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(aiDisabledBanner, "AI Disabled Banner", "Angular Standalone Component", "Persistent banner shown when no Claude API key is configured; links to Settings and can be dismissed for the session")
     Component(todoistProjectPicker, "Todoist Project Picker Dialog", "Angular Standalone Component (MAT_DIALOG)", "Pre-push project selection. Loads push-target history from the API, resolves display names, pre-selects the last-used project per resource type, and falls back to Inbox. Shows raw IDs with a hint when names cannot be resolved")
 
+    ' ── Shared Components ─────────────────────────────────────
+    Component(ingredientAutocomplete, "Ingredient Autocomplete", "Angular Standalone Component, ControlValueAccessor", "Shared typeahead with 250 ms debounce, min-length gate, and stale-request cancellation. Optional create-new mode for inventory entry")
+
     ' ── Core Services ──────────────────────────────────────────
     Component(aiAvailabilityService, "AiAvailabilityService", "Angular Service, providedIn: root", "Signal-backed 'is the Claude API key configured?' gate consumed by the AI-disabled banner and AI-dependent affordances")
     Component(settingsService, "SettingsService", "Angular Service, providedIn: root", "Claude API key and Todoist token save/test/clear, Todoist project history for push-target picker")
@@ -37,7 +40,7 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
     Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
     Component(recipeService, "RecipeService", "Angular Service, providedIn: root", "Paged recipe library, manual creation, matching, detail, add-to-shopping-list")
-    Component(referenceDataService, "ReferenceDataService", "Angular Service, providedIn: root", "Canonical ingredients and units of measure for forms")
+    Component(referenceDataService, "ReferenceDataService", "Angular Service, providedIn: root", "Bounded ingredient search and units of measure for forms")
     Component(seasonalProduceService, "SeasonalProduceService", "Angular Service, providedIn: root", "In-season and full calendar queries")
     Component(shoppingListService, "ShoppingListService", "Angular Service, providedIn: root", "Generate, fetch, and push shopping lists")
     Component(themeService, "ThemeService", "Angular Service, providedIn: root", "Dark/light mode toggle, localStorage persistence")
@@ -69,9 +72,13 @@ Rel(aiAvailabilityService, settingsService, "Reads Claude token status")
 
 ' ── Feature → Service relationships ────────────────────────
 Rel(inventoryPage, inventoryService, "Uses")
+Rel(inventoryPage, ingredientAutocomplete, "Uses for ingredient selection")
+Rel(inventoryPage, referenceDataService, "Loads units of measure")
 Rel(recipeBrowser, recipeService, "Uses")
 Rel(recipeCreate, recipeService, "Uses")
-Rel(recipeCreate, referenceDataService, "Uses")
+Rel(recipeCreate, ingredientAutocomplete, "Uses for ingredient selection")
+Rel(recipeCreate, referenceDataService, "Loads units of measure")
+Rel(ingredientAutocomplete, referenceDataService, "Searches ingredients (bounded, debounced)")
 Rel(mealPlanBoard, mealPlanService, "Uses")
 Rel(mealPlanBoard, recipeService, "Uses")
 Rel(mealPlanBoard, todoistAvailabilityService, "Gates push button on Todoist configured status")

@@ -35,6 +35,7 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 - **Truncates over-length strings** at the EF-configured column caps before writing (recipe title, source URL, ingredient notes, unresolved-token sample columns). Over-length source URLs are dropped to null rather than truncated, since a truncated URL is worse than none.
 - **Applies `InstructionProseFilter`** to directions. Steps with first-person pronouns or >40 words after parenthetical stripping are dropped.
 - **Batches writes** in groups of 100 recipes (`IngestConstants.RecipeBatchSize`) with explicit `ChangeTracker.Clear()` between flushes so the working set stays bounded across the full 1.6M+ row run.
+- **Backfills `RecipeReferenceCount`** at end-of-run via a single `UPDATE … FROM (SELECT … GROUP BY …)` statement so the denormalized autocomplete ranking column reflects the full ingested dataset without per-row overhead during the batch loop.
 
 ## Performance
 

@@ -213,6 +213,26 @@ if (batchRecipeCount > 0)
     await FlushBatchAsync(dbContext, unitOfMeasureResolver, summary, options.DryRun);
 }
 
+// Backfill RecipeReferenceCount for all CanonicalIngredients in one UPDATE so the
+// stored count is accurate after a bulk ingest.  The same SQL runs in the migration
+// for any database that predates this column.  Skipped in dry-run mode because no
+// RecipeIngredient rows were written.
+if (!options.DryRun)
+{
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        UPDATE "CanonicalIngredients" c
+        SET "RecipeReferenceCount" = s.cnt
+        FROM (
+            SELECT "CanonicalIngredientId", COUNT(*)::integer AS cnt
+            FROM "RecipeIngredients"
+            GROUP BY "CanonicalIngredientId"
+        ) s
+        WHERE s."CanonicalIngredientId" = c."Id"
+        """);
+    summary.RecipeReferenceCountBackfilled = true;
+}
+
 summary.CanonicalIngredientsCreated = canonicalRegistry.NewRowsCreated;
 summary.StopTimer();
 

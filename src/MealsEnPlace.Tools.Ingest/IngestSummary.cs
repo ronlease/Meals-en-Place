@@ -34,6 +34,8 @@ internal sealed class IngestSummary
 
     public int InstructionStepsRetained { get; set; }
 
+    public bool RecipeReferenceCountBackfilled { get; set; }
+
     public int RecipesIngested { get; set; }
 
     public int RecipesSkippedByMaxRows { get; set; }
@@ -90,6 +92,7 @@ internal sealed class IngestSummary
               Ingested:                    {RecipesIngested:N0}
               Batches flushed:             {BatchesFlushed:N0}
               CanonicalIngredients created:{CanonicalIngredientsCreated:N0}
+              Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run)")}
 
             Ingredients
               Total processed:             {TotalIngredientsProcessed:N0}

@@ -18,6 +18,14 @@ public class CanonicalIngredient
     /// <summary>Normalized display name for this ingredient.</summary>
     public string Name { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Denormalized count of <see cref="RecipeIngredient"/> rows that reference this ingredient.
+    /// Maintained by <c>RecipeImportService</c> on interactive recipe creation and
+    /// by the ingest tool's end-of-run backfill.  Used to rank autocomplete results
+    /// so frequently-used ingredients surface above low-quality fragments.
+    /// </summary>
+    public int RecipeReferenceCount { get; set; }
+
     // Navigation properties
 
     /// <summary>Historical names folded into this survivor by a MEP-038 dedup pass.</summary>

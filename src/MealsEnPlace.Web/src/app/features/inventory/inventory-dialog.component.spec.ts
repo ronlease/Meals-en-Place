@@ -15,10 +15,12 @@ import { ReferenceDataService } from '../../core/services/reference-data.service
 import { InventoryDialogComponent, InventoryDialogData } from './inventory-dialog.component';
 
 describe('InventoryDialogComponent', () => {
-  const INGREDIENTS: CanonicalIngredientDto[] = [
-    { category: 'Canned', defaultUnitOfMeasureId: 'uom-oz', id: 'ing-1', name: 'Diced Tomatoes' },
-    { category: 'Produce', defaultUnitOfMeasureId: 'uom-g', id: 'ing-2', name: 'Spinach' },
-  ];
+  const INGREDIENT: CanonicalIngredientDto = {
+    category: 'Canned',
+    defaultUnitOfMeasureId: 'uom-oz',
+    id: 'ing-1',
+    name: 'Diced Tomatoes',
+  };
 
   const UNITS: UnitOfMeasureDto[] = [
     { abbreviation: 'oz', id: 'uom-oz', name: 'Ounce', unitOfMeasureType: 'Weight' },
@@ -34,8 +36,8 @@ describe('InventoryDialogComponent', () => {
   };
   let referenceDataServiceMock: {
     createIngredient: ReturnType<typeof vi.fn>;
-    getIngredients: ReturnType<typeof vi.fn>;
     getUnits: ReturnType<typeof vi.fn>;
+    searchIngredients: ReturnType<typeof vi.fn>;
   };
   let snackBarMock: { open: ReturnType<typeof vi.fn> };
 
@@ -77,13 +79,9 @@ describe('InventoryDialogComponent', () => {
   interface Internals {
     containerForm: InventoryDialogComponent['containerForm'];
     containerReferenceDetected: () => boolean;
-    filteredIngredients: () => CanonicalIngredientDto[];
-    ingredientNotResolved: () => boolean;
-    ingredients: () => CanonicalIngredientDto[];
     inventoryForm: InventoryDialogComponent['inventoryForm'];
     loading: () => boolean;
     referenceDataLoading: () => boolean;
-    showCreateNew: () => boolean;
     units: () => UnitOfMeasureDto[];
   }
 
@@ -93,15 +91,9 @@ describe('InventoryDialogComponent', () => {
 
   /** Fills the form to a valid add-mode state with the given ingredient selected. */
   function fillValidForm(): void {
-    internals().inventoryForm.setValue({
-      canonicalIngredientName: 'Diced Tomatoes',
-      expiryDate: null,
-      location: 'Pantry',
-      notes: '',
-      quantity: 2,
-      unitOfMeasureId: 'uom-oz',
-    });
-    component.onIngredientSelected('Diced Tomatoes');
+    internals().inventoryForm.controls.canonicalIngredient.setValue(INGREDIENT);
+    internals().inventoryForm.controls.quantity.setValue(2);
+    internals().inventoryForm.controls.unitOfMeasureId.setValue('uom-oz');
   }
 
   beforeEach(() => {
@@ -109,8 +101,8 @@ describe('InventoryDialogComponent', () => {
     inventoryServiceMock = { addItem: vi.fn(), updateItem: vi.fn() };
     referenceDataServiceMock = {
       createIngredient: vi.fn(),
-      getIngredients: vi.fn().mockReturnValue(of(INGREDIENTS)),
       getUnits: vi.fn().mockReturnValue(of(UNITS)),
+      searchIngredients: vi.fn().mockReturnValue(of([])),
     };
     snackBarMock = { open: vi.fn() };
   });
@@ -118,28 +110,20 @@ describe('InventoryDialogComponent', () => {
   // ── Reference data loading ──────────────────────────────────────────────────
 
   describe('reference data', () => {
-    it('loads ingredients and units on init', () => {
+    it('loads units on init and stops the loading spinner', () => {
       createComponent({ location: 'Pantry', mode: 'add' });
 
-      expect(internals().ingredients()).toEqual(INGREDIENTS);
       expect(internals().units()).toEqual(UNITS);
       expect(internals().referenceDataLoading()).toBe(false);
     });
 
-    it('reports a failed ingredient fetch and stops the spinner', () => {
-      referenceDataServiceMock.getIngredients.mockReturnValue(
-        throwError(() => new Error('network')),
-      );
-
+    it('does not call getIngredients — ingredients are fetched on demand by the autocomplete', () => {
       createComponent({ location: 'Pantry', mode: 'add' });
 
-      expect(internals().referenceDataLoading()).toBe(false);
-      expect(snackBarMock.open).toHaveBeenCalledWith('Failed to load ingredients.', 'Dismiss', {
-        duration: 4000,
-      });
+      expect(referenceDataServiceMock.searchIngredients).not.toHaveBeenCalled();
     });
 
-    it('reports a failed unit fetch separately from the ingredient fetch', () => {
+    it('reports a failed unit fetch and stops the spinner', () => {
       referenceDataServiceMock.getUnits.mockReturnValue(throwError(() => new Error('network')));
 
       createComponent({ location: 'Pantry', mode: 'add' });
@@ -171,7 +155,8 @@ describe('InventoryDialogComponent', () => {
       createComponent({ item, location: 'Pantry', mode: 'edit' });
 
       const value = internals().inventoryForm.getRawValue();
-      expect(value.canonicalIngredientName).toBe('Diced Tomatoes');
+      expect(value.canonicalIngredient?.id).toBe('ing-1');
+      expect(value.canonicalIngredient?.name).toBe('Diced Tomatoes');
       expect(value.location).toBe('Fridge');
       expect(value.notes).toBe('1 can diced tomatoes');
       expect(value.quantity).toBe(14.5);
@@ -190,10 +175,10 @@ describe('InventoryDialogComponent', () => {
       expect(internals().inventoryForm.controls.notes.value).toBe('');
     });
 
-    it('treats an edited item as having a resolved ingredient', () => {
+    it('seeds the ingredient control with the edited item in edit mode', () => {
       createComponent({ item: makeItem(), location: 'Pantry', mode: 'edit' });
 
-      expect(internals().ingredientNotResolved()).toBe(false);
+      expect(internals().inventoryForm.controls.canonicalIngredient.value?.id).toBe('ing-1');
     });
 
     it('titles the dialog "Add Item" in add mode', () => {
@@ -209,154 +194,34 @@ describe('InventoryDialogComponent', () => {
     });
   });
 
-  // ── Ingredient autocomplete ─────────────────────────────────────────────────
+  // ── Ingredient error messages ───────────────────────────────────────────────
 
-  describe('ingredient autocomplete', () => {
-    it('shows every ingredient before the user types', () => {
+  describe('ingredient error messages', () => {
+    it('shows only the select-an-ingredient error when text was typed but no option picked', () => {
       createComponent({ location: 'Pantry', mode: 'add' });
+      const ctrl = internals().inventoryForm.controls.canonicalIngredient;
+      ctrl.markAsDirty();
+      ctrl.markAsTouched();
+      // value remains null — user typed but did not pick an option
+      fixture.detectChanges();
 
-      expect(internals().filteredIngredients()).toEqual(INGREDIENTS);
+      const errors: NodeListOf<HTMLElement> =
+        fixture.nativeElement.querySelectorAll('.field-error');
+      expect(errors.length).toBe(1);
+      expect(errors[0].textContent?.trim()).toContain('Select an ingredient from the list');
     });
 
-    it('filters case-insensitively on a substring', () => {
+    it('shows only the required error when the field was blurred without typing anything', () => {
       createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('spin');
+      const ctrl = internals().inventoryForm.controls.canonicalIngredient;
+      ctrl.markAsTouched();
+      // control is not dirty — the user never typed anything
+      fixture.detectChanges();
 
-      component.onIngredientInput();
-
-      expect(
-        internals()
-          .filteredIngredients()
-          .map((i) => i.name),
-      ).toEqual(['Spinach']);
-    });
-
-    it('clears the resolved ingredient when the user edits the text', () => {
-      // Typing after a selection invalidates it — the name alone is not an ID.
-      createComponent({ location: 'Pantry', mode: 'add' });
-      component.onIngredientSelected('Spinach');
-
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Spina');
-      component.onIngredientInput();
-
-      expect(internals().ingredientNotResolved()).toBe(true);
-    });
-
-    it('resolves the ingredient when a suggestion is selected', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Spinach');
-
-      component.onIngredientSelected('Spinach');
-
-      expect(internals().ingredientNotResolved()).toBe(false);
-    });
-
-    it('ignores a selection that matches no known ingredient', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Unknown');
-      component.onIngredientInput();
-
-      component.onIngredientSelected('Unknown');
-
-      expect(internals().ingredientNotResolved()).toBe(true);
-    });
-
-    it('offers "create new" for a name that does not exist yet', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Quinoa');
-
-      component.onIngredientInput();
-
-      expect(internals().showCreateNew()).toBe(true);
-    });
-
-    it('does not offer "create new" for an exact existing name, ignoring case', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('spinach');
-
-      component.onIngredientInput();
-
-      expect(internals().showCreateNew()).toBe(false);
-    });
-
-    it('does not offer "create new" for an empty query', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-
-      expect(internals().showCreateNew()).toBe(false);
-    });
-  });
-
-  // ── Creating a new canonical ingredient ─────────────────────────────────────
-
-  describe('onCreateNewIngredient', () => {
-    it('does nothing for a blank name', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('   ');
-
-      component.onCreateNewIngredient();
-
-      expect(referenceDataServiceMock.createIngredient).not.toHaveBeenCalled();
-    });
-
-    it('creates the ingredient under the Other category with the first unit as default', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Quinoa');
-      referenceDataServiceMock.createIngredient.mockReturnValue(
-        of({ category: 'Other', defaultUnitOfMeasureId: 'uom-oz', id: 'ing-9', name: 'Quinoa' }),
-      );
-
-      component.onCreateNewIngredient();
-
-      expect(referenceDataServiceMock.createIngredient).toHaveBeenCalledWith({
-        category: 'Other',
-        defaultUnitOfMeasureId: 'uom-oz',
-        name: 'Quinoa',
-      });
-    });
-
-    it('adds the created ingredient to the list and resolves the selection', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Quinoa');
-      referenceDataServiceMock.createIngredient.mockReturnValue(
-        of({ category: 'Other', defaultUnitOfMeasureId: 'uom-oz', id: 'ing-9', name: 'Quinoa' }),
-      );
-
-      component.onCreateNewIngredient();
-
-      expect(
-        internals()
-          .ingredients()
-          .map((i) => i.id),
-      ).toContain('ing-9');
-      expect(internals().ingredientNotResolved()).toBe(false);
-      expect(internals().loading()).toBe(false);
-    });
-
-    it('surfaces the server message when creation fails', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Quinoa');
-      referenceDataServiceMock.createIngredient.mockReturnValue(
-        throwError(() => ({ error: { message: 'Ingredient already exists.' } })),
-      );
-
-      component.onCreateNewIngredient();
-
-      expect(snackBarMock.open).toHaveBeenCalledWith('Ingredient already exists.', 'Dismiss', {
-        duration: 4000,
-      });
-      expect(internals().loading()).toBe(false);
-    });
-
-    it('falls back to a generic message when the server sends no message', () => {
-      createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.controls.canonicalIngredientName.setValue('Quinoa');
-      referenceDataServiceMock.createIngredient.mockReturnValue(throwError(() => ({})));
-
-      component.onCreateNewIngredient();
-
-      expect(snackBarMock.open).toHaveBeenCalledWith('Failed to create ingredient.', 'Dismiss', {
-        duration: 4000,
-      });
+      const errors: NodeListOf<HTMLElement> =
+        fixture.nativeElement.querySelectorAll('.field-error');
+      expect(errors.length).toBe(1);
+      expect(errors[0].textContent?.trim()).toContain('Ingredient is required');
     });
   });
 
@@ -372,16 +237,10 @@ describe('InventoryDialogComponent', () => {
     });
 
     it('refuses to submit a valid form whose ingredient was never resolved to an ID', () => {
-      // A free-typed name that matches nothing must not be posted.
       createComponent({ location: 'Pantry', mode: 'add' });
-      internals().inventoryForm.setValue({
-        canonicalIngredientName: 'Made Up',
-        expiryDate: null,
-        location: 'Pantry',
-        notes: '',
-        quantity: 2,
-        unitOfMeasureId: 'uom-oz',
-      });
+      internals().inventoryForm.controls.quantity.setValue(2);
+      internals().inventoryForm.controls.unitOfMeasureId.setValue('uom-oz');
+      // canonicalIngredient remains null
 
       component.onSubmit();
 
@@ -461,10 +320,6 @@ describe('InventoryDialogComponent', () => {
   });
 
   // ── Container reference resolution ──────────────────────────────────────────
-  //
-  // The core MEP-003 flow: the API answers an add with a container-reference
-  // detection instead of an item, and the dialog must switch into declaration
-  // mode rather than closing.
 
   describe('container reference detection', () => {
     const DETECTED: ContainerReferenceDetectedResponse = {

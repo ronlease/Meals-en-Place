@@ -17,7 +17,7 @@ Manages pantry, fridge, and freezer inventory items with container reference det
 | PUT | `/api/v1/inventory/{id}` | Update item |
 | DELETE | `/api/v1/inventory/{id}` | Delete item |
 | POST | `/api/v1/ReferenceData/ingredients` | Create canonical ingredient |
-| GET | `/api/v1/ReferenceData/ingredients` | List canonical ingredients |
+| GET | `/api/v1/ReferenceData/ingredients?search=&limit=` | Search canonical ingredients by name (case-insensitive; ranked: prefix matches first, then by descending recipe reference count, then by name; blank search returns `[]`; limit default 20 / max 50) |
 | GET | `/api/v1/ReferenceData/units` | List units of measure |
 
 ## Key Concepts
