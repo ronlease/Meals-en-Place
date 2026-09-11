@@ -93,7 +93,25 @@ foreach (var row in streamResult.Rows)
     // ── Canonical ingredients from NER ────────────────────────────────────
     // Upsert a canonical row per unique NER token. Order matters for later
     // "longest match wins" linkage.
-    foreach (var nerToken in row.Ner)
+    var cleanedNerTokens = new List<string>(row.Ner.Count);
+    foreach (var rawNerToken in row.Ner)
+    {
+        var normalizationResult = NerTokenNormalizer.Normalize(rawNerToken);
+        if (normalizationResult.IsRejected)
+        {
+            summary.NerTokensRejected++;
+            continue;
+        }
+
+        if (normalizationResult.NormalizedValue != rawNerToken)
+        {
+            summary.NerTokensNormalized++;
+        }
+
+        cleanedNerTokens.Add(normalizationResult.NormalizedValue!);
+    }
+
+    foreach (var nerToken in cleanedNerTokens)
     {
         _ = canonicalRegistry.GetOrCreate(nerToken);
     }
@@ -125,7 +143,7 @@ foreach (var row in streamResult.Rows)
     {
         summary.TotalIngredientsProcessed++;
 
-        var bestNer = CanonicalIngredientRegistry.PickBestNerMatch(rawIngredient, row.Ner);
+        var bestNer = CanonicalIngredientRegistry.PickBestNerMatch(rawIngredient, cleanedNerTokens);
         if (bestNer is null)
         {
             summary.IngredientsWithoutNerMatch++;

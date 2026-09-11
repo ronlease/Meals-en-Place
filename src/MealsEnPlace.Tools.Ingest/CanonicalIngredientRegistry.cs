@@ -82,24 +82,37 @@ internal sealed class CanonicalIngredientRegistry
     /// <summary>
     /// Ensures a <see cref="CanonicalIngredient"/> exists for the given
     /// NER token. Returns the existing id when cached; inserts a new row
-    /// (into the DbContext, not yet saved) when novel. Over-length tokens
-    /// are truncated to <see cref="CanonicalIngredientNameMaxLength"/> so
-    /// Kaggle's long descriptive phrases don't overflow the column.
+    /// (into the DbContext, not yet saved) when novel. Normalization via
+    /// <see cref="NerTokenNormalizer.Normalize"/> is applied defensively so
+    /// that callers which bypass the per-row cleaning step in Program.cs
+    /// cannot introduce junk rows. A token that normalizes to a rejection
+    /// falls back to the "unknown" canonical exactly as degenerate empty
+    /// input does today. Over-length tokens are truncated to
+    /// <see cref="CanonicalIngredientNameMaxLength"/> after normalization.
     /// </summary>
     public Guid GetOrCreate(string nerToken)
     {
-        var trimmed = nerToken.Trim();
-        if (string.IsNullOrWhiteSpace(trimmed))
+        var normalizationResult = NerTokenNormalizer.Normalize(nerToken);
+
+        // Rejected tokens (empty after cleanup, no letters, stopwords only) and
+        // genuinely degenerate input both fall back to "unknown" so FK constraints
+        // remain satisfied. Program.cs filters these out before calling GetOrCreate
+        // in normal flow; this path is the safety net for unexpected callers.
+        string trimmed;
+        if (normalizationResult.IsRejected)
         {
-            // Degenerate input; re-use the default "Other" canonical by
-            // name "unknown" to keep FKs valid. Callers should avoid
-            // sending empties but we don't crash.
             trimmed = "unknown";
+        }
+        else
+        {
+            trimmed = normalizationResult.NormalizedValue!;
         }
 
         if (trimmed.Length > CanonicalIngredientNameMaxLength)
         {
-            trimmed = trimmed[..CanonicalIngredientNameMaxLength];
+            // TrimEnd so a cut at a word boundary cannot leave a trailing space
+            // that would defeat the case-insensitive dedupe against the same prefix.
+            trimmed = trimmed[..CanonicalIngredientNameMaxLength].TrimEnd();
         }
 
         if (_byLowerName.TryGetValue(trimmed, out var existingId))

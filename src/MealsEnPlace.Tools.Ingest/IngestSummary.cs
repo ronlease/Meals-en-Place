@@ -34,6 +34,18 @@ internal sealed class IngestSummary
 
     public int InstructionStepsRetained { get; set; }
 
+    /// <summary>
+    /// Count of NER tokens whose normalized value differed from the original
+    /// token string. Informational: shows how much Kaggle noise was cleaned up.
+    /// </summary>
+    public int NerTokensNormalized { get; set; }
+
+    /// <summary>
+    /// Count of NER tokens that were rejected (empty after cleanup, no letters,
+    /// or stopwords only) and therefore produced no CanonicalIngredient row.
+    /// </summary>
+    public int NerTokensRejected { get; set; }
+
     public bool RecipeReferenceCountBackfilled { get; set; }
 
     public int RecipesIngested { get; set; }
@@ -95,6 +107,8 @@ internal sealed class IngestSummary
               Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run)")}
 
             Ingredients
+              NER tokens normalized:       {NerTokensNormalized:N0}
+              NER tokens rejected:         {NerTokensRejected:N0}
               Total processed:             {TotalIngredientsProcessed:N0}
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
               Unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)

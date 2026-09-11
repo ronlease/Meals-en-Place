@@ -86,4 +86,44 @@ public class IngestSummaryTests
         // Assert — the label must always appear regardless of whether it ran
         rendered.Should().Contain("Ref count backfilled");
     }
+
+    // ── Format — NER token normalization counter ──────────────────────────────
+
+    [Fact]
+    public void Format_WithNerTokensNormalized_ContainsNormalizedLabelAndCount()
+    {
+        // Arrange
+        var summary = new IngestSummary { NerTokensNormalized = 42 };
+        summary.StopTimer();
+
+        var options = new IngestOptions { CsvPath = "data.csv", DryRun = false };
+        var counters = new StreamCounters();
+
+        // Act
+        var rendered = summary.Format(options, counters);
+
+        // Assert
+        rendered.Should().Contain("NER tokens normalized");
+        rendered.Should().Contain("42");
+    }
+
+    // ── Format — NER token rejection counter ─────────────────────────────────
+
+    [Fact]
+    public void Format_WithNerTokensRejected_ContainsRejectedLabelAndCount()
+    {
+        // Arrange
+        var summary = new IngestSummary { NerTokensRejected = 13 };
+        summary.StopTimer();
+
+        var options = new IngestOptions { CsvPath = "data.csv", DryRun = false };
+        var counters = new StreamCounters();
+
+        // Act
+        var rendered = summary.Format(options, counters);
+
+        // Assert
+        rendered.Should().Contain("NER tokens rejected");
+        rendered.Should().Contain("13");
+    }
 }

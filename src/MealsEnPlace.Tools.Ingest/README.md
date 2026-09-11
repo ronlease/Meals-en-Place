@@ -31,11 +31,36 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 - **Parses ingredient / directions / NER arrays** as JSON. Malformed rows are counted and skipped, not fatal.
 - **Detects container references** (can, jar, box, etc.) via `ContainerReferenceDetector` and persists them as unresolved `RecipeIngredient` rows with the original text in `Notes`.
 - **Resolves units of measure deterministically** through `InMemoryUnitOfMeasureResolver` — the tool preloads `UnitOfMeasure` and `UnitOfMeasureAlias` into memory so per-ingredient resolution is O(1). Unresolved tokens go to the `UnresolvedUnitOfMeasureToken` review queue instead of invoking Claude, preserving quota.
+- **Normalizes NER tokens** via `NerTokenNormalizer` before any canonical lookup or creation. Rules (applied in order): trim; strip leading/trailing non-[letter/digit/apostrophe] characters; collapse internal whitespace; repeatedly strip trailing stopwords (a, an, the, and, or, of, for, with, to, add, plus); reject if empty; reject if no letter; reject if all words are stopwords. Tokens that differ from their original after normalization are counted as "NER tokens normalized"; tokens rejected by any rule are counted as "NER tokens rejected" and produce no `CanonicalIngredient` row.
 - **Upserts canonical ingredients** from the NER column via `CanonicalIngredientRegistry`. Each unique NER token becomes a `CanonicalIngredient` row; raw ingredient strings link to the longest NER token they contain.
 - **Truncates over-length strings** at the EF-configured column caps before writing (recipe title, source URL, ingredient notes, unresolved-token sample columns). Over-length source URLs are dropped to null rather than truncated, since a truncated URL is worse than none.
 - **Applies `InstructionProseFilter`** to directions. Steps with first-person pronouns or >40 words after parenthetical stripping are dropped.
 - **Batches writes** in groups of 100 recipes (`IngestConstants.RecipeBatchSize`) with explicit `ChangeTracker.Clear()` between flushes so the working set stays bounded across the full 1.6M+ row run.
 - **Backfills `RecipeReferenceCount`** at end-of-run via a single `UPDATE … FROM (SELECT … GROUP BY …)` statement so the denormalized autocomplete ranking column reflects the full ingested dataset without per-row overhead during the batch loop.
+
+## Resetting and re-ingesting
+
+> **WARNING: this is a destructive, irreversible operation.** `docker compose down -v` deletes
+> the `pgdata` volume and **all data** — inventory items, user-created ingredients, recipes,
+> meal plans, and everything else. It cannot be undone.
+>
+> **Do not run the ingest tool twice against the same database without a reset first.** The tool
+> does not detect previously imported recipes: running it twice duplicates every recipe in the
+> catalog and doubles every ingredient reference count. Canonical ingredients themselves are
+> deduplicated by name, so the duplicates are invisible until you notice every recipe twice.
+
+Run the following commands from the repository root:
+
+```
+docker compose down -v
+docker compose up -d
+dotnet ef database update --project src/MealsEnPlace.Api
+dotnet run --project src/MealsEnPlace.Tools.Ingest -- --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv
+```
+
+`dotnet ef database update` applies all migrations so seed data (units of measure, seasonality
+windows, etc.) lands before the ingest begins. The ingest tool is only run **once** per clean
+database.
 
 ## Performance
 

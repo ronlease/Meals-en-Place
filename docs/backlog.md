@@ -3526,9 +3526,34 @@ Feature: Server-Side Ingredient Search for Inventory Dialog Autocomplete
 
 ## [MEP-049] NER Token Normalization at Ingest Time
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-026 (the Kaggle ingest pipeline this story modifies), MEP-048 (the search that exposed the junk rows)
+
+### Implementation Notes
+Shipped as a pure `NerTokenNormalizer` in `MealsEnPlace.Tools.Ingest`. Rule order: trim;
+strip leading/trailing characters that are not letters or digits (so wrapping quotes,
+brackets, slashes, and periods are removed while internal apostrophes and hyphens survive);
+collapse internal whitespace; repeatedly strip a trailing stopword but never the last
+remaining word; reject empty, reject no-letters, reject all-stopwords. Stopword set:
+{a, add, an, and, for, of, or, plus, the, to, with}.
+
+`Program.cs` normalizes each row's NER list once up front and feeds the cleaned list to both
+the pre-create loop and the best-match picker, so a rejected token never creates a
+CanonicalIngredient row and fallback to the next-best match is automatic.
+`GetOrCreate` also normalizes defensively and routes rejections to the existing "unknown"
+row. `IngestSummary` reports NER tokens normalized and rejected.
+
+Two review findings fixed before close: (1) a token truncated at 200 characters could keep
+a trailing space -- now `TrimEnd` runs after the cut; (2) apostrophes were originally allowed
+at the edges, so `'apple'` kept its wrapping quotes -- edge stripping now removes them.
+
+Verification: 115 ingest-scoped unit tests pass; `NerTokenNormalizer` and
+`CanonicalIngredientRegistry` at 100% line coverage. A 20,000-row dry run against the
+user's CSV completed and reported 39 normalized / 26 rejected tokens. The README documents
+the full database reset procedure (drop/recreate database or Docker volume, apply EF
+migrations, ingest once) and the double-run duplication warning. The two "full re-ingest"
+acceptance scenarios are verified by the user's actual re-ingest, which is being run next.
 
 ### Business Problem
 The Kaggle bulk ingest (MEP-026) feeds every NER-column token through
