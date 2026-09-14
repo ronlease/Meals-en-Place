@@ -3692,7 +3692,7 @@ Feature: NER Token Normalization at Ingest Time
 
 ## [MEP-050] Canonical Ingredient Normalization Gaps: Preservation State, Typos, Brands, Filler, and URL Rejection
 
-**Status:** Backlog
+**Status:** In Progress -- normalizer/ingest code and unit tests shipped; database not yet updated (see below)
 **Priority:** Medium
 **Depends on:** MEP-038 (dedup tooling this story extends), MEP-049 (NER normalization and re-ingest procedure this story reuses)
 
