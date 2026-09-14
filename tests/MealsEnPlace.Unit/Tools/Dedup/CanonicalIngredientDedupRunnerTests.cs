@@ -100,7 +100,7 @@ public sealed class CanonicalIngredientDedupRunnerTests : IDisposable
         var recipe = SeedRecipe();
         var survivor = SeedCanonicalIngredient("onion");
         var loser1 = SeedCanonicalIngredient("chopped onion");
-        var loser2 = SeedCanonicalIngredient("fresh onions");
+        var loser2 = SeedCanonicalIngredient("sliced onions");
         SeedRecipeIngredient(loser1.Id, recipe.Id);
         SeedRecipeIngredient(loser1.Id, recipe.Id);
         SeedRecipeIngredient(loser2.Id, recipe.Id);

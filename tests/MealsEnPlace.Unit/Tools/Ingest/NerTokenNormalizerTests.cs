@@ -104,6 +104,15 @@
 //   When Normalize is called again on the result
 //   Then the output is identical to the first call's output
 //
+// Scenario: A token that looks like a URL is rejected -- MEP-050
+//   Given a Kaggle NER token that is a full recipe source URL
+//     (e.g. "http://www.foodnetwork.com/recipes/.../index.html?oc=linkback")
+//   When the normalization step runs
+//   Then the token is rejected with LooksLikeUrl
+//   Note: distinct from MEP-037, which handles ad/tracking URLs in the Kaggle
+//   row's `link` field (Recipe.SourceUrl) -- this is about a URL leaking into
+//   the NER ingredient token column and becoming a CanonicalIngredient row.
+//
 // Non-unit-testable scenarios (require a real Kaggle CSV and a running Postgres database):
 //   - Full re-ingest produces no punctuation-fragment ingredient names
 //   - Full database reset procedure is documented in the README
@@ -290,6 +299,25 @@ public class NerTokenNormalizerTests
 
         result.IsRejected.Should().BeTrue();
         result.RejectionReason.Should().Be(NerTokenRejectionReason.NoLetters);
+    }
+
+    // ── URL-shaped tokens rejected -- MEP-050 ─────────────────────────────────
+    //
+    // The Kaggle NER column occasionally captures an entire recipe source
+    // link instead of an ingredient phrase. "://" is a cheap, reliable
+    // signal that lets the rejection run before any of the cleanup rules
+    // that would otherwise let letters-only URLs slip through as accepted
+    // (single-word, non-stopword) tokens.
+
+    [Theory]
+    [InlineData("http://www.foodnetwork.com/recipes/paula-deen/sure-fire-no-fire-smores-recipe/index.html?oc=linkback")]
+    [InlineData("https://www.example.com/recipe")]
+    public void Normalize_LooksLikeUrl_RejectedWithLooksLikeUrlReason(string rawToken)
+    {
+        var result = NerTokenNormalizer.Normalize(rawToken);
+
+        result.IsRejected.Should().BeTrue();
+        result.RejectionReason.Should().Be(NerTokenRejectionReason.LooksLikeUrl);
     }
 
     // ── Mixed-case trailing stopword stripped case-insensitively ─────────────
