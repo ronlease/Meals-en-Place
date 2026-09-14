@@ -8,6 +8,9 @@ internal enum NerTokenRejectionReason
     /// <summary>Token collapsed to an empty string after all cleanup rules ran.</summary>
     EmptyAfterCleanup,
 
+    /// <summary>Token contained a URL scheme ("://"), indicating NER extraction captured a link rather than an ingredient.</summary>
+    LooksLikeUrl,
+
     /// <summary>Token contained no alphabetic characters after cleanup.</summary>
     NoLetters,
 
@@ -48,6 +51,7 @@ internal readonly record struct NerTokenNormalizationResult
 /// Normalization rules, applied in order:
 /// <list type="number">
 ///   <item>Trim leading and trailing whitespace.</item>
+///   <item>Reject if the token contains a URL scheme ("://") -- a sign that NER extraction captured a recipe source link instead of an ingredient.</item>
 ///   <item>Strip leading and trailing characters that are not letters or digits (internal apostrophes and hyphens survive).</item>
 ///   <item>Collapse runs of internal whitespace to a single space.</item>
 ///   <item>Repeatedly strip the trailing word when it is in the stopword list.</item>
@@ -88,16 +92,28 @@ internal static class NerTokenNormalizer
         // Rule 1: trim leading and trailing whitespace.
         var working = rawToken.Trim();
 
-        // Rule 2: strip leading and trailing characters that are not letters, digits, or apostrophes.
+        // Rule 2: reject tokens that look like a URL. The Kaggle NER column occasionally
+        // captures an entire recipe source link (e.g. "http://www.foodnetwork.com/...")
+        // instead of an ingredient phrase; "://" is a cheap, reliable signal for that.
+        if (working.Contains("://", StringComparison.Ordinal))
+        {
+            return new NerTokenNormalizationResult
+            {
+                IsRejected = true,
+                RejectionReason = NerTokenRejectionReason.LooksLikeUrl
+            };
+        }
+
+        // Rule 3: strip leading and trailing characters that are not letters, digits, or apostrophes.
         working = StripEdgeNonIngredientChars(working);
 
-        // Rule 3: collapse runs of internal whitespace to a single space.
+        // Rule 4: collapse runs of internal whitespace to a single space.
         working = CollapseInternalWhitespace(working);
 
-        // Rule 4: repeatedly strip the trailing word when it is a stopword.
+        // Rule 5: repeatedly strip the trailing word when it is a stopword.
         working = StripTrailingStopwords(working);
 
-        // Rule 5: reject if empty.
+        // Rule 6: reject if empty.
         if (working.Length == 0)
         {
             return new NerTokenNormalizationResult
@@ -107,7 +123,7 @@ internal static class NerTokenNormalizer
             };
         }
 
-        // Rule 6: reject if no alphabetic character remains.
+        // Rule 7: reject if no alphabetic character remains.
         var hasLetter = false;
         foreach (var c in working)
         {
@@ -127,7 +143,7 @@ internal static class NerTokenNormalizer
             };
         }
 
-        // Rule 7: reject if every remaining word is a stopword.
+        // Rule 8: reject if every remaining word is a stopword.
         var words = working.Split(' ', StringSplitOptions.RemoveEmptyEntries);
         var allStopwords = true;
         foreach (var word in words)
