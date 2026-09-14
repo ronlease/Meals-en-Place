@@ -133,8 +133,8 @@ export class IngredientAutocompleteComponent implements ControlValueAccessor {
   protected readonly showCreateNew: Signal<boolean>;
 
   // ── Private ───────────────────────────────────────────────────────────────
-  private onChange: (value: CanonicalIngredientDto | null) => void = () => {};
-  private onTouched: () => void = () => {};
+  private onChange: (value: CanonicalIngredientDto | null) => void = () => undefined;
+  private onTouched: () => void = () => undefined;
   private readonly referenceDataService = inject(ReferenceDataService);
   private readonly selectedIngredient = signal<CanonicalIngredientDto | null>(null);
   private readonly snackBar = inject(MatSnackBar);
