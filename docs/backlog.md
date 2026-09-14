@@ -3690,6 +3690,150 @@ Feature: NER Token Normalization at Ingest Time
 
 ---
 
+## [MEP-050] Canonical Ingredient Normalization Gaps: Preservation State, Typos, Brands, Filler, and URL Rejection
+
+**Status:** Backlog
+**Priority:** Medium
+**Depends on:** MEP-038 (dedup tooling this story extends), MEP-049 (NER normalization and re-ingest procedure this story reuses)
+
+### Business Problem
+A data-quality investigation into the `CanonicalIngredients` table -- prompted by searching "pea" and finding 398 near-duplicate rows -- uncovered several categories of ingredient-name duplication that the existing MEP-038 fold-group approach and MEP-049 NER token normalization do not catch. `CanonicalNameNormalizer` (in `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`) builds a fold-group key by lowercasing, splitting on space/tab/comma/parens/hyphen, dropping a flat stopword list of cosmetic prep words, singularizing, and sorting tokens. `FoldGroupResolver` folds any two names that produce the same key. This works for pure prep/plural noise but misses five distinct failure modes, all found among the "pea" duplicates but generalizable to the whole ~120k-row canonical ingredient table:
+
+1. **Preservation-state words are miscategorized as cosmetic.** The current stopword list includes `fresh`, `frozen`, `dried`, `cooked`, `raw`, and `uncooked` alongside pure prep-cut words like `chopped` and `diced`. This folded `frozen peas`, `fresh peas`, `cooked peas`, and `dried peas` all into a single `pea` canonical (confirmed via `CanonicalIngredientAliases`) -- which is wrong. Preservation state changes how an ingredient is stored, purchased, and used in a recipe. `fresh peas` and `frozen peas` must be distinct `CanonicalIngredient` rows, the same way `baby carrot` is already distinct from `carrot`. The six preservation-state words (`fresh`, `frozen`, `dried`, `cooked`, `raw`, `uncooked`) must be removed from the stopword list and treated as substantive. Pure prep-cut words (`chopped`, `crushed`, `cubed`, `cut`, `diced`, `grated`, `ground`, `halved`, `minced`, `peeled`, `quartered`, `seeded`, `shredded`, `sliced`, `trimmed`, `whole`) stay cosmetic and keep folding as today.
+
+   **Critical constraint:** the MEP-038 dedup pass is destructive -- it deletes loser `CanonicalIngredient` rows and only records the folded name string in `CanonicalIngredientAliases`, with no record of which specific `RecipeIngredient` row originated from which pre-fold name. `frozen peas` cannot be surgically split back out of the current `pea` row because there is no way to know which of `pea`'s 17,631 `RecipeIngredient` references were originally "frozen peas" vs "fresh peas" vs plain "peas." The only correct fix is the full reset-and-re-ingest procedure documented in MEP-049: drop/recreate the Postgres database, re-run the ingest tool against the user's Kaggle CSV, re-run the Dedup tool. This wipes inventory items, user-created ingredients, and meal plans -- same consequence as MEP-049.
+
+2. **Typos are not caught at all.** Examples: `frozed peas`, `spit peas`, `slit peas`, `sping peas`, `yellow splitt peas`, `earlie peas`, `pidgeaon peas`, and three misspellings of the Le Sueur brand (`lesuer`, `leseur`, `lesueuer`). The fix is a small hand-curated typo/synonym dictionary applied as an extra normalization step before the token-set key is built. Automatic fuzzy/edit-distance matching is explicitly rejected because it is dangerous in this domain -- `pea` and `pear` are one edit apart, and automatic distance-based folding could silently corrupt recipe matching data. The dictionary must also cover compound-word vs. split-word synonyms that the token-set approach cannot catch because they do not share tokens at all: `chickpea` / `chick pea`, and `black-eyed` / `black eyed` / `blackeyed` / `black eye` (all currently separate canonicals; `back eyed peas` and `blacck eyed peas` are typos of the same group).
+
+3. **Brand names are not stripped.** Examples: `lesueur peas`, `lesueur green peas`, `del monte peas`, `del monte sugar peas`, `campbell's pea soup`, `birds eye sweet peas`, `green giant baby early peas`, `green giant frozen sweet peas`, `knorr green peas`. A new brand-name stopword category (separate from the prep-cut list) should be added to `CanonicalNameNormalizer` so brand words strip out the same way prep words do (e.g., `lesueur peas` folds to `pea`, `campbell's pea soup` folds to `pea soup`). This list will grow over time as more brands surface across the wider catalog, not just peas -- it should live somewhere clearly extensible (e.g., a separate file or configuration section rather than inline in the normalizer method).
+
+4. **Leading filler/quantity words and recipe-authoring artifacts are not caught.** Examples: `handful of peas`, `handful snow peas`, `bags of frozen peas`, `bags peas`, `packets frozen peas`, `mugful frozen peas`, `kilogram snow peas`, `gallon peas`, `pints peas`, and non-ingredient phrasing artifacts `peas optional`, `peas and/or`, `choice of peas`, `either peas`, `peas etc`, `peas - if`, `e.g. peas`. A second new stopword category (filler/quantity/authoring-artifact words) should strip these the same way. Additionally, `CanonicalNameNormalizer.Normalize` splits on `[' ', '\t', ',', '(', ')', '-']` but not `/`, so tokens like `peas/carrots`, `chickpeas/garbanzo beans`, and `peanut/vegetable oil` never tokenize correctly. `/` must be added to the split-character set.
+
+5. **URLs leak into canonical ingredient names.** Two `CanonicalIngredient` rows are entire Food Network URLs (e.g., `http://www.foodnetwork.com/recipes/paula-deen/sure-fire-no-fire-smores-recipe/index.html?oc=linkback`) that were extracted from the Kaggle NER column as ingredient names. `NerTokenNormalizer` (in `src/MealsEnPlace.Tools.Ingest/NerTokenNormalizer.cs`) strips edge punctuation but never rejects a token containing a URL shape, so these pass through as valid canonical ingredients. A rejection rule must be added to `NerTokenNormalizer.Normalize` for any token containing `://` (or otherwise matching a URL shape), following the same rejection pattern already used for `EmptyAfterCleanup`, `NoLetters`, and `StopwordsOnly`. This is a different bug from MEP-037, which handles ad/tracking URLs in the Kaggle row's `link` field (`Recipe.SourceUrl`); this bug is about URLs leaking into the NER ingredient token column and becoming `CanonicalIngredient` rows -- an unrelated column and unrelated failure mode. Not scoped to peas; likely present across the whole catalog.
+
+**Non-goal:** `snow pea`, `sugar snap pea`, `black-eyed peas`, `split peas` (yellow and green stay separate), `chickpea`, and `pigeon pea` are genuine distinct ingredients and sub-varieties. They must NOT be folded together. Nothing in this story should fold them, and acceptance criteria verify that they survive intact.
+
+**Recommended sequencing:** Items 2, 3, and 4 (typo/synonym dictionary, brand stopwords, filler stopwords, `/` delimiter) are non-destructive against the current database -- those duplicate rows still exist un-folded today, so extending `CanonicalNameNormalizer` / `FoldGroupResolver` and re-running `MealsEnPlace.Tools.Dedup --dry-run` then live folds them without requiring a reset. Item 5 (URL rejection in `NerTokenNormalizer`) only affects future ingests, not current data, unless bundled with a reset. Item 1 (preservation-state un-fold) strictly requires the full reset-and-re-ingest procedure because it is undoing an already-applied destructive fold. Recommendation: land all normalizer/ingest changes (items 1 through 5) together, then do exactly one reset, re-ingest, `Dedup --dry-run`, `Dedup` (live) cycle rather than doing a non-destructive dedup pass now and a second reset later.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization Gaps
+
+  Scenario: Preservation-state words are treated as substantive, not cosmetic
+    Given CanonicalNameNormalizer's stopword list currently includes "fresh", "frozen", "dried", "cooked", "raw", and "uncooked"
+    When the stopword list is corrected
+    Then "fresh", "frozen", "dried", "cooked", "raw", and "uncooked" are removed from the cosmetic stopword list
+    And "fresh peas" and "frozen peas" produce different fold-group keys
+    And "chopped peas" and "diced peas" still produce the same fold-group key as "peas"
+
+  Scenario: Preservation-state correction requires full reset-and-re-ingest
+    Given the MEP-038 dedup pass destructively deleted loser CanonicalIngredient rows
+    And CanonicalIngredientAliases records only the folded name string, not which RecipeIngredient rows originated from which pre-fold name
+    When the preservation-state stopword correction is deployed
+    Then the full reset-and-re-ingest procedure (MEP-049) is executed: drop/recreate the Postgres database, apply migrations, run ingest, run Dedup --dry-run, run Dedup live
+    And the procedure wipes inventory items, user-created ingredients, and meal plans
+    And the re-ingest documentation is updated to note this consequence
+
+  Scenario: Typo/synonym dictionary corrects known misspellings before fold-key computation
+    Given a hand-curated typo/synonym dictionary is configured
+    And the dictionary maps "frozed" to "frozen", "spit" to "split", "slit" to "split", "sping" to "snap", "splitt" to "split", "earlie" to "early", "pidgeaon" to "pigeon"
+    When CanonicalNameNormalizer processes the token "frozed peas"
+    Then the token normalizes as if it were "frozen peas"
+    And "spit peas" normalizes as "split peas"
+    And "pidgeaon peas" normalizes as "pigeon peas"
+
+  Scenario: Typo/synonym dictionary corrects Le Sueur brand misspellings
+    Given the dictionary maps "lesuer", "leseur", and "lesueuer" to "lesueur"
+    When CanonicalNameNormalizer processes "lesuer peas"
+    Then the token normalizes the same as "lesueur peas"
+    And after brand stripping (see brand-name scenario), all resolve to "pea"
+
+  Scenario: Typo/synonym dictionary handles compound-word and split-word synonyms
+    Given the dictionary maps "chickpea" to "chick pea" (or vice versa) as a compound synonym
+    And the dictionary maps "blackeyed" to "black-eyed", "black eye" to "black-eyed"
+    When CanonicalNameNormalizer processes "chickpea", "chick pea", "black-eyed peas", "blackeyed peas", "black eye peas"
+    Then "chickpea" and "chick pea" produce the same fold-group key
+    And "black-eyed peas", "blackeyed peas", and "black eye peas" produce the same fold-group key
+    And "back eyed peas" (typo) and "blacck eyed peas" (typo) also resolve to the same key via the typo dictionary
+
+  Scenario: No fuzzy or edit-distance matching is used
+    Given the typo correction uses only a hand-curated dictionary
+    When "pea" and "pear" are processed
+    Then they remain distinct fold-group keys despite being one edit apart
+    And no automatic distance-based folding is applied
+
+  Scenario: Brand names are stripped via a brand-name stopword category
+    Given a brand-name stopword list is configured separately from the prep-cut stopword list
+    And the list includes "lesueur", "del monte", "campbell's", "birds eye", "green giant", "knorr"
+    When CanonicalNameNormalizer processes "lesueur peas"
+    Then the fold-group key matches that of "peas"
+    And "del monte sugar peas" folds to the same key as "sugar peas"
+    And "campbell's pea soup" folds to the same key as "pea soup"
+    And "green giant frozen sweet peas" folds to the same key as "frozen sweet peas"
+
+  Scenario: Brand-name stopword list is extensible
+    Given the brand-name list will grow as more brands surface across the wider catalog
+    When the list is implemented
+    Then it lives in a clearly extensible location (separate file, configuration section, or dedicated constant collection) rather than inline in the normalizer method
+
+  Scenario: Filler, quantity, and authoring-artifact words are stripped
+    Given a filler/quantity/authoring-artifact stopword list includes "handful", "bags", "packets", "mugful", "kilogram", "gallon", "pints", "optional", "etc", "choice", "either", "e.g"
+    When CanonicalNameNormalizer processes "handful of peas"
+    Then the fold-group key matches that of "peas"
+    And "bags of frozen peas" folds to the same key as "frozen peas"
+    And "peas optional" folds to the same key as "peas"
+    And "e.g. peas" folds to the same key as "peas"
+
+  Scenario: Forward slash is added to the split-character set
+    Given CanonicalNameNormalizer.Normalize currently splits on space, tab, comma, parens, and hyphen
+    When "/" is added to the split-character set
+    Then "peas/carrots" tokenizes into "peas" and "carrots"
+    And "chickpeas/garbanzo beans" tokenizes into "chickpeas", "garbanzo", and "beans"
+    And "peanut/vegetable oil" tokenizes into "peanut", "vegetable", and "oil"
+
+  Scenario: URL-shaped NER tokens are rejected at ingest time
+    Given a Kaggle NER token is "http://www.foodnetwork.com/recipes/paula-deen/sure-fire-no-fire-smores-recipe/index.html?oc=linkback"
+    When NerTokenNormalizer.Normalize processes the token
+    Then the token is rejected with a reason analogous to "EmptyAfterCleanup", "NoLetters", or "StopwordsOnly"
+    And no CanonicalIngredient row is created for it
+    And IngestSummary reports the rejection
+
+  Scenario: URL rejection is distinct from MEP-037 ad/tracking URL stripping
+    Given MEP-037 handles ad/tracking URLs in the Kaggle row's link field (Recipe.SourceUrl)
+    When a URL leaks into the NER ingredient token column
+    Then the NerTokenNormalizer URL rejection catches it
+    And the fix applies to any URL shape (containing "://"), not only ad/tracking patterns
+
+  Scenario: Genuine distinct ingredients are NOT folded together
+    Given CanonicalIngredient rows exist for "snow pea", "sugar snap pea", "black-eyed peas", "split peas", "chickpea", and "pigeon pea"
+    When the full normalization and dedup pipeline runs
+    Then each remains a distinct CanonicalIngredient row
+    And "snow pea" is not folded into "pea"
+    And "sugar snap pea" is not folded into "pea"
+    And "black-eyed peas" is not folded into "pea"
+    And "split peas" is not folded into "pea"
+    And "chickpea" is not folded into "pea"
+    And "pigeon pea" is not folded into "pea"
+    And yellow split peas and green split peas remain separate
+
+  Scenario: All changes land together with a single reset-and-re-ingest cycle
+    Given items 2, 3, and 4 (typo dictionary, brand stopwords, filler stopwords, "/" delimiter) are non-destructive
+    And item 5 (URL rejection) only affects future ingests
+    And item 1 (preservation-state un-fold) requires a full reset
+    When all five changes are implemented
+    Then exactly one reset, re-ingest, Dedup --dry-run, Dedup (live) cycle is performed
+    And no intermediate non-destructive dedup pass followed by a second reset is needed
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all normalizer changes have been deployed
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups, alias inserts, and per-table FK reassignment counts
+    And the user can review the output before running the live pass
+```
+
+---
+
 ## [MEP-051] Upgrade to Vitest 5 / @vitest/coverage-v8 5
 
 **Status:** Blocked
