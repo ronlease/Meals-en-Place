@@ -22,14 +22,14 @@ Recipe library browser, manual recipe creation, recipe detail dialog, container-
 - **RecipeBrowserComponent** — Two-tab interface: "My Recipes" table (click row to open detail dialog) with resolution status badges, and "What Can I Make?" match finder with dietary tag chip filters.
   - Paging: server-side, 25 recipes per page. The paginator exposes **previous/next navigation only** — first/last-page buttons and the page-size selector are suppressed via `showFirstLastButtons` (default false) and `[hidePageSize]="true"`. This is intentional: at 1.6 M+ recipes the last-page position takes ~20 s to query and pages beyond ~1 500 exceed the database command timeout. Offering a one-click jump to those positions would guarantee timeouts.
 - **RecipeDetailDialogComponent** — Dialog showing full recipe detail: ingredients table, instructions, dietary tags, source URL link, and "Add to Shopping List" button.
-- **RecipeCreateComponent** — Form for manual recipe creation with dynamic ingredient rows, ingredient/unit of measure selection, and container reference notes.
+- **RecipeCreateComponent** — Form for manual recipe creation with dynamic ingredient rows, server-side ingredient search via the shared `IngredientAutocompleteComponent`, unit of measure selection, and container reference notes.
 - **ContainerResolutionPageComponent** — Grouped view of unresolved container references with a bulk-resolve dialog.
 - **RecipeMatchResultsComponent** — Presentational component showing Full/Near/Partial match tiers.
 
 ## Services Used
 
 - `RecipeService` — Library listing (server-side paged via `GET /api/v1/recipes?page=&pageSize=`), detail, creation, matching, unresolved-group bulk resolve, add-to-shopping-list
-- `ReferenceDataService` — Canonical ingredients and unit of measure lookup (for recipe creation form)
+- `ReferenceDataService` — Unit of measure lookup and server-side ingredient search (`searchIngredients`) for the recipe creation form; the full ingredient list is never loaded
 
 ## Models
 

@@ -52,18 +52,6 @@ describe('ReferenceDataService', () => {
     expect(received).toEqual(INGREDIENT);
   });
 
-  it('getIngredients GETs the ingredients URL', () => {
-    let received: CanonicalIngredientDto[] | undefined;
-
-    service.getIngredients().subscribe((ingredients) => (received = ingredients));
-
-    const testRequest = httpMock.expectOne(`${BASE_URL}/ingredients`);
-    expect(testRequest.request.method).toBe('GET');
-
-    testRequest.flush([INGREDIENT]);
-    expect(received).toEqual([INGREDIENT]);
-  });
-
   it('getUnits GETs the units URL', () => {
     let received: UnitOfMeasureDto[] | undefined;
 
@@ -77,5 +65,30 @@ describe('ReferenceDataService', () => {
     ];
     testRequest.flush(units);
     expect(received).toEqual(units);
+  });
+
+  it('searchIngredients GETs the ingredients URL with search and limit params', () => {
+    let received: CanonicalIngredientDto[] | undefined;
+
+    service.searchIngredients('diced', 10).subscribe((ingredients) => (received = ingredients));
+
+    const testRequest = httpMock.expectOne(`${BASE_URL}/ingredients?search=diced&limit=10`);
+    expect(testRequest.request.method).toBe('GET');
+
+    testRequest.flush([INGREDIENT]);
+    expect(received).toEqual([INGREDIENT]);
+  });
+
+  it('searchIngredients uses the default limit of 20 when none is supplied', () => {
+    service.searchIngredients('butter').subscribe();
+
+    const testRequest = httpMock.expectOne(`${BASE_URL}/ingredients?search=butter&limit=20`);
+    testRequest.flush([]);
+  });
+
+  it('does not expose a getIngredients method that would fetch the full ingredient list', () => {
+    // Scenario: No remaining caller requests the full ingredient list.
+    // The old getIngredients() that triggered a 120,505-row dump must not exist on the service.
+    expect((service as unknown as Record<string, unknown>)['getIngredients']).toBeUndefined();
   });
 });

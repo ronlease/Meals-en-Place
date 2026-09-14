@@ -242,4 +242,119 @@ public class CanonicalIngredientRegistryTests : IDisposable
         saved.Name.Length.Should().Be(200);
         registry.NewRowsCreated.Should().Be(1);
     }
+
+    // Scenario: Truncation at the 200-char boundary must not leave a trailing space
+    //   Given a NER token of 199 'z' characters followed by " b" (201 chars total)
+    //   When GetOrCreate truncates it to 200 chars
+    //   Then the stored name does not end with a space
+    // NOTE: This test exposes a source defect — GetOrCreate slices to 200 chars without
+    // trimming, so a token whose 200th character is a space produces a name with a
+    // trailing space.  The test is left failing to flag the defect.
+
+    [Fact]
+    public async Task GetOrCreate_OverLengthTokenWithSpaceAtBoundary_StoredNameHasNoTrailingSpace()
+    {
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+
+        // 199 'z' chars + ' ' + 'b' = 201 chars total.
+        // Index 199 (the 200th character) is a space; truncation to 200 chars without
+        // a subsequent TrimEnd yields a name ending with a space.
+        var token = new string('z', 199) + " b";
+
+        var id = registry.GetOrCreate(token);
+        await _dbContext.SaveChangesAsync();
+
+        // Assert
+        var saved = await _dbContext.CanonicalIngredients.AsNoTracking()
+            .SingleAsync(ci => ci.Id == id);
+        saved.Name.Should().NotEndWith(" ");
+    }
+
+    // Scenario: Punctuation variants and the clean token all resolve to the same id via normalization
+    //   Given no existing CanonicalIngredient for "apple"
+    //   When GetOrCreate is called with "apple.", "apple/", and "apple"
+    //   Then all three return the same id
+    //   And exactly one new row is created
+
+    [Fact]
+    public async Task GetOrCreate_PunctuationVariantsAndCleanToken_AllReturnSameId()
+    {
+        // Arrange
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+
+        // Act — "apple.", "apple/" and "apple" all normalize to "apple"
+        var idFromPeriod = registry.GetOrCreate("apple.");
+        var idFromSlash = registry.GetOrCreate("apple/");
+        var idFromClean = registry.GetOrCreate("apple");
+
+        // Assert
+        idFromPeriod.Should().Be(idFromSlash);
+        idFromSlash.Should().Be(idFromClean);
+        registry.NewRowsCreated.Should().Be(1);
+    }
+
+    // Scenario: Rejected NER token falls back to "unknown" canonical and does not create a separate row
+    //   Given a NER token that normalizes to a rejection (e.g., "and" → StopwordsOnly)
+    //   When GetOrCreate is called
+    //   Then the "unknown" canonical id is returned
+    //   And no row is created for the rejected token itself
+    //   And NewRowsCreated is 1 (the "unknown" row, not the rejected token)
+
+    [Fact]
+    public async Task GetOrCreate_RejectedToken_ReturnsUnknownIdAndDoesNotCreateSeparateRow()
+    {
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+
+        // "and" normalizes to a StopwordsOnly rejection; GetOrCreate falls back to "unknown".
+        var unknownId = registry.GetOrCreate("and");
+
+        // Assert
+        unknownId.Should().NotBe(Guid.Empty);
+        registry.NewRowsCreated.Should().Be(1);
+        _dbContext.CanonicalIngredients.Local
+            .Should().ContainSingle(c => c.Name == "unknown");
+        _dbContext.CanonicalIngredients.Local
+            .Should().NotContain(c => c.Name == "and");
+    }
+
+    // Scenario: Two distinct rejected tokens both return the same "unknown" id
+    //   Given two calls to GetOrCreate with different rejected tokens
+    //   When both calls complete
+    //   Then both return the same "unknown" id
+    //   And NewRowsCreated remains 1
+
+    [Fact]
+    public async Task GetOrCreate_TwoRejectedTokens_BothReturnSameUnknownId()
+    {
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+
+        // "and" → StopwordsOnly, "1/2" → NoLetters; both fall back to "unknown".
+        var firstId = registry.GetOrCreate("and");
+        var secondId = registry.GetOrCreate("1/2");
+
+        // Assert
+        firstId.Should().Be(secondId);
+        registry.NewRowsCreated.Should().Be(1);
+    }
+
+    // Scenario: Whitespace-padded and clean token resolve to the same canonical row
+    //   Given no existing CanonicalIngredient for "Apple"
+    //   When GetOrCreate is called with "  Apple  " and then "apple"
+    //   Then both return the same id (normalization + case-insensitive deduplication)
+    //   And exactly one new row is created
+
+    [Fact]
+    public async Task GetOrCreate_WhitespacePaddedAndCleanToken_ResolveToCaseInsensitiveSameRow()
+    {
+        var registry = await CanonicalIngredientRegistry.LoadAsync(_dbContext);
+
+        // "  Apple  " normalizes to "Apple"; the registry deduplicates case-insensitively,
+        // so "apple" on the second call resolves to the same row.
+        var paddedId = registry.GetOrCreate("  Apple  ");
+        var cleanId = registry.GetOrCreate("apple");
+
+        // Assert
+        paddedId.Should().Be(cleanId);
+        registry.NewRowsCreated.Should().Be(1);
+    }
 }

@@ -2992,9 +2992,19 @@ Feature: Keyset Pagination for Deep Recipe Pages
 
 ## [MEP-045] Paginate GET /api/v1/inventory/ingredients
 
-**Status:** Backlog
+**Status:** Superseded by MEP-048
 **Priority:** Medium
 **Depends on:** MEP-043 (introduced the `PagedResult<T>` helper this story reuses)
+
+### Supersession Note
+MEP-048 replaces this item. The core goal -- eliminating the unbounded full-table dump
+from `GET /api/v1/referencedata/ingredients` -- is achieved by a bounded typed-search
+endpoint (search + limit parameters, blank search returns empty) rather than offset
+pagination. Offset pagination is the wrong shape for an autocomplete: the user never pages
+through canonical ingredients; they type a name fragment and pick from a short result list.
+Additionally, this item cited the wrong route (`/api/v1/inventory/ingredients`; the real
+route is `/api/v1/referencedata/ingredients`) and a stale row count (146,584; the table
+holds 120,505 rows as of 2026-09-10).
 
 ### Business Problem
 MEP-043's sibling-endpoint audit identified `GET /api/v1/inventory/ingredients` as the
@@ -3248,6 +3258,605 @@ Feature: Angular C4 Component Model Accuracy
     Then the script renders updated PNGs via the Docker-hosted PlantUML renderer
     And the updated PNGs are committed alongside the PlantUML source changes
     And no CI workflow is expected to render them (rendering is local per the current process)
+```
+
+---
+
+## [MEP-048] Server-Side Ingredient Search for the Inventory Dialog Autocomplete
+
+**Status:** Done
+**Priority:** High
+**Depends on:** none
+
+### Business Problem
+The "Add Item" inventory dialog is effectively unusable. When the dialog opens, it calls
+`GET /api/v1/referencedata/ingredients`, which returns every row in the
+`CanonicalIngredients` table -- currently 120,505 rows, roughly 15 MB of JSON -- with no
+LIMIT clause. The download alone is slow, but the real damage happens in the browser: the
+autocomplete's `filteredIngredients` computed returns the full list when the query string
+is empty, so focusing the Ingredient field causes Angular Material to render approximately
+120,000 `mat-option` elements. Every keystroke then runs an unthrottled, undebounced
+substring scan over all 120,505 names and re-renders the matching options. The result is
+seconds-long freezes on every keypress, making it impossible to search for an ingredient
+at a normal typing speed. A secondary issue is that the units request is chained
+sequentially after the ingredients request instead of running in parallel, adding
+unnecessary latency even before the autocomplete problem kicks in.
+
+This item supersedes MEP-045, which proposed offset pagination for the same endpoint.
+Offset pagination is the wrong shape for an autocomplete -- the user never pages through
+canonical ingredients; they type a name fragment and pick from a short result list.
+
+The inventory dialog is not the only consumer. The recipe create page
+(`recipe-create.component.ts`) renders a `mat-select` per ingredient row over the same
+full 120,505-row list, producing the same performance collapse. Because the new endpoint
+returns an empty array for a blank search, that select would become empty if left
+untouched. The fix is a shared standalone `IngredientAutocompleteComponent` (in
+`src/app/shared/ingredient-autocomplete/`) implementing `ControlValueAccessor` with an
+optional `allowCreate` input. The inventory dialog uses it with create enabled; the recipe
+create page replaces its per-row `mat-select` with the same component, create disabled.
+Debounce, minimum-length gating, and stale-request cancellation live in the shared
+component -- one implementation, two consumers.
+
+Follow-on candidate (out of scope here): many Kaggle-ingested canonical ingredient names
+are low-quality junk strings ("a crowd", "type fruit", "bottles wegmans chili sauce") that
+clutter search results and should be cleaned up in a separate data-quality pass. MEP-049
+addresses the root cause -- noisy NER tokens entering CanonicalIngredients uncleaned at
+ingest time -- and requires a full re-ingest to replace the affected rows.
+
+### Scope decisions made during implementation
+
+**Search results are ranked by a stored recipe-reference count, not a live correlated
+COUNT.** The initial ordering -- prefix match first, then name ascending -- surfaced junk
+at the top of results: "apple", "apple [", "apple.", "apple/", "apple add", because
+punctuation sorts before letters. Ranking by how many recipes reference each ingredient
+pushes well-known ingredients to the top, but a live `COUNT` correlated against the
+13,635,157-row `RecipeIngredients` table was measured at 2,900 ms for the search term
+"ch" (20,697 candidates) versus 104 ms without it. The count is therefore stored.
+
+A new column `CanonicalIngredients.RecipeReferenceCount` (`int`, `NOT NULL`, default 0)
+is added by an explicit EF Core migration that also backfills the value from
+`RecipeIngredients` in a single `UPDATE ... FROM` statement. The migration must be applied
+manually with `dotnet ef database update` before testing; it is not auto-applied at
+startup.
+
+Search ordering is: prefix match first, then `RecipeReferenceCount` descending, then
+`Name` ascending, then `Take(limit)`. This means "pineapple" (67,693 references) still
+ranks below "apple" (38,510 references) for the search term "apple" because prefix match
+wins the first tiebreaker.
+
+The count is incremented by `RecipeImportService` when a recipe is created through the
+API (by the number of `RecipeIngredient` rows per canonical ingredient), and recomputed
+once at the end of a Kaggle ingest run by `MealsEnPlace.Tools.Ingest`. There is no recipe
+delete endpoint today; if one is added it must decrement the count.
+
+**Verification.** On a clone of the user's database (120,506 canonical ingredients,
+13,635,157 recipe ingredients) the migration applied cleanly and backfilled 118,072 rows.
+The ranked search runs in 92 ms for "ch", 86 ms for "sa", and 92 ms for "apple" (versus
+2,900 ms with the earlier correlated-count approach). The term "apple" now returns apple,
+apple cider vinegar, applesauce, apple juice, apple cider as the first five results.
+API suite: 646 unit + 18 integration tests pass, 90.8% line coverage. Angular suite: 585
+tests pass, 94.6% line coverage. A defect QA caught before close: a failed search request
+put the `rxResource` into an error state that threw in the template; the stream now
+catches errors and degrades to an empty result set. Users must run
+`dotnet ef database update` to apply the new migration before using this feature.
+
+### Acceptance Criteria
+```gherkin
+Feature: Server-Side Ingredient Search for Inventory Dialog Autocomplete
+
+  Scenario: Bounded search replaces unbounded list
+    Given the CanonicalIngredients table contains 120,505 rows
+    When I call GET /api/v1/referencedata/ingredients with search="chick" and limit=20
+    Then the response contains at most 20 ingredient items
+    And the response is a plain array of CanonicalIngredientDto (no PagedResult envelope)
+    And the SQL query includes a LIMIT clause and never loads the full table
+
+  Scenario: Blank or whitespace search returns an empty list
+    Given the CanonicalIngredients table contains 120,505 rows
+    When I call GET /api/v1/referencedata/ingredients with search="" or search="   "
+    Then the response is an empty array with HTTP 200
+    And no database query executes against the CanonicalIngredients table
+
+  Scenario: Limit parameter is clamped to a safe range
+    Given a caller requests GET /api/v1/referencedata/ingredients with search="rice" and limit=500
+    When the server processes the request
+    Then the limit is clamped to 50
+    And the response contains at most 50 items
+
+  Scenario: Default limit is applied when limit is omitted
+    Given a caller requests GET /api/v1/referencedata/ingredients with search="butter" and no limit parameter
+    When the server processes the request
+    Then the server uses a default limit of 20
+    And the response contains at most 20 items
+
+  Scenario: Search is case-insensitive
+    Given a canonical ingredient named "Chicken Breast" exists
+    When I search with search="chicken breast"
+    Then "Chicken Breast" appears in the results
+
+  Scenario: Prefix matches are ranked before substring matches
+    Given canonical ingredients "Garlic" and "Roasted Garlic Hummus" exist
+    When I search with search="garlic"
+    Then "Garlic" appears before "Roasted Garlic Hummus" in the results
+
+  Scenario: Results use database-side DTO projection
+    Given the endpoint queries the CanonicalIngredients table
+    When the query executes
+    Then the SQL projects only the fields needed by CanonicalIngredientDto
+    And no full entity materialization occurs
+
+  Scenario: Swagger documentation reflects the new parameters
+    Given the OpenAPI spec is generated by Swashbuckle
+    When a developer inspects the spec for GET /api/v1/referencedata/ingredients
+    Then the search (string) and limit (integer, default 20, range 1-50) query parameters are documented
+    And the endpoint description explains that blank search returns an empty list
+
+  Scenario: POST endpoint and units endpoint are unchanged
+    Given POST /api/v1/referencedata/ingredients exists for creating new ingredients
+    And GET /api/v1/referencedata/units exists for listing units of measure
+    When the search parameters are added to the GET ingredients endpoint
+    Then the POST endpoint behavior is unaffected
+    And the GET units endpoint behavior is unaffected
+
+  Scenario: Angular dialog debounces ingredient search input
+    Given the user opens the "Add Item" inventory dialog
+    When the user types "chi" into the ingredient autocomplete field
+    Then the dialog waits 250 ms after the last keystroke before sending a search request
+    And typing additional characters within the 250 ms window resets the debounce timer
+    And no request is sent until the debounced input stabilizes
+
+  Scenario: Minimum character threshold prevents trivial searches
+    Given the user opens the "Add Item" inventory dialog
+    When the user types a single character "c" into the ingredient autocomplete field
+    Then no search request is sent to the API
+    When the user types a second character making the input "ch"
+    Then a search request is sent after the debounce period
+
+  Scenario: Stale in-flight requests are cancelled
+    Given the user types "chi" and a search request is in flight
+    When the user continues typing to "chic" before the first request returns
+    Then the first request is cancelled
+    And only the result of the "chic" search is displayed
+
+  Scenario: Loading indicator appears during search
+    Given the user has typed "chick" and the debounce period has elapsed
+    When the search request is in flight
+    Then a loading indicator appears in the autocomplete dropdown
+    When the results arrive
+    Then the loading indicator is replaced by the matching ingredient options
+
+  Scenario: Create-new option derives from debounced query and search results
+    Given the user types "Dragon Fruit" into the ingredient autocomplete
+    And the search returns no exact match
+    When the autocomplete results are displayed
+    Then a "Create Dragon Fruit" option appears at the end of the list
+    And the option text reflects the debounced query, not a stale value
+
+  Scenario: Edit mode pre-fills ingredient name and selected ID
+    Given I am editing an existing inventory item with ingredient "Olive Oil" (ID 42)
+    When the edit dialog opens
+    Then the ingredient autocomplete field displays "Olive Oil"
+    And the selected ingredient ID is 42
+    And no initial search request fires until the user modifies the input
+
+  Scenario: Units load in parallel with dialog initialization
+    Given the user opens the "Add Item" inventory dialog
+    When the dialog initializes
+    Then the units of measure request fires immediately, in parallel with initial rendering
+    And the units request is not chained after any ingredient request
+    And units are available for selection as soon as their response arrives
+
+  Scenario: Ingredient selection validation still works
+    Given the user has typed into the ingredient autocomplete
+    When the user submits the form without selecting an ingredient from the list
+    Then the form shows a validation error requiring an ingredient selection
+    And the form cannot be submitted until a valid ingredient is selected
+
+  Scenario: Recipe create rows use the shared autocomplete instead of a full-list select
+    Given the user is on the recipe create page
+    And each ingredient row previously rendered a mat-select over all 120,505 canonical ingredients
+    When the page loads
+    Then each ingredient row renders the shared IngredientAutocompleteComponent instead
+    And the allowCreate input is disabled on the recipe create page
+    And no mat-select over the full ingredient list exists anywhere on the page
+
+  Scenario: Selecting an ingredient in a recipe row sets that row's canonical ingredient ID
+    Given the user is editing an ingredient row on the recipe create page
+    When the user types "basil" into the shared autocomplete and selects "Fresh Basil" from the results
+    Then the row's canonicalIngredientId is set to the ID of "Fresh Basil"
+    And the autocomplete displays "Fresh Basil" as the selected value
+
+  Scenario: Shared component is the single owner of search behaviour
+    Given the IngredientAutocompleteComponent is a standalone Angular component implementing ControlValueAccessor
+    When the inventory dialog and the recipe create page both use it
+    Then debounce timing (250 ms), minimum character threshold (2), and stale-request cancellation are implemented only in the shared component
+    And neither consumer duplicates any of that logic
+
+  Scenario: No remaining caller requests the full ingredient list
+    Given the shared IngredientAutocompleteComponent replaces all previous ingredient selection controls
+    When every consumer of GET /api/v1/referencedata/ingredients is accounted for
+    Then no frontend component calls the endpoint without a non-blank search parameter
+    And the old ReferenceDataService.getIngredients() method that fetched the full list is removed or unreachable
+
+  Scenario: Prefix match beats higher reference count
+    Given canonical ingredients "Apple" (38,510 recipe references) and "Pineapple" (67,693 recipe references) exist
+    When I search with search="apple"
+    Then "Apple" appears before "Pineapple" in the results
+    Because "Apple" is a prefix match and "Pineapple" is a substring match
+
+  Scenario: Higher reference count ranks first within the prefix-match group
+    Given canonical ingredients "Chicken Breast" (85,000 recipe references) and "Chicken Feet" (1,200 recipe references) both start with "chicken"
+    When I search with search="chicken"
+    Then "Chicken Breast" appears before "Chicken Feet" in the results
+    Because both are prefix matches and "Chicken Breast" has a higher RecipeReferenceCount
+
+  Scenario: Name breaks ties when reference counts are equal
+    Given canonical ingredients "Basil" and "Bay Leaf" both have 5,000 recipe references and both start with "ba"
+    When I search with search="ba"
+    Then "Basil" appears before "Bay Leaf" in the results
+    Because both are prefix matches with equal RecipeReferenceCount and "Basil" sorts before "Bay Leaf" alphabetically
+
+  Scenario: Migration backfills RecipeReferenceCount from existing RecipeIngredients
+    Given the CanonicalIngredients table has 120,505 rows with RecipeReferenceCount defaulting to 0
+    And the RecipeIngredients table contains 13,635,157 rows
+    When the EF Core migration runs via "dotnet ef database update"
+    Then every CanonicalIngredient's RecipeReferenceCount is set to the number of RecipeIngredient rows referencing it
+    And canonical ingredients with no recipe references retain a count of 0
+
+  Scenario: API recipe import increments RecipeReferenceCount
+    Given a canonical ingredient "Saffron" has a RecipeReferenceCount of 412
+    When a new recipe is imported through POST /api/v1/recipes with 1 RecipeIngredient referencing "Saffron"
+    Then "Saffron" RecipeReferenceCount increases to 413
+
+  Scenario: Kaggle ingest recomputes RecipeReferenceCount at end of run
+    Given the MealsEnPlace.Tools.Ingest tool has finished inserting all recipes from a Kaggle dataset
+    When the ingest run completes
+    Then RecipeReferenceCount is recomputed for every CanonicalIngredient from the full RecipeIngredients table
+    And the counts reflect the complete post-ingest state, not incremental updates
+
+  Scenario: Search completes well under one second on the full table
+    Given the CanonicalIngredients table contains 120,505 rows with a populated RecipeReferenceCount column
+    And the RecipeIngredients table contains 13,635,157 rows
+    When I search with search="ch" (a broad term matching thousands of candidates)
+    Then the response returns in under 500 ms
+    And the query uses the stored RecipeReferenceCount rather than a live correlated COUNT
+```
+
+---
+
+## [MEP-049] NER Token Normalization at Ingest Time
+
+**Status:** Done
+**Priority:** Medium
+**Depends on:** MEP-026 (the Kaggle ingest pipeline this story modifies), MEP-048 (the search that exposed the junk rows)
+
+### Implementation Notes
+Shipped as a pure `NerTokenNormalizer` in `MealsEnPlace.Tools.Ingest`. Rule order: trim;
+strip leading/trailing characters that are not letters or digits (so wrapping quotes,
+brackets, slashes, and periods are removed while internal apostrophes and hyphens survive);
+collapse internal whitespace; repeatedly strip a trailing stopword but never the last
+remaining word; reject empty, reject no-letters, reject all-stopwords. Stopword set:
+{a, add, an, and, for, of, or, plus, the, to, with}.
+
+`Program.cs` normalizes each row's NER list once up front and feeds the cleaned list to both
+the pre-create loop and the best-match picker, so a rejected token never creates a
+CanonicalIngredient row and fallback to the next-best match is automatic.
+`GetOrCreate` also normalizes defensively and routes rejections to the existing "unknown"
+row. `IngestSummary` reports NER tokens normalized and rejected.
+
+Two review findings fixed before close: (1) a token truncated at 200 characters could keep
+a trailing space -- now `TrimEnd` runs after the cut; (2) apostrophes were originally allowed
+at the edges, so `'apple'` kept its wrapping quotes -- edge stripping now removes them.
+
+Verification: 115 ingest-scoped unit tests pass; `NerTokenNormalizer` and
+`CanonicalIngredientRegistry` at 100% line coverage. A 20,000-row dry run against the
+user's CSV completed and reported 39 normalized / 26 rejected tokens.
+
+Full re-ingest verification (2026-09-10, 42 minutes): 2,231,142 rows read, 588,044
+Recipes1M rows skipped, 1,643,098 recipes ingested, 143,107 canonical ingredients created,
+14,833 NER tokens normalized, 31,131 rejected, reference counts backfilled, zero stderr
+output. Post-ingest checks: 0 canonical names with a non-alphanumeric leading or trailing
+character; the "apple" search returns Apples, apple, apple cider vinegar, applesauce, apple
+juice, apple cider first with none of the punctuation variants present.
+
+Scope decision during verification: the reset procedure was missing the MEP-038 Dedup tool
+(`src/MealsEnPlace.Tools.Dedup`) as a final step. The dedup tool is a separate offline pass
+that folds plural and prep-modifier variants (e.g., "Apples" into "apple"); it is not part
+of the ingest, so a fresh ingest lands at ~143k canonical rows until the dedup runs. A dry
+run on the new database projected 15,261 fold groups, 25,289 loser rows, and 2,931,374
+RecipeIngredient reassignments. The dedup tool has also been updated on this branch to
+recompute `RecipeReferenceCount` at the end of a live run, mirroring the ingest tool. The
+README now documents the full procedure as: reset database, apply migrations, run ingest,
+run dedup dry-run to review, run dedup live. Both tools recompute reference counts.
+
+Follow-on candidate (not a new item): 3,640 names still contain internal punctuation such
+as "parmesan/romano", "chili_powder", "preserves(blueberry", "oreo® cookies", and
+stopword-free fragments like "a crowd" and "type fruit" survive because only trailing
+connectives are stripped.
+
+### Business Problem
+The Kaggle bulk ingest (MEP-026) feeds every NER-column token through
+`CanonicalIngredientRegistry.GetOrCreate`, which trims whitespace and truncates at 200
+characters but applies no further normalization. The Kaggle NER column is noisy: tokens
+arrive with leading or trailing punctuation, dangling brackets, embedded slashes, trailing
+connectives ("apple and", "apple add"), and fragments that contain no letters at all ("a
+crowd", "and", "type fruit"). Each noisy token becomes its own CanonicalIngredient row.
+
+After MEP-038's morphological deduplication pass the table holds 120,505 rows. Of those,
+1,480 names have leading or trailing punctuation or brackets; 6,381 names contain a character
+other than letters, spaces, apostrophes, or hyphens; and 2,434 rows are referenced by zero
+RecipeIngredients (1,902 of those are in the punctuation set). The MEP-048 ingredient search
+makes the problem user-visible: searching "apple" shows "apple", "apple [", "apple.",
+"apple/", and "apple add" side by side. "apple" is referenced by 38,510 RecipeIngredients;
+the four junk variants by a combined total of 2.
+
+The fix belongs in the importer, not in a repair migration over existing rows. Normalizing
+tokens at ingest time prevents junk from entering the table in the first place. After the
+normalization rules are in place the user will run a full re-ingest from a clean database.
+The re-ingest procedure is a full reset: drop and recreate the Postgres database (or
+recreate the Docker volume), apply all EF Core migrations so seed data lands, then run the
+ingest tool once. All existing data -- inventory items, user-created ingredients, recipes --
+is wiped and rebuilt from scratch.
+
+The ingest tool currently has no documented reset or re-ingest procedure (the README
+documents `--csv`, `--dry-run`, and `--max-rows` only). This story must also document the
+full reset-and-ingest procedure so the user can repeat it confidently. The documentation
+must warn that the ingest tool does not detect previously imported recipes: running it twice
+against the same database duplicates every recipe.
+
+Semantic merging of true synonyms (e.g., "bell pepper" vs "sweet pepper") remains in
+MEP-038's domain and is out of scope here.
+
+### Acceptance Criteria
+```gherkin
+Feature: NER Token Normalization at Ingest Time
+
+  Scenario: Leading and trailing punctuation and brackets are stripped
+    Given a Kaggle NER token "apple ["
+    When the normalization step runs
+    Then the normalized value is "apple"
+    And the CanonicalIngredient row is stored with name "apple"
+
+  Scenario: Trailing punctuation variants collapse to the base name
+    Given Kaggle NER tokens "apple.", "apple/", and "apple"
+    When each token is normalized and passed to GetOrCreate
+    Then all three resolve to the same CanonicalIngredient row with name "apple"
+
+  Scenario: Internal whitespace is collapsed
+    Given a Kaggle NER token "  red   bell   pepper  "
+    When the normalization step runs
+    Then the normalized value is "red bell pepper"
+
+  Scenario: Trailing connective is stripped rather than rejecting the token
+    Given Kaggle NER tokens "apple and" and "apple add"
+    When the normalization step runs
+    Then both normalize to "apple"
+    And both resolve to the same CanonicalIngredient row as a plain "apple" token
+
+  Scenario: Token normalizing to empty is rejected
+    Given a Kaggle NER token consisting only of punctuation (e.g., "[", "//")
+    When the normalization step runs
+    Then the token is rejected
+    And no CanonicalIngredient row is created for it
+    And the raw ingredient falls back to the next-best NER match or existing unknown handling
+
+  Scenario: Token containing no letters is rejected
+    Given a Kaggle NER token "1/2" or "3.5"
+    When the normalization step runs
+    Then the token is rejected because it contains no alphabetic characters
+    And no CanonicalIngredient row is created for it
+
+  Scenario: Stopword-only token is rejected
+    Given a Kaggle NER token "and" or "a" or "of the" or "for" or "with"
+    When the normalization step runs
+    Then the token is rejected because it consists entirely of English stopwords or connectives
+    And no CanonicalIngredient row is created for it
+    And the stopword list includes at minimum: a, an, the, and, or, of, for, with, to, add, plus
+
+  Scenario: Normalization rules are pure functions with unit tests
+    Given the normalization logic is implemented as pure functions
+    When the unit test suite in tests/MealsEnPlace.Unit/Tools/Ingest runs
+    Then the five apple examples ("apple", "apple [", "apple.", "apple/", "apple add") all normalize to "apple"
+    And edge cases for empty, no-letter, and stopword-only tokens are covered
+    And the tests are independent of database state
+
+  Scenario: Ingest summary reports normalization and rejection counts
+    Given a full Kaggle ingest completes
+    When the summary is printed
+    Then it reports the count of tokens that were normalized (original differed from stored value)
+    And the count of tokens that were rejected (did not produce a CanonicalIngredient row)
+
+  Scenario: Full re-ingest produces no punctuation-fragment ingredient names
+    Given the normalization rules are deployed in CanonicalIngredientRegistry
+    And the user runs a full re-ingest against the Kaggle CSV
+    When the ingest completes
+    Then no CanonicalIngredient name matches the pattern of leading or trailing punctuation or brackets
+    And searching "apple" returns "apple" without "apple [", "apple.", "apple/", or "apple add" variants
+
+  Scenario: Full database reset procedure is documented
+    Given the ingest tool's README (src/MealsEnPlace.Tools.Ingest/README.md) currently has no reset or re-ingest documentation
+    When MEP-049 ships
+    Then the README documents the step-by-step procedure: drop and recreate the Postgres database (or recreate the Docker volume), apply all EF Core migrations with "dotnet ef database update --project src/MealsEnPlace.Api" so seed data lands, run the ingest tool once, run the MEP-038 Dedup tool with --dry-run to review projected folds, then run the Dedup tool live
+    And the procedure states explicitly that all existing data (inventory, recipes, user-created ingredients) is wiped
+    And both the ingest and dedup tools recompute RecipeReferenceCount at the end of a live run
+
+  Scenario: README warns against running the ingest tool twice without resetting
+    Given the ingest tool does not detect previously imported recipes
+    When a user runs the ingest tool against a database that already contains ingested recipes
+    Then every recipe in the CSV is inserted again, duplicating the entire catalog
+    And the README states that the database must be reset before re-ingesting
+    And the README labels this as a destructive operation that cannot be undone
+```
+
+---
+
+## [MEP-050] Canonical Ingredient Normalization Gaps: Preservation State, Typos, Brands, Filler, and URL Rejection
+
+**Status:** Done
+**Priority:** Medium
+**Depends on:** MEP-038 (dedup tooling this story extends), MEP-049 (NER normalization and re-ingest procedure this story reuses)
+
+### Business Problem
+A data-quality investigation into the `CanonicalIngredients` table -- prompted by searching "pea" and finding 398 near-duplicate rows -- uncovered several categories of ingredient-name duplication that the existing MEP-038 fold-group approach and MEP-049 NER token normalization do not catch. `CanonicalNameNormalizer` (in `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`) builds a fold-group key by lowercasing, splitting on space/tab/comma/parens/hyphen, dropping a flat stopword list of cosmetic prep words, singularizing, and sorting tokens. `FoldGroupResolver` folds any two names that produce the same key. This works for pure prep/plural noise but misses five distinct failure modes, all found among the "pea" duplicates but generalizable to the whole ~120k-row canonical ingredient table:
+
+1. **Preservation-state words are miscategorized as cosmetic.** The current stopword list includes `fresh`, `frozen`, `dried`, `cooked`, `raw`, and `uncooked` alongside pure prep-cut words like `chopped` and `diced`. This folded `frozen peas`, `fresh peas`, `cooked peas`, and `dried peas` all into a single `pea` canonical (confirmed via `CanonicalIngredientAliases`) -- which is wrong. Preservation state changes how an ingredient is stored, purchased, and used in a recipe. `fresh peas` and `frozen peas` must be distinct `CanonicalIngredient` rows, the same way `baby carrot` is already distinct from `carrot`. The six preservation-state words (`fresh`, `frozen`, `dried`, `cooked`, `raw`, `uncooked`) must be removed from the stopword list and treated as substantive. Pure prep-cut words (`chopped`, `crushed`, `cubed`, `cut`, `diced`, `grated`, `ground`, `halved`, `minced`, `peeled`, `quartered`, `seeded`, `shredded`, `sliced`, `trimmed`, `whole`) stay cosmetic and keep folding as today.
+
+   **Critical constraint:** the MEP-038 dedup pass is destructive -- it deletes loser `CanonicalIngredient` rows and only records the folded name string in `CanonicalIngredientAliases`, with no record of which specific `RecipeIngredient` row originated from which pre-fold name. `frozen peas` cannot be surgically split back out of the current `pea` row because there is no way to know which of `pea`'s 17,631 `RecipeIngredient` references were originally "frozen peas" vs "fresh peas" vs plain "peas." The only correct fix is the full reset-and-re-ingest procedure documented in MEP-049: drop/recreate the Postgres database, re-run the ingest tool against the user's Kaggle CSV, re-run the Dedup tool. This wipes inventory items, user-created ingredients, and meal plans -- same consequence as MEP-049.
+
+2. **Typos are not caught at all.** Examples: `frozed peas`, `spit peas`, `slit peas`, `sping peas`, `yellow splitt peas`, `earlie peas`, `pidgeaon peas`, and three misspellings of the Le Sueur brand (`lesuer`, `leseur`, `lesueuer`). The fix is a small hand-curated typo/synonym dictionary applied as an extra normalization step before the token-set key is built. Automatic fuzzy/edit-distance matching is explicitly rejected because it is dangerous in this domain -- `pea` and `pear` are one edit apart, and automatic distance-based folding could silently corrupt recipe matching data. The dictionary must also cover compound-word vs. split-word synonyms that the token-set approach cannot catch because they do not share tokens at all: `chickpea` / `chick pea`, and `black-eyed` / `black eyed` / `blackeyed` / `black eye` (all currently separate canonicals; `back eyed peas` and `blacck eyed peas` are typos of the same group).
+
+3. **Brand names are not stripped.** Examples: `lesueur peas`, `lesueur green peas`, `del monte peas`, `del monte sugar peas`, `campbell's pea soup`, `birds eye sweet peas`, `green giant baby early peas`, `green giant frozen sweet peas`, `knorr green peas`. A new brand-name stopword category (separate from the prep-cut list) should be added to `CanonicalNameNormalizer` so brand words strip out the same way prep words do (e.g., `lesueur peas` folds to `pea`, `campbell's pea soup` folds to `pea soup`). This list will grow over time as more brands surface across the wider catalog, not just peas -- it should live somewhere clearly extensible (e.g., a separate file or configuration section rather than inline in the normalizer method).
+
+4. **Leading filler/quantity words and recipe-authoring artifacts are not caught.** Examples: `handful of peas`, `handful snow peas`, `bags of frozen peas`, `bags peas`, `packets frozen peas`, `mugful frozen peas`, `kilogram snow peas`, `gallon peas`, `pints peas`, and non-ingredient phrasing artifacts `peas optional`, `peas and/or`, `choice of peas`, `either peas`, `peas etc`, `peas - if`, `e.g. peas`. A second new stopword category (filler/quantity/authoring-artifact words) should strip these the same way. Additionally, `CanonicalNameNormalizer.Normalize` splits on `[' ', '\t', ',', '(', ')', '-']` but not `/`, so tokens like `peas/carrots`, `chickpeas/garbanzo beans`, and `peanut/vegetable oil` never tokenize correctly. `/` must be added to the split-character set.
+
+5. **URLs leak into canonical ingredient names.** Two `CanonicalIngredient` rows are entire Food Network URLs (e.g., `http://www.foodnetwork.com/recipes/paula-deen/sure-fire-no-fire-smores-recipe/index.html?oc=linkback`) that were extracted from the Kaggle NER column as ingredient names. `NerTokenNormalizer` (in `src/MealsEnPlace.Tools.Ingest/NerTokenNormalizer.cs`) strips edge punctuation but never rejects a token containing a URL shape, so these pass through as valid canonical ingredients. A rejection rule must be added to `NerTokenNormalizer.Normalize` for any token containing `://` (or otherwise matching a URL shape), following the same rejection pattern already used for `EmptyAfterCleanup`, `NoLetters`, and `StopwordsOnly`. This is a different bug from MEP-037, which handles ad/tracking URLs in the Kaggle row's `link` field (`Recipe.SourceUrl`); this bug is about URLs leaking into the NER ingredient token column and becoming `CanonicalIngredient` rows -- an unrelated column and unrelated failure mode. Not scoped to peas; likely present across the whole catalog.
+
+**Non-goal:** `snow pea`, `sugar snap pea`, `black-eyed peas`, `split peas` (yellow and green stay separate), `chickpea`, and `pigeon pea` are genuine distinct ingredients and sub-varieties. They must NOT be folded together. Nothing in this story should fold them, and acceptance criteria verify that they survive intact.
+
+**Recommended sequencing:** Items 2, 3, and 4 (typo/synonym dictionary, brand stopwords, filler stopwords, `/` delimiter) are non-destructive against the current database -- those duplicate rows still exist un-folded today, so extending `CanonicalNameNormalizer` / `FoldGroupResolver` and re-running `MealsEnPlace.Tools.Dedup --dry-run` then live folds them without requiring a reset. Item 5 (URL rejection in `NerTokenNormalizer`) only affects future ingests, not current data, unless bundled with a reset. Item 1 (preservation-state un-fold) strictly requires the full reset-and-re-ingest procedure because it is undoing an already-applied destructive fold. Recommendation: land all normalizer/ingest changes (items 1 through 5) together, then do exactly one reset, re-ingest, `Dedup --dry-run`, `Dedup` (live) cycle rather than doing a non-destructive dedup pass now and a second reset later.
+
+### Verification note
+
+Verified against a full reset-and-re-ingest of the live database (2026-09-13): 143,049 raw
+canonical rows folded to 117,500. `fresh pea` (420 refs), `frozen pea` (9,112 refs), and
+`pea` (8,445 refs) are now three distinct canonicals, confirming the preservation-state
+split. `lesueur peas`, `del monte peas`, `campbell's pea soup`, `birds eye sweet peas`, and
+`knorr green peas` all folded into their non-branded survivor (recorded as aliases);
+`chickpea`/`chick pea`/`chickpeas` collapsed to one row; the two Food Network URL rows are
+gone and no `://`-shaped name remains anywhere in the catalog.
+
+Two known residual gaps, neither blocking: (1) a brand-name phrase only strips from a name
+when a non-branded duplicate exists to fold into -- a singleton with no such duplicate (e.g.
+`green giant baby early peas`) keeps its brand in the display name even though its fold key
+is brand-free, since this dedup pass merges duplicates rather than renaming unique rows; (2)
+`black-eye peas` (hyphenated, no trailing "d") wasn't added to the typo dictionary's
+`black eye` (space-separated) pattern, so it didn't join the `black eyed` family. Also
+unrelated to this story: one pre-existing degenerate canonical named literally `http` (2
+refs) predates the URL fix and isn't a full URL, so the `://` rejection rule doesn't apply to
+it.
+
+Also discovered during the live run: Npgsql's default 30-second command timeout is too short
+for a bulk `UPDATE` against the 14M-row `RecipeIngredients` table when a fold group's loser
+has a very large reference count. The first live attempt aborted partway through (partial
+progress preserved safely -- see `CanonicalIngredientDedupRunner`'s per-batch transactions);
+a retry with `Command Timeout=300` on the connection string completed cleanly. Documented in
+`src/MealsEnPlace.Tools.Dedup/README.md`.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization Gaps
+
+  Scenario: Preservation-state words are treated as substantive, not cosmetic
+    Given CanonicalNameNormalizer's stopword list currently includes "fresh", "frozen", "dried", "cooked", "raw", and "uncooked"
+    When the stopword list is corrected
+    Then "fresh", "frozen", "dried", "cooked", "raw", and "uncooked" are removed from the cosmetic stopword list
+    And "fresh peas" and "frozen peas" produce different fold-group keys
+    And "chopped peas" and "diced peas" still produce the same fold-group key as "peas"
+
+  Scenario: Preservation-state correction requires full reset-and-re-ingest
+    Given the MEP-038 dedup pass destructively deleted loser CanonicalIngredient rows
+    And CanonicalIngredientAliases records only the folded name string, not which RecipeIngredient rows originated from which pre-fold name
+    When the preservation-state stopword correction is deployed
+    Then the full reset-and-re-ingest procedure (MEP-049) is executed: drop/recreate the Postgres database, apply migrations, run ingest, run Dedup --dry-run, run Dedup live
+    And the procedure wipes inventory items, user-created ingredients, and meal plans
+    And the re-ingest documentation is updated to note this consequence
+
+  Scenario: Typo/synonym dictionary corrects known misspellings before fold-key computation
+    Given a hand-curated typo/synonym dictionary is configured
+    And the dictionary maps "frozed" to "frozen", "spit" to "split", "slit" to "split", "sping" to "snap", "splitt" to "split", "earlie" to "early", "pidgeaon" to "pigeon"
+    When CanonicalNameNormalizer processes the token "frozed peas"
+    Then the token normalizes as if it were "frozen peas"
+    And "spit peas" normalizes as "split peas"
+    And "pidgeaon peas" normalizes as "pigeon peas"
+
+  Scenario: Typo/synonym dictionary corrects Le Sueur brand misspellings
+    Given the dictionary maps "lesuer", "leseur", and "lesueuer" to "lesueur"
+    When CanonicalNameNormalizer processes "lesuer peas"
+    Then the token normalizes the same as "lesueur peas"
+    And after brand stripping (see brand-name scenario), all resolve to "pea"
+
+  Scenario: Typo/synonym dictionary handles compound-word and split-word synonyms
+    Given the dictionary maps "chickpea" to "chick pea" (or vice versa) as a compound synonym
+    And the dictionary maps "blackeyed" to "black-eyed", "black eye" to "black-eyed"
+    When CanonicalNameNormalizer processes "chickpea", "chick pea", "black-eyed peas", "blackeyed peas", "black eye peas"
+    Then "chickpea" and "chick pea" produce the same fold-group key
+    And "black-eyed peas", "blackeyed peas", and "black eye peas" produce the same fold-group key
+    And "back eyed peas" (typo) and "blacck eyed peas" (typo) also resolve to the same key via the typo dictionary
+
+  Scenario: No fuzzy or edit-distance matching is used
+    Given the typo correction uses only a hand-curated dictionary
+    When "pea" and "pear" are processed
+    Then they remain distinct fold-group keys despite being one edit apart
+    And no automatic distance-based folding is applied
+
+  Scenario: Brand names are stripped via a brand-name stopword category
+    Given a brand-name stopword list is configured separately from the prep-cut stopword list
+    And the list includes "lesueur", "del monte", "campbell's", "birds eye", "green giant", "knorr"
+    When CanonicalNameNormalizer processes "lesueur peas"
+    Then the fold-group key matches that of "peas"
+    And "del monte sugar peas" folds to the same key as "sugar peas"
+    And "campbell's pea soup" folds to the same key as "pea soup"
+    And "green giant frozen sweet peas" folds to the same key as "frozen sweet peas"
+
+  Scenario: Brand-name stopword list is extensible
+    Given the brand-name list will grow as more brands surface across the wider catalog
+    When the list is implemented
+    Then it lives in a clearly extensible location (separate file, configuration section, or dedicated constant collection) rather than inline in the normalizer method
+
+  Scenario: Filler, quantity, and authoring-artifact words are stripped
+    Given a filler/quantity/authoring-artifact stopword list includes "handful", "bags", "packets", "mugful", "kilogram", "gallon", "pints", "optional", "etc", "choice", "either", "e.g"
+    When CanonicalNameNormalizer processes "handful of peas"
+    Then the fold-group key matches that of "peas"
+    And "bags of frozen peas" folds to the same key as "frozen peas"
+    And "peas optional" folds to the same key as "peas"
+    And "e.g. peas" folds to the same key as "peas"
+
+  Scenario: Forward slash is added to the split-character set
+    Given CanonicalNameNormalizer.Normalize currently splits on space, tab, comma, parens, and hyphen
+    When "/" is added to the split-character set
+    Then "peas/carrots" tokenizes into "peas" and "carrots"
+    And "chickpeas/garbanzo beans" tokenizes into "chickpeas", "garbanzo", and "beans"
+    And "peanut/vegetable oil" tokenizes into "peanut", "vegetable", and "oil"
+
+  Scenario: URL-shaped NER tokens are rejected at ingest time
+    Given a Kaggle NER token is "http://www.foodnetwork.com/recipes/paula-deen/sure-fire-no-fire-smores-recipe/index.html?oc=linkback"
+    When NerTokenNormalizer.Normalize processes the token
+    Then the token is rejected with a reason analogous to "EmptyAfterCleanup", "NoLetters", or "StopwordsOnly"
+    And no CanonicalIngredient row is created for it
+    And IngestSummary reports the rejection
+
+  Scenario: URL rejection is distinct from MEP-037 ad/tracking URL stripping
+    Given MEP-037 handles ad/tracking URLs in the Kaggle row's link field (Recipe.SourceUrl)
+    When a URL leaks into the NER ingredient token column
+    Then the NerTokenNormalizer URL rejection catches it
+    And the fix applies to any URL shape (containing "://"), not only ad/tracking patterns
+
+  Scenario: Genuine distinct ingredients are NOT folded together
+    Given CanonicalIngredient rows exist for "snow pea", "sugar snap pea", "black-eyed peas", "split peas", "chickpea", and "pigeon pea"
+    When the full normalization and dedup pipeline runs
+    Then each remains a distinct CanonicalIngredient row
+    And "snow pea" is not folded into "pea"
+    And "sugar snap pea" is not folded into "pea"
+    And "black-eyed peas" is not folded into "pea"
+    And "split peas" is not folded into "pea"
+    And "chickpea" is not folded into "pea"
+    And "pigeon pea" is not folded into "pea"
+    And yellow split peas and green split peas remain separate
+
+  Scenario: All changes land together with a single reset-and-re-ingest cycle
+    Given items 2, 3, and 4 (typo dictionary, brand stopwords, filler stopwords, "/" delimiter) are non-destructive
+    And item 5 (URL rejection) only affects future ingests
+    And item 1 (preservation-state un-fold) requires a full reset
+    When all five changes are implemented
+    Then exactly one reset, re-ingest, Dedup --dry-run, Dedup (live) cycle is performed
+    And no intermediate non-destructive dedup pass followed by a second reset is needed
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all normalizer changes have been deployed
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups, alias inserts, and per-table FK reassignment counts
+    And the user can review the output before running the live pass
 ```
 
 ---

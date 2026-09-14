@@ -5,6 +5,7 @@
 //   When RunAsync is invoked with dryRun=true
 //   Then the DB rows are unchanged
 //   And the summary reports the projected fold group and FK counts
+//   And RecipeReferenceCountBackfilled is false (dry-run skips the backfill)
 //
 // Scenario: Live run folds losers into the survivor and reassigns every FK table
 //   Given losers that have FKs in RecipeIngredient / InventoryItem / ShoppingListItem / SeasonalityWindow / ConsumeAuditEntry
@@ -12,6 +13,9 @@
 //   Then only the survivor CanonicalIngredient remains
 //   And every child-table row now points at the survivor
 //   And an alias row exists for each loser, pointing at the survivor
+//   And RecipeReferenceCountBackfilled is false because the SQLite provider does not
+//       support UPDATE ... FROM (backfill is guarded to Npgsql; production behaviour
+//       differs — on Npgsql the flag is true and the count column is updated)
 //
 // Scenario: Empty database is a no-op
 //   Given no CanonicalIngredient rows
@@ -96,7 +100,7 @@ public sealed class CanonicalIngredientDedupRunnerTests : IDisposable
         var recipe = SeedRecipe();
         var survivor = SeedCanonicalIngredient("onion");
         var loser1 = SeedCanonicalIngredient("chopped onion");
-        var loser2 = SeedCanonicalIngredient("fresh onions");
+        var loser2 = SeedCanonicalIngredient("sliced onions");
         SeedRecipeIngredient(loser1.Id, recipe.Id);
         SeedRecipeIngredient(loser1.Id, recipe.Id);
         SeedRecipeIngredient(loser2.Id, recipe.Id);
@@ -111,6 +115,8 @@ public sealed class CanonicalIngredientDedupRunnerTests : IDisposable
         summary.LoserRowsDeleted.Should().Be(2);
         summary.AliasRowsWritten.Should().Be(2);
         summary.RecipeIngredientFksReassigned.Should().Be(3);
+        // Dry-run returns before the backfill block; flag must remain false.
+        summary.RecipeReferenceCountBackfilled.Should().BeFalse();
 
         (await _dbContext.CanonicalIngredients.CountAsync()).Should().Be(SeededCanonicalCount + 3);
         (await _dbContext.CanonicalIngredientAliases.CountAsync()).Should().Be(0);
@@ -144,6 +150,10 @@ public sealed class CanonicalIngredientDedupRunnerTests : IDisposable
         summary.ShoppingListItemFksReassigned.Should().Be(1);
         summary.SeasonalityWindowFksReassigned.Should().Be(1);
         summary.ConsumeAuditEntryFksReassigned.Should().Be(1);
+        // SQLite does not support UPDATE ... FROM (Postgres-only syntax), so the
+        // backfill is guarded to the Npgsql provider.  In this test the flag stays
+        // false; on a real Postgres run it would be true and the column would be updated.
+        summary.RecipeReferenceCountBackfilled.Should().BeFalse();
 
         // 10 seeded + 1 survivor = 11; the one loser is gone.
         // ExecuteUpdate / ExecuteDelete bypass the EF change tracker so assert

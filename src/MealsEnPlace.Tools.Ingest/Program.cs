@@ -93,7 +93,25 @@ foreach (var row in streamResult.Rows)
     // ── Canonical ingredients from NER ────────────────────────────────────
     // Upsert a canonical row per unique NER token. Order matters for later
     // "longest match wins" linkage.
-    foreach (var nerToken in row.Ner)
+    var cleanedNerTokens = new List<string>(row.Ner.Count);
+    foreach (var rawNerToken in row.Ner)
+    {
+        var normalizationResult = NerTokenNormalizer.Normalize(rawNerToken);
+        if (normalizationResult.IsRejected)
+        {
+            summary.NerTokensRejected++;
+            continue;
+        }
+
+        if (normalizationResult.NormalizedValue != rawNerToken)
+        {
+            summary.NerTokensNormalized++;
+        }
+
+        cleanedNerTokens.Add(normalizationResult.NormalizedValue!);
+    }
+
+    foreach (var nerToken in cleanedNerTokens)
     {
         _ = canonicalRegistry.GetOrCreate(nerToken);
     }
@@ -125,7 +143,7 @@ foreach (var row in streamResult.Rows)
     {
         summary.TotalIngredientsProcessed++;
 
-        var bestNer = CanonicalIngredientRegistry.PickBestNerMatch(rawIngredient, row.Ner);
+        var bestNer = CanonicalIngredientRegistry.PickBestNerMatch(rawIngredient, cleanedNerTokens);
         if (bestNer is null)
         {
             summary.IngredientsWithoutNerMatch++;
@@ -211,6 +229,27 @@ foreach (var row in streamResult.Rows)
 if (batchRecipeCount > 0)
 {
     await FlushBatchAsync(dbContext, unitOfMeasureResolver, summary, options.DryRun);
+}
+
+// Backfill RecipeReferenceCount for all CanonicalIngredients in one UPDATE so the
+// stored count is accurate after a bulk ingest.  The same SQL runs in the migration
+// for any database that predates this column, and in CanonicalIngredientDedupRunner
+// (MealsEnPlace.Tools.Dedup) after a fold pass.  If the SQL changes, update all three
+// copies.  Skipped in dry-run mode because no RecipeIngredient rows were written.
+if (!options.DryRun)
+{
+    await dbContext.Database.ExecuteSqlRawAsync(
+        """
+        UPDATE "CanonicalIngredients" c
+        SET "RecipeReferenceCount" = s.cnt
+        FROM (
+            SELECT "CanonicalIngredientId", COUNT(*)::integer AS cnt
+            FROM "RecipeIngredients"
+            GROUP BY "CanonicalIngredientId"
+        ) s
+        WHERE s."CanonicalIngredientId" = c."Id"
+        """);
+    summary.RecipeReferenceCountBackfilled = true;
 }
 
 summary.CanonicalIngredientsCreated = canonicalRegistry.NewRowsCreated;

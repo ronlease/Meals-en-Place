@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
@@ -17,11 +17,12 @@ export class ReferenceDataService {
     return this.http.post<CanonicalIngredientDto>(`${this.baseUrl}/ingredients`, request);
   }
 
-  getIngredients(): Observable<CanonicalIngredientDto[]> {
-    return this.http.get<CanonicalIngredientDto[]>(`${this.baseUrl}/ingredients`);
-  }
-
   getUnits(): Observable<UnitOfMeasureDto[]> {
     return this.http.get<UnitOfMeasureDto[]>(`${this.baseUrl}/units`);
+  }
+
+  searchIngredients(term: string, limit = 20): Observable<CanonicalIngredientDto[]> {
+    const params = new HttpParams().set('search', term).set('limit', limit);
+    return this.http.get<CanonicalIngredientDto[]>(`${this.baseUrl}/ingredients`, { params });
   }
 }
