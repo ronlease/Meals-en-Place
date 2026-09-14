@@ -48,6 +48,21 @@ MealsEnPlace.Tools.Dedup --dry-run
 MealsEnPlace.Tools.Dedup
 ```
 
+### Command timeout on large fold groups
+
+Npgsql's default command timeout is 30 seconds. A fold group whose loser has a very large
+`RecipeIngredient` reference count (tens of thousands of rows) can push a single bulk
+`UPDATE` past that on a 14M+ row table, which surfaces as `System.TimeoutException: Timeout
+during reading attempt` and aborts the whole run (MEP-050: observed reassigning ~1M+
+RecipeIngredient FKs total). Earlier batches that already committed are unaffected — the
+tool is safe to re-run; already-folded groups simply won't reappear in the next plan. If it
+times out, raise the timeout for the retry rather than shrinking `FoldGroupBatchSize`:
+
+```bash
+ConnectionStrings__DefaultConnection="Host=localhost;Port=5433;Database=mealsenplace;Username=mealsenplace;Password=mealsenplace_dev;Command Timeout=300" \
+  MealsEnPlace.Tools.Dedup
+```
+
 ## Connection string
 
 The tool reads `ConnectionStrings:DefaultConnection` from `appsettings.json`, with `ConnectionStrings__DefaultConnection` as the environment-variable override. The committed default targets the local Docker Compose Postgres on port 5433.

@@ -3692,7 +3692,7 @@ Feature: NER Token Normalization at Ingest Time
 
 ## [MEP-050] Canonical Ingredient Normalization Gaps: Preservation State, Typos, Brands, Filler, and URL Rejection
 
-**Status:** In Progress -- normalizer/ingest code and unit tests shipped; database not yet updated (see below)
+**Status:** Done
 **Priority:** Medium
 **Depends on:** MEP-038 (dedup tooling this story extends), MEP-049 (NER normalization and re-ingest procedure this story reuses)
 
@@ -3714,6 +3714,33 @@ A data-quality investigation into the `CanonicalIngredients` table -- prompted b
 **Non-goal:** `snow pea`, `sugar snap pea`, `black-eyed peas`, `split peas` (yellow and green stay separate), `chickpea`, and `pigeon pea` are genuine distinct ingredients and sub-varieties. They must NOT be folded together. Nothing in this story should fold them, and acceptance criteria verify that they survive intact.
 
 **Recommended sequencing:** Items 2, 3, and 4 (typo/synonym dictionary, brand stopwords, filler stopwords, `/` delimiter) are non-destructive against the current database -- those duplicate rows still exist un-folded today, so extending `CanonicalNameNormalizer` / `FoldGroupResolver` and re-running `MealsEnPlace.Tools.Dedup --dry-run` then live folds them without requiring a reset. Item 5 (URL rejection in `NerTokenNormalizer`) only affects future ingests, not current data, unless bundled with a reset. Item 1 (preservation-state un-fold) strictly requires the full reset-and-re-ingest procedure because it is undoing an already-applied destructive fold. Recommendation: land all normalizer/ingest changes (items 1 through 5) together, then do exactly one reset, re-ingest, `Dedup --dry-run`, `Dedup` (live) cycle rather than doing a non-destructive dedup pass now and a second reset later.
+
+### Verification note
+
+Verified against a full reset-and-re-ingest of the live database (2026-09-13): 143,049 raw
+canonical rows folded to 117,500. `fresh pea` (420 refs), `frozen pea` (9,112 refs), and
+`pea` (8,445 refs) are now three distinct canonicals, confirming the preservation-state
+split. `lesueur peas`, `del monte peas`, `campbell's pea soup`, `birds eye sweet peas`, and
+`knorr green peas` all folded into their non-branded survivor (recorded as aliases);
+`chickpea`/`chick pea`/`chickpeas` collapsed to one row; the two Food Network URL rows are
+gone and no `://`-shaped name remains anywhere in the catalog.
+
+Two known residual gaps, neither blocking: (1) a brand-name phrase only strips from a name
+when a non-branded duplicate exists to fold into -- a singleton with no such duplicate (e.g.
+`green giant baby early peas`) keeps its brand in the display name even though its fold key
+is brand-free, since this dedup pass merges duplicates rather than renaming unique rows; (2)
+`black-eye peas` (hyphenated, no trailing "d") wasn't added to the typo dictionary's
+`black eye` (space-separated) pattern, so it didn't join the `black eyed` family. Also
+unrelated to this story: one pre-existing degenerate canonical named literally `http` (2
+refs) predates the URL fix and isn't a full URL, so the `://` rejection rule doesn't apply to
+it.
+
+Also discovered during the live run: Npgsql's default 30-second command timeout is too short
+for a bulk `UPDATE` against the 14M-row `RecipeIngredients` table when a fold group's loser
+has a very large reference count. The first live attempt aborted partway through (partial
+progress preserved safely -- see `CanonicalIngredientDedupRunner`'s per-batch transactions);
+a retry with `Command Timeout=300` on the connection string completed cleanly. Documented in
+`src/MealsEnPlace.Tools.Dedup/README.md`.
 
 ### Acceptance Criteria
 ```gherkin
