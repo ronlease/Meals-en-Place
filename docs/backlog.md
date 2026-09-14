@@ -3249,3 +3249,59 @@ Feature: Angular C4 Component Model Accuracy
     And the updated PNGs are committed alongside the PlantUML source changes
     And no CI workflow is expected to render them (rendering is local per the current process)
 ```
+
+---
+
+## [MEP-051] Upgrade to Vitest 5 / @vitest/coverage-v8 5
+
+**Status:** Blocked
+**Priority:** Low
+**Depends on:** stable `@angular/build` release accepting `vitest ^5.0.0`
+
+### Business Problem
+Dependabot proposed bumping `@vitest/coverage-v8` from 4.1.11 to 5.0.0
+(PR #146). Investigation revealed this upgrade is currently unsafe.
+`@vitest/coverage-v8@5.0.0` has a peer dependency requiring `vitest@5.0.0`,
+but every stable release of `@angular/build` (through 22.1.8) pins its
+`vitest` peer dependency to `^4.0.8`. The project's Angular test runner goes
+through the `@angular/build:unit-test` builder (configured in `angular.json`),
+so vitest cannot be upgraded independently of `@angular/build`.
+
+Only a `next`-tagged prerelease (`@angular/build@22.2.0-next.7`) accepts
+`vitest ^5.0.0` -- there is no stable Angular tooling release that supports
+it. Bumping the coverage package alone creates an immediate peer-dependency
+conflict. Bumping both together forces pulling in prerelease Angular build
+tooling as a devDependency, which is not acceptable for this project.
+
+PR #146 was closed with an explanatory comment. This backlog item tracks the
+blocked upgrade so it can be picked up once the dependency constraint clears.
+
+**Unblocked when:** A stable (non-prerelease) version of `@angular/build` is
+published that declares `vitest ^5.0.0` (or broader) in its peer dependencies.
+At that point, `@angular/build`, `vitest`, and `@vitest/coverage-v8` can all
+be bumped together in a single coordinated upgrade.
+
+### Acceptance Criteria
+```gherkin
+Feature: Vitest 5 Upgrade
+
+  Scenario: Upgrade vitest and coverage package together
+    Given a stable release of @angular/build accepts vitest ^5.0.0 in its peer dependencies
+    When the developer upgrades @angular/build, vitest, and @vitest/coverage-v8 together
+    Then npm install completes with no peer-dependency warnings or errors
+    And the @angular/build:unit-test builder runs all existing test suites successfully
+    And coverage collection via @vitest/coverage-v8 reports results without errors
+    And the 90% coverage threshold configured in angular.json is still enforced
+
+  Scenario: No partial upgrade
+    Given vitest 5 is available but @angular/build stable does not yet accept it
+    When a developer or Dependabot proposes bumping only @vitest/coverage-v8 to 5.x
+    Then the proposal is declined
+    And this backlog item remains in Blocked status
+
+  Scenario: Prerelease tooling is not used
+    Given only a prerelease (next-tagged) version of @angular/build accepts vitest ^5.0.0
+    When evaluating the upgrade
+    Then the upgrade is deferred until a stable release is available
+    And no prerelease @angular/build version is added to devDependencies
+```
