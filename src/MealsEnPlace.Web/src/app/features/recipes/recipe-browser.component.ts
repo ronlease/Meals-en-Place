@@ -108,7 +108,9 @@ const LIBRARY_PAGE_SIZE = 25;
               <div class="state-message">
                 <mat-icon>menu_book</mat-icon>
                 @if (activeSearchQuery().length > 0 || libraryDietaryTags().length > 0) {
-                  <span>No recipes match your search. Try different terms or clear the filters.</span>
+                  <span
+                    >No recipes match your search. Try different terms or clear the filters.</span
+                  >
                 } @else {
                   <span>No recipes yet. Import some to get started.</span>
                 }

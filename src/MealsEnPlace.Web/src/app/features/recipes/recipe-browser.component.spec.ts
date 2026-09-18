@@ -78,7 +78,7 @@ describe('RecipeBrowserComponent', () => {
   // ── Initial load ────────────────────────────────────────────────────────
 
   it('calls getRecipes with page=1 and pageSize=25 on init', () => {
-    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25);
+    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25, undefined, undefined);
   });
 
   it('populates the library signal with items from the paged response', () => {
@@ -105,7 +105,7 @@ describe('RecipeBrowserComponent', () => {
     paginator.nextPage();
     fixture.detectChanges();
 
-    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(2, 25);
+    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(2, 25, undefined, undefined);
   });
 
   it('fetches page 1 again when the previous-page button is clicked from page 2', () => {
@@ -122,7 +122,7 @@ describe('RecipeBrowserComponent', () => {
     paginator.previousPage();
     fixture.detectChanges();
 
-    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25);
+    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25, undefined, undefined);
   });
 
   // ── Deep-navigation constraints ─────────────────────────────────────────
@@ -188,7 +188,7 @@ describe('RecipeBrowserComponent', () => {
     fixture.detectChanges();
 
     expect(recipeServiceSpy.getRecipes).toHaveBeenCalledTimes(1);
-    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25);
+    expect(recipeServiceSpy.getRecipes).toHaveBeenCalledWith(1, 25, undefined, undefined);
   });
 
   it('clears the error state and shows data after a successful retry', () => {
@@ -367,6 +367,6 @@ describe('RecipeBrowserComponent', () => {
     // A silent off-by-one here would page the whole library incorrectly.
     component.onPageChange({ length: 50, pageIndex: 3, pageSize: 25, previousPageIndex: 2 });
 
-    expect(recipeServiceSpy.getRecipes).toHaveBeenLastCalledWith(4, 25);
+    expect(recipeServiceSpy.getRecipes).toHaveBeenLastCalledWith(4, 25, undefined, undefined);
   });
 });
