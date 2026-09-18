@@ -15,7 +15,7 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
 
     ' ── Feature Page Components ────────────────────────────────
     Component(inventoryPage, "Inventory Page", "Angular Standalone Components", "Tab-based Pantry/Fridge/Freezer view with add/edit dialogs and container reference detection")
-    Component(recipeBrowser, "Recipe Browser", "Angular Standalone Components", "My Recipes library table with server-side paging (prev/next only — no page jump, no page-size selector — to prevent OFFSET queries that exceed the database command timeout at depth) and What Can I Make matching tab with dietary filters")
+    Component(recipeBrowser, "Recipe Browser", "Angular Standalone Components", "My Recipes library table with title search, ingredient search, dietary tag filtering, and server-side paging (prev/next only — no page jump, no page-size selector — to prevent OFFSET queries that exceed the database command timeout at depth), and What Can I Make matching tab with dietary filters")
     Component(recipeCreate, "Recipe Create", "Angular Standalone Component", "Manual recipe creation form with dynamic ingredient rows")
     Component(mealPlanBoard, "Meal Plan Board", "Angular Standalone Components", "7-day x 4-slot grid with plan generation. Swap dialog receives a capped page (100) of the library plus the true total count, states when the list is partial, and handles a failed recipe fetch distinctly from an empty library")
     Component(shoppingListPage, "Shopping List Page", "Angular Standalone Component", "Table of items needed from meal plan gaps with regenerate capability")

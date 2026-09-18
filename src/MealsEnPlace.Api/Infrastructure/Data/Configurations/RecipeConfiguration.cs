@@ -36,6 +36,12 @@ public class RecipeConfiguration : IEntityTypeConfiguration<Recipe>
         builder.HasIndex(r => r.Title)
             .HasDatabaseName("IX_Recipes_Title");
 
+        // pg_trgm GIN index: accelerates ILIKE '%term%' title searches at 1.6 M-row scale.
+        // Requires the pg_trgm extension (enabled in migration AddRecipeSearchTrigrams).
+        builder.HasIndex([nameof(Recipe.Title)], "IX_Recipes_Title_Trgm")
+            .HasAnnotation("Npgsql:IndexMethod", "gin")
+            .HasAnnotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
         // IsFullyResolved is computed — do not map to a column.
         builder.Ignore(r => r.IsFullyResolved);
     }

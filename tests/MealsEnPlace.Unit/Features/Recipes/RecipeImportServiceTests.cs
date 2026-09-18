@@ -45,6 +45,69 @@
 // Scenario: GetPagedLocalRecipesAsync clamps pageSize above MaxPageSize to MaxPageSize
 // Scenario: GetPagedLocalRecipesAsync clamps pageSize below 1 to 1
 // Scenario: GetPagedLocalRecipesAsync respects Skip for page 2
+//
+// Scenario: Title search returns only recipes whose title contains the search term
+//   Given recipes "Chicken Tikka Masala" and "Beef Stew" exist
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "tikka"
+//   Then only "Chicken Tikka Masala" is returned
+//
+// Scenario: Title search is case-insensitive
+//   Given a recipe titled "Chicken Tikka Masala" exists
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "TIKKA MASALA"
+//   Then the recipe is returned
+//
+// Scenario: Title search with no matching recipe returns empty Items
+//   Given no recipe title contains "xyznonexistent123"
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "xyznonexistent123"
+//   Then Items is empty
+//
+// Scenario: Title search with no matching recipe returns TotalCount of zero
+//   Given no recipe title contains "xyznonexistent123"
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "xyznonexistent123"
+//   Then TotalCount is 0
+//
+// Scenario: Ingredient search returns only recipes that contain the matching ingredient
+//   Given "Pasta Primavera" (contains "Broccoli") and "Beef Stew" (no broccoli) exist
+//   When GetPagedLocalRecipesAsync is called with IngredientSearch "broccoli"
+//   Then only "Pasta Primavera" is returned
+//
+// Scenario: Ingredient search excludes recipes without the matching ingredient
+//   Given "Beef Stew" contains no ingredient named "broccoli"
+//   When GetPagedLocalRecipesAsync is called with IngredientSearch "broccoli"
+//   Then "Beef Stew" is not in the result
+//
+// Scenario: Ingredient search is case-insensitive
+//   Given a recipe contains an ingredient named "Chicken Thigh"
+//   When GetPagedLocalRecipesAsync is called with IngredientSearch "CHICKEN THIGH"
+//   Then the recipe is returned
+//
+// Scenario: Title search and dietary-tag filter combine with AND semantics
+//   Given "Vegetarian Pasta" (Vegetarian, title contains "pasta") and "Chicken Pasta" (Carnivore) exist
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "pasta" and DietaryTags [Vegetarian]
+//   Then only "Vegetarian Pasta" is returned
+//
+// Scenario: Multiple dietary-tag filters all must match
+//   Given "Vegan GF Salad" (Vegan + GlutenFree), "Vegan Pasta" (Vegan only), "GF Steak" (GlutenFree only) exist
+//   When GetPagedLocalRecipesAsync is called with DietaryTags [Vegan, GlutenFree]
+//   Then only "Vegan GF Salad" is returned
+//
+// Scenario: Empty search (no TitleSearch, IngredientSearch, or DietaryTags) returns all recipes
+//   Given 3 recipes exist
+//   When GetPagedLocalRecipesAsync is called with all search fields null or empty
+//   Then all 3 recipes are returned
+//
+// Scenario: TotalCount reflects the filtered count, not the full catalog count
+//   Given 5 recipes exist, only 2 contain "pasta" in the title
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "pasta" and pageSize 25
+//   Then TotalCount is 2
+//
+// Scenario: Pagination on a filtered result set uses filtered count for page math
+//   Given 3 recipes contain "pasta" in the title
+//   When GetPagedLocalRecipesAsync is called with TitleSearch "pasta", page 2, and pageSize 1
+//   Then Items contains the second alphabetical matching recipe
+//   And TotalCount is 3
+//   And TotalPages is 3
+//
 // Scenario: GetRecipeDetailAsync returns null when recipe not found
 // Scenario: GetRecipeDetailAsync returns full detail for an existing recipe
 
@@ -466,7 +529,7 @@ public class RecipeImportServiceTests : IDisposable
         // Arrange — nothing seeded beyond reference units of measure
 
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, null));
 
         // Assert
         result.Items.Should().BeEmpty();
@@ -499,7 +562,7 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, null));
 
         // Assert
         result.Items.Should().HaveCount(2);
@@ -554,7 +617,7 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(1, 25);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, null));
 
         // Assert
         var dto = result.Items.Should().ContainSingle().Subject;
@@ -574,7 +637,7 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 2);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 2, null));
 
         // Assert
         result.TotalCount.Should().Be(3);
@@ -594,7 +657,7 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(page: 2, pageSize: 1);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 2, 1, null));
 
         // Assert
         result.Items.Should().ContainSingle()
@@ -609,7 +672,7 @@ public class RecipeImportServiceTests : IDisposable
     {
         // Arrange — empty catalog is fine; we care about the returned Page field
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(page: -5, pageSize: 25);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, -5, 25, null));
 
         // Assert
         result.Page.Should().Be(1);
@@ -630,7 +693,7 @@ public class RecipeImportServiceTests : IDisposable
         await _dbContext.SaveChangesAsync();
 
         // Act — request 10,000 per page
-        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 10_000);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 10_000, null));
 
         // Assert
         result.PageSize.Should().Be(RecipeImportService.MaxPageSize);
@@ -640,10 +703,337 @@ public class RecipeImportServiceTests : IDisposable
     public async Task GetPagedLocalRecipesAsync_PageSizeBelowOne_ClampsToOne()
     {
         // Act
-        var result = await _sut.GetPagedLocalRecipesAsync(page: 1, pageSize: 0);
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 0, null));
 
         // Assert
         result.PageSize.Should().Be(1);
+    }
+
+    // ── GetPagedLocalRecipesAsync — title search ──────────────────────────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_ReturnsOnlyRecipesWhoseTitleContainsSearchTerm()
+    {
+        // Arrange
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Chicken Tikka Masala" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Beef Stew" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, "tikka"));
+
+        // Assert
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Chicken Tikka Masala");
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_IsCaseInsensitive()
+    {
+        // Arrange
+        _dbContext.Recipes.Add(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Chicken Tikka Masala" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — search in all-caps
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, "TIKKA MASALA"));
+
+        // Assert
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Chicken Tikka Masala");
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_NoMatch_ReturnsEmptyItems()
+    {
+        // Arrange
+        _dbContext.Recipes.Add(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Beef Stew" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, "xyznonexistent123"));
+
+        // Assert
+        result.Items.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_NoMatch_TotalCountIsZero()
+    {
+        // Arrange
+        _dbContext.Recipes.Add(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Beef Stew" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, "xyznonexistent123"));
+
+        // Assert
+        result.TotalCount.Should().Be(0);
+        result.TotalPages.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_TotalCountReflectsFilteredCount()
+    {
+        // Arrange — 5 recipes total; only 2 contain "pasta" in the title
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Pasta Primavera" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Chicken Pasta Bake" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Beef Stew" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Apple Crumble" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Lentil Soup" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, "pasta"));
+
+        // Assert — filtered count, not full catalog
+        result.TotalCount.Should().Be(2);
+        result.Items.Should().HaveCount(2);
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearch_PaginationWorksOnFilteredResultSet()
+    {
+        // Arrange — 3 recipes contain "pasta"; request page 2 of pageSize 1 against filtered results
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Pasta Arrabiata" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Pasta Carbonara" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Pasta Primavera" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Beef Stew" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — page 2 of the filtered (pasta-only) result set
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 2, 1, "pasta"));
+
+        // Assert — second alphabetical pasta recipe, filtered TotalCount and TotalPages
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Pasta Carbonara");
+        result.TotalCount.Should().Be(3);
+        result.TotalPages.Should().Be(3);
+    }
+
+    // ── GetPagedLocalRecipesAsync — ingredient search ─────────────────────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_IngredientSearch_ReturnsOnlyRecipesWithMatchingIngredient()
+    {
+        // Arrange
+        var broccoli = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Produce,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Broccoli"
+        };
+        var beef = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Protein,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Beef"
+        };
+        _dbContext.CanonicalIngredients.AddRange(broccoli, beef);
+
+        var pastaPrimavera = new Recipe
+        {
+            CuisineType = string.Empty,
+            Id = Guid.NewGuid(),
+            Instructions = string.Empty,
+            ServingCount = 2,
+            Title = "Pasta Primavera"
+        };
+        var beefStew = new Recipe
+        {
+            CuisineType = string.Empty,
+            Id = Guid.NewGuid(),
+            Instructions = string.Empty,
+            ServingCount = 4,
+            Title = "Beef Stew"
+        };
+        _dbContext.Recipes.AddRange(pastaPrimavera, beefStew);
+
+        _dbContext.RecipeIngredients.AddRange(
+            new RecipeIngredient
+            {
+                CanonicalIngredientId = broccoli.Id,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Quantity = 200m,
+                RecipeId = pastaPrimavera.Id,
+                UnitOfMeasureId = GramUnitOfMeasureId
+            },
+            new RecipeIngredient
+            {
+                CanonicalIngredientId = beef.Id,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Quantity = 500m,
+                RecipeId = beefStew.Id,
+                UnitOfMeasureId = GramUnitOfMeasureId
+            });
+        await _dbContext.SaveChangesAsync();
+
+        // Act
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], "broccoli", 1, 25, null));
+
+        // Assert
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Pasta Primavera");
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_IngredientSearch_ExcludesRecipesWithoutMatchingIngredient()
+    {
+        // Arrange
+        var beef = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Protein,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Beef"
+        };
+        _dbContext.CanonicalIngredients.Add(beef);
+
+        var beefStew = new Recipe
+        {
+            CuisineType = string.Empty,
+            Id = Guid.NewGuid(),
+            Instructions = string.Empty,
+            ServingCount = 4,
+            Title = "Beef Stew"
+        };
+        _dbContext.Recipes.Add(beefStew);
+        _dbContext.RecipeIngredients.Add(new RecipeIngredient
+        {
+            CanonicalIngredientId = beef.Id,
+            Id = Guid.NewGuid(),
+            IsContainerResolved = true,
+            Quantity = 500m,
+            RecipeId = beefStew.Id,
+            UnitOfMeasureId = GramUnitOfMeasureId
+        });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — searching for "broccoli" which Beef Stew does not contain
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], "broccoli", 1, 25, null));
+
+        // Assert
+        result.Items.Should().BeEmpty();
+        result.TotalCount.Should().Be(0);
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_IngredientSearch_IsCaseInsensitive()
+    {
+        // Arrange
+        var chickenThigh = new CanonicalIngredient
+        {
+            Category = IngredientCategory.Protein,
+            DefaultUnitOfMeasureId = GramUnitOfMeasureId,
+            Id = Guid.NewGuid(),
+            Name = "Chicken Thigh"
+        };
+        _dbContext.CanonicalIngredients.Add(chickenThigh);
+
+        var recipe = new Recipe
+        {
+            CuisineType = string.Empty,
+            Id = Guid.NewGuid(),
+            Instructions = string.Empty,
+            ServingCount = 4,
+            Title = "Roasted Chicken"
+        };
+        _dbContext.Recipes.Add(recipe);
+        _dbContext.RecipeIngredients.Add(new RecipeIngredient
+        {
+            CanonicalIngredientId = chickenThigh.Id,
+            Id = Guid.NewGuid(),
+            IsContainerResolved = true,
+            Quantity = 600m,
+            RecipeId = recipe.Id,
+            UnitOfMeasureId = GramUnitOfMeasureId
+        });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — search in all-caps
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], "CHICKEN THIGH", 1, 25, null));
+
+        // Assert
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Roasted Chicken");
+    }
+
+    // ── GetPagedLocalRecipesAsync — combined filters (AND semantics) ──────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_TitleSearchAndDietaryTag_AppliesAndSemantics()
+    {
+        // Arrange — "Vegetarian Pasta" matches both title "pasta" and tag Vegetarian;
+        // "Chicken Pasta" matches title but not tag; "Vegetarian Soup" matches tag but not title
+        var vegPasta = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Vegetarian Pasta" };
+        var chickenPasta = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Chicken Pasta" };
+        var vegSoup = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Vegetarian Soup" };
+        _dbContext.Recipes.AddRange(vegPasta, chickenPasta, vegSoup);
+        _dbContext.RecipeDietaryTags.AddRange(
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = vegPasta.Id, Tag = DietaryTag.Vegetarian },
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = vegSoup.Id, Tag = DietaryTag.Vegetarian });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — title contains "pasta" AND has Vegetarian tag
+        var result = await _sut.GetPagedLocalRecipesAsync(
+            new RecipeSearchQuery([DietaryTag.Vegetarian], null, 1, 25, "pasta"));
+
+        // Assert — only the recipe matching both predicates is returned
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Vegetarian Pasta");
+    }
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_MultipleDietaryTagFilters_AllMustBePresent()
+    {
+        // Arrange — only "Vegan GF Salad" carries both Vegan and GlutenFree
+        var veganGfSalad = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Vegan GF Salad" };
+        var veganPasta = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "Vegan Pasta" };
+        var gfSteak = new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 2, Title = "GF Steak" };
+        _dbContext.Recipes.AddRange(veganGfSalad, veganPasta, gfSteak);
+        _dbContext.RecipeDietaryTags.AddRange(
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = veganGfSalad.Id, Tag = DietaryTag.Vegan },
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = veganGfSalad.Id, Tag = DietaryTag.GlutenFree },
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = veganPasta.Id, Tag = DietaryTag.Vegan },
+            new RecipeDietaryTag { Id = Guid.NewGuid(), RecipeId = gfSteak.Id, Tag = DietaryTag.GlutenFree });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — require BOTH Vegan AND GlutenFree
+        var result = await _sut.GetPagedLocalRecipesAsync(
+            new RecipeSearchQuery([DietaryTag.Vegan, DietaryTag.GlutenFree], null, 1, 25, null));
+
+        // Assert — only the recipe carrying both tags is returned
+        result.Items.Should().ContainSingle()
+            .Which.Title.Should().Be("Vegan GF Salad");
+    }
+
+    // ── GetPagedLocalRecipesAsync — empty search (MEP-043 parity) ────────────
+
+    [Fact]
+    public async Task GetPagedLocalRecipesAsync_NoSearchTermsOrDietaryTags_ReturnsAllRecipesUnfiltered()
+    {
+        // Arrange
+        _dbContext.Recipes.AddRange(
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Alpha" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Beta" },
+            new Recipe { CuisineType = string.Empty, Id = Guid.NewGuid(), Instructions = string.Empty, ServingCount = 1, Title = "Gamma" });
+        await _dbContext.SaveChangesAsync();
+
+        // Act — all search fields null or empty, identical to MEP-043 parity
+        var result = await _sut.GetPagedLocalRecipesAsync(new RecipeSearchQuery([], null, 1, 25, null));
+
+        // Assert — all 3 recipes returned
+        result.Items.Should().HaveCount(3);
+        result.TotalCount.Should().Be(3);
     }
 
     // ── GetRecipeDetailAsync ──────────────────────────────────────────────────

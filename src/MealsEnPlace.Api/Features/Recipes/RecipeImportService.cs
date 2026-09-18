@@ -26,6 +26,8 @@ public sealed class RecipeImportService(
     /// </summary>
     public const int MaxPageSize = 100;
 
+    private const string NpgsqlProviderName = "Npgsql.EntityFrameworkCore.PostgreSQL";
+
     /// <inheritdoc />
     public async Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default)
     {
@@ -111,17 +113,67 @@ public sealed class RecipeImportService(
 
     /// <inheritdoc />
     public async Task<PagedResult<RecipeListItemDto>> GetPagedLocalRecipesAsync(
-        int page,
-        int pageSize,
+        RecipeSearchQuery query,
         CancellationToken cancellationToken = default)
     {
         // Clamp inputs to safe bounds — no 400 errors for out-of-range values.
-        page = Math.Max(1, page);
-        pageSize = Math.Clamp(pageSize, 1, MaxPageSize);
+        var page = Math.Max(1, query.Page);
+        var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
 
-        // Total count uses a simple COUNT(*) on the Recipes table — much
-        // cheaper than counting the projected result set.
-        var totalCount = await dbContext.Recipes.LongCountAsync(cancellationToken);
+        // Detect the EF Core database provider once; ILike is Npgsql-only and
+        // throws NotSupportedException on the in-memory provider used by tests.
+        var isNpgsql = dbContext.Database.ProviderName == NpgsqlProviderName;
+
+        IQueryable<Recipe> baseQuery = dbContext.Recipes.AsNoTracking();
+
+        // Title search — uses the pg_trgm GIN index (IX_Recipes_Title_Trgm) via
+        // ILike on Npgsql; falls back to a case-folded Contains for the EF Core
+        // in-memory provider used by unit tests.
+        if (!string.IsNullOrWhiteSpace(query.TitleSearch))
+        {
+            var term = query.TitleSearch.Trim();
+            if (isNpgsql)
+            {
+                var pattern = "%" + IngredientSearchHelper.EscapeILikeWildcards(term) + "%";
+                baseQuery = baseQuery.Where(r => EF.Functions.ILike(r.Title, pattern));
+            }
+            else
+            {
+                var lower = term.ToLowerInvariant();
+                baseQuery = baseQuery.Where(r => r.Title.ToLower().Contains(lower));
+            }
+        }
+
+        // Ingredient search — correlated EXISTS subquery against CanonicalIngredient.Name.
+        // Uses the pg_trgm GIN index (IX_CanonicalIngredients_Name_Trgm) via ILike.
+        if (!string.IsNullOrWhiteSpace(query.IngredientSearch))
+        {
+            var term = query.IngredientSearch.Trim();
+            if (isNpgsql)
+            {
+                var pattern = "%" + IngredientSearchHelper.EscapeILikeWildcards(term) + "%";
+                baseQuery = baseQuery.Where(r =>
+                    r.RecipeIngredients.Any(ri =>
+                        EF.Functions.ILike(ri.CanonicalIngredient.Name, pattern)));
+            }
+            else
+            {
+                var lower = term.ToLowerInvariant();
+                baseQuery = baseQuery.Where(r =>
+                    r.RecipeIngredients.Any(ri =>
+                        ri.CanonicalIngredient.Name.ToLower().Contains(lower)));
+            }
+        }
+
+        // Dietary-tag filter — AND semantics: each selected tag must be present.
+        foreach (var tag in query.DietaryTags)
+        {
+            var capturedTag = tag;
+            baseQuery = baseQuery.Where(r => r.DietaryTags.Any(dt => dt.Tag == capturedTag));
+        }
+
+        // COUNT(*) on the filtered set drives totalCount and totalPages metadata.
+        var totalCount = await baseQuery.LongCountAsync(cancellationToken);
 
         // Project directly to the DTO in the database. No Include/ThenInclude
         // collection loads — DietaryTags and RecipeIngredient counts are
@@ -129,8 +181,7 @@ public sealed class RecipeImportService(
         // so no cartesian product forms. IsFullyResolved cannot be projected
         // from the C# computed property, so it is expressed as two Any()
         // subqueries that EF Core translates to SQL EXISTS clauses.
-        var items = await dbContext.Recipes
-            .AsNoTracking()
+        var items = await baseQuery
             .OrderBy(r => r.Title)
             .Select(r => new RecipeListItemDto
             {

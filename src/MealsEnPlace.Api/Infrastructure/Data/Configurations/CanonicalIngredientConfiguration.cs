@@ -40,6 +40,12 @@ public class CanonicalIngredientConfiguration : IEntityTypeConfiguration<Canonic
 
         builder.HasIndex(ci => ci.Name).IsUnique();
 
+        // pg_trgm GIN index: accelerates ILIKE '%term%' ingredient-name searches.
+        // Requires the pg_trgm extension (enabled in migration AddRecipeSearchTrigrams).
+        builder.HasIndex([nameof(CanonicalIngredient.Name)], "IX_CanonicalIngredients_Name_Trgm")
+            .HasAnnotation("Npgsql:IndexMethod", "gin")
+            .HasAnnotation("Npgsql:IndexOperators", new[] { "gin_trgm_ops" });
+
         builder.HasOne(ci => ci.DefaultUnitOfMeasure)
             .WithMany()
             .HasForeignKey(ci => ci.DefaultUnitOfMeasureId)

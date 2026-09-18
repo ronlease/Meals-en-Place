@@ -3090,7 +3090,7 @@ Feature: Paginate Canonical Ingredients Endpoint
 
 ## [MEP-046] Recipe Search and Filtering
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** High
 **Depends on:** MEP-043 (pagination infrastructure the search results will page through)
 

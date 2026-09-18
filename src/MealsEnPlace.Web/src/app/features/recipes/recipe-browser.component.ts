@@ -1,8 +1,11 @@
+import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatChipListboxChange, MatChipsModule } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
+import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
+import { MatInputModule } from '@angular/material/input';
 import { PageEvent } from '@angular/material/paginator';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -29,12 +32,15 @@ const LIBRARY_PAGE_SIZE = 25;
   imports: [
     MatButtonModule,
     MatChipsModule,
+    MatFormFieldModule,
     MatIconModule,
+    MatInputModule,
     MatPaginatorModule,
     MatProgressSpinnerModule,
     MatTableModule,
     MatTabsModule,
     MatTooltipModule,
+    ReactiveFormsModule,
     RecipeMatchResultsComponent,
     RouterModule,
   ],
@@ -58,6 +64,36 @@ const LIBRARY_PAGE_SIZE = 25;
       <mat-tab label="My Recipes">
         <ng-template matTabContent>
           <div class="tab-content">
+            <!-- Search and filter toolbar -->
+            <div class="library-toolbar">
+              <mat-form-field appearance="outline" class="search-field">
+                <mat-label>Search recipes</mat-label>
+                <input
+                  matInput
+                  [formControl]="searchControl"
+                  (keydown.enter)="onSearchSubmit()"
+                  placeholder="Title or ingredient..."
+                />
+                <button
+                  mat-icon-button
+                  matSuffix
+                  (click)="onSearchSubmit()"
+                  aria-label="Search recipes"
+                >
+                  <mat-icon>search</mat-icon>
+                </button>
+              </mat-form-field>
+              <mat-chip-listbox
+                [multiple]="true"
+                (change)="onLibraryDietaryFilterChange($event)"
+                aria-label="Filter library by dietary tag"
+              >
+                @for (tag of allDietaryTags; track tag) {
+                  <mat-chip-option [value]="tag">{{ tag }}</mat-chip-option>
+                }
+              </mat-chip-listbox>
+            </div>
+
             @if (libraryLoading()) {
               <div class="spinner-container">
                 <mat-progress-spinner mode="indeterminate" diameter="48" />
@@ -71,7 +107,13 @@ const LIBRARY_PAGE_SIZE = 25;
             } @else if (library().length === 0) {
               <div class="state-message">
                 <mat-icon>menu_book</mat-icon>
-                <span>No recipes yet. Import some to get started.</span>
+                @if (activeSearchQuery().length > 0 || libraryDietaryTags().length > 0) {
+                  <span
+                    >No recipes match your search. Try different terms or clear the filters.</span
+                  >
+                } @else {
+                  <span>No recipes yet. Import some to get started.</span>
+                }
               </div>
             } @else {
               <mat-table [dataSource]="library()" class="recipe-table">
@@ -209,6 +251,19 @@ const LIBRARY_PAGE_SIZE = 25;
         padding-top: 20px;
       }
 
+      .library-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+
+      .search-field {
+        flex: 0 1 320px;
+        min-width: 200px;
+      }
+
       .spinner-container {
         display: flex;
         justify-content: center;
@@ -307,6 +362,7 @@ export class RecipeBrowserComponent implements OnInit {
     'Vegan',
     'Vegetarian',
   ];
+  protected readonly activeSearchQuery = signal('');
   protected readonly currentPage = signal(1);
   protected readonly library = signal<RecipeListItemDto[]>([]);
   protected readonly libraryColumns = [
@@ -316,12 +372,14 @@ export class RecipeBrowserComponent implements OnInit {
     'totalIngredients',
     'status',
   ];
+  protected readonly libraryDietaryTags = signal<string[]>([]);
   protected readonly libraryError = signal(false);
   protected readonly libraryLoading = signal(false);
   protected readonly matchError = signal(false);
   protected readonly matchLoading = signal(false);
   protected readonly matchResults = signal<RecipeMatchResponse | null>(null);
   protected readonly pageSize = signal(LIBRARY_PAGE_SIZE);
+  protected readonly searchControl = new FormControl<string>('', { nonNullable: true });
   protected readonly totalCount = signal(0);
 
   private readonly dialog = inject(MatDialog);
@@ -353,7 +411,9 @@ export class RecipeBrowserComponent implements OnInit {
   loadLibrary(): void {
     this.libraryError.set(false);
     this.libraryLoading.set(true);
-    this.recipeService.getRecipes(this.currentPage(), this.pageSize()).subscribe({
+    const q = this.searchControl.value || undefined;
+    const tags = this.libraryDietaryTags().length > 0 ? this.libraryDietaryTags() : undefined;
+    this.recipeService.getRecipes(this.currentPage(), this.pageSize(), q, tags).subscribe({
       error: () => {
         this.libraryLoading.set(false);
         this.libraryError.set(true);
@@ -374,9 +434,21 @@ export class RecipeBrowserComponent implements OnInit {
     this.selectedDietaryTags = event.value ?? [];
   }
 
+  onLibraryDietaryFilterChange(event: MatChipListboxChange): void {
+    this.libraryDietaryTags.set(event.value ?? []);
+    this.currentPage.set(1);
+    this.loadLibrary();
+  }
+
   onPageChange(event: PageEvent): void {
     // MatPaginator uses 0-based pageIndex; the API uses 1-based page numbers.
     this.currentPage.set(event.pageIndex + 1);
+    this.loadLibrary();
+  }
+
+  onSearchSubmit(): void {
+    this.activeSearchQuery.set(this.searchControl.value);
+    this.currentPage.set(1);
     this.loadLibrary();
   }
 
