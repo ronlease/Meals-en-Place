@@ -1,12 +1,14 @@
 import { signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { MatSelect } from '@angular/material/select';
 import { MatSlideToggle } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { By } from '@angular/platform-browser';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Observable, of, throwError } from 'rxjs';
 import { DisplaySystem } from '../../core/models/preferences.models';
+import { ClaudeModel } from '../../core/models/settings.models';
 import { AiAvailabilityService } from '../../core/services/ai-availability.service';
 import { PreferencesService } from '../../core/services/preferences.service';
 import { SettingsService } from '../../core/services/settings.service';
@@ -15,8 +17,10 @@ import { SettingsPageComponent } from './settings-page.component';
 
 describe('SettingsPageComponent', () => {
   let aiConfigured: ReturnType<typeof signal<boolean>>;
+  let aiModel: ReturnType<typeof signal<ClaudeModel>>;
   let aiRefresh: ReturnType<typeof vi.fn>;
   let aiSetConfigured: ReturnType<typeof vi.fn>;
+  let aiSetModel: ReturnType<typeof vi.fn>;
   let autoDepleteOnConsume: ReturnType<typeof signal<boolean>>;
   let component: SettingsPageComponent;
   let dialogMock: { open: ReturnType<typeof vi.fn> };
@@ -26,6 +30,7 @@ describe('SettingsPageComponent', () => {
   let settingsServiceMock: {
     clearToken: ReturnType<typeof vi.fn>;
     clearTodoistToken: ReturnType<typeof vi.fn>;
+    saveModel: ReturnType<typeof vi.fn>;
     saveToken: ReturnType<typeof vi.fn>;
     saveTodoistToken: ReturnType<typeof vi.fn>;
     testToken: ReturnType<typeof vi.fn>;
@@ -52,8 +57,10 @@ describe('SettingsPageComponent', () => {
             configured: aiConfigured,
             dismissBanner: vi.fn(),
             dismissed: signal(false),
+            model: aiModel,
             refresh: aiRefresh,
             setConfigured: aiSetConfigured,
+            setModel: aiSetModel,
           },
         },
         {
@@ -87,6 +94,7 @@ describe('SettingsPageComponent', () => {
   type TestResult = { message: string; success: boolean } | null;
 
   interface Internals {
+    modelOptions: { label: string; value: ClaudeModel }[];
     saving: () => boolean;
     testResult: () => TestResult;
     testing: () => boolean;
@@ -121,12 +129,14 @@ describe('SettingsPageComponent', () => {
 
   beforeEach(() => {
     aiConfigured = signal(false);
+    aiModel = signal<ClaudeModel>('Sonnet5');
     autoDepleteOnConsume = signal(false);
     displaySystem = signal<DisplaySystem>('Imperial');
     todoistConfigured = signal(false);
 
     aiRefresh = vi.fn();
     aiSetConfigured = vi.fn((value: boolean) => aiConfigured.set(value));
+    aiSetModel = vi.fn((value: ClaudeModel) => aiModel.set(value));
     setAutoDepleteOnConsume = vi.fn();
     todoistRefresh = vi.fn();
     todoistSetConfigured = vi.fn((value: boolean) => todoistConfigured.set(value));
@@ -137,6 +147,7 @@ describe('SettingsPageComponent', () => {
     settingsServiceMock = {
       clearToken: vi.fn(),
       clearTodoistToken: vi.fn(),
+      saveModel: vi.fn(),
       saveToken: vi.fn(),
       saveTodoistToken: vi.fn(),
       testToken: vi.fn(),
@@ -257,6 +268,71 @@ describe('SettingsPageComponent', () => {
         'Dismiss',
         { duration: 5000 },
       );
+    });
+  });
+
+  // ── Claude model selector ───────────────────────────────────────────────────
+
+  describe('model selection', () => {
+    it('offers all four models in best-to-cheapest order', () => {
+      // mat-select only renders its mat-option children into the DOM once the
+      // panel is opened, so this asserts on the data driving the @for loop
+      // rather than querying rendered <mat-option> elements.
+      createComponent();
+
+      expect(internals().modelOptions).toEqual([
+        { label: 'Opus 5', value: 'Opus5' },
+        { label: 'Sonnet 5', value: 'Sonnet5' },
+        { label: 'Haiku 4.5', value: 'Haiku45' },
+        { label: 'Fable 5.1', value: 'Fable51' },
+      ]);
+    });
+
+    it('reflects the currently selected model from AiAvailabilityService', () => {
+      aiModel.set('Opus5');
+
+      createComponent();
+
+      const select = fixture.debugElement.query(By.directive(MatSelect))
+        .componentInstance as MatSelect;
+      expect(select.value).toBe('Opus5');
+    });
+
+    it('saves the selected model and updates AiAvailabilityService on success', () => {
+      createComponent();
+      settingsServiceMock.saveModel.mockReturnValue(of({ configured: false, model: 'Haiku45' }));
+
+      component.saveModel('Haiku45');
+
+      expect(settingsServiceMock.saveModel).toHaveBeenCalledWith('Haiku45');
+      expect(aiSetModel).toHaveBeenCalledWith('Haiku45');
+      expect(snackBarMock.open).toHaveBeenCalledWith('Claude model saved.', 'Dismiss', {
+        duration: 4000,
+      });
+    });
+
+    it('reports a failure without crashing when saving the model fails', () => {
+      createComponent();
+      settingsServiceMock.saveModel.mockReturnValue(throwError(() => new Error('boom')));
+
+      component.saveModel('Opus5');
+
+      expect(aiSetModel).not.toHaveBeenCalled();
+      expect(snackBarMock.open).toHaveBeenCalledWith(
+        'Could not save the model. See console for details.',
+        'Dismiss',
+        { duration: 5000 },
+      );
+    });
+
+    it('does not require an API key to be configured to save a model', () => {
+      aiConfigured.set(false);
+      createComponent();
+      settingsServiceMock.saveModel.mockReturnValue(of({ configured: false, model: 'Fable51' }));
+
+      component.saveModel('Fable51');
+
+      expect(settingsServiceMock.saveModel).toHaveBeenCalledWith('Fable51');
     });
   });
 

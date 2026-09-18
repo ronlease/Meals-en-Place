@@ -67,6 +67,7 @@ builder.Services.AddCors(options =>
 var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
 var settingsDirectory = Path.Combine(localAppData, "MealsEnPlace");
 var keyRingDirectory = Path.Combine(settingsDirectory, "keys");
+var claudeModelFilePath = Path.Combine(settingsDirectory, "claude-model.txt");
 var claudeTokenFilePath = Path.Combine(settingsDirectory, "claude-token.dat");
 var todoistTokenFilePath = Path.Combine(settingsDirectory, "todoist-token.dat");
 Directory.CreateDirectory(keyRingDirectory);
@@ -82,6 +83,14 @@ builder.Services.AddSingleton(new ClaudeTokenStoreOptions
 });
 builder.Services.AddSingleton<IClaudeTokenStore, ClaudeTokenStore>();
 builder.Services.AddScoped<IClaudeAvailability, ClaudeAvailability>();
+
+// -- Claude model preference (MEP-052) ----------------------------------------
+// Not a secret, so it is stored as plain text rather than DataProtection-encrypted.
+builder.Services.AddSingleton(new ClaudeModelStoreOptions
+{
+    ModelFilePath = claudeModelFilePath
+});
+builder.Services.AddSingleton<IClaudeModelStore, ClaudeModelStore>();
 
 builder.Services.AddSingleton(new TodoistTokenStoreOptions
 {

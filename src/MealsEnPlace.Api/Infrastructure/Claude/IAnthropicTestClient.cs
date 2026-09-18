@@ -9,8 +9,9 @@ namespace MealsEnPlace.Api.Infrastructure.Claude;
 public interface IAnthropicTestClient
 {
     /// <summary>
-    /// Issues the cheapest possible Messages API call using <paramref name="token"/>
-    /// and reports success or the Anthropic-reported error message.
+    /// Issues a minimal Messages API call using <paramref name="token"/> and the
+    /// currently selected Claude model preference (MEP-052), and reports success
+    /// or the Anthropic-reported error message.
     /// </summary>
     Task<AnthropicTestResult> PingAsync(string token, CancellationToken cancellationToken = default);
 }

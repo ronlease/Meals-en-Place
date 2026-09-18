@@ -5,18 +5,21 @@ using Microsoft.AspNetCore.Mvc;
 namespace MealsEnPlace.Api.Features.Settings;
 
 /// <summary>
-/// Settings endpoints covering the BYO Anthropic API key flow (MEP-032), the BYO
-/// Todoist API token flow (MEP-035), and the Todoist project quick-pick history
-/// (MEP-036). Every response shape carries at most a boolean <c>Configured</c>
-/// indicator for token operations — the raw token is never returned from any endpoint
-/// and is not written to logs. A failed Test Connection call never overwrites a
-/// previously-valid stored token.
+/// Settings endpoints covering the BYO Anthropic API key flow (MEP-032), the
+/// Claude model preference (MEP-052), the BYO Todoist API token flow (MEP-035),
+/// and the Todoist project quick-pick history (MEP-036). Every response shape
+/// carries at most a boolean <c>Configured</c> indicator for token operations —
+/// the raw token is never returned from any endpoint and is not written to logs.
+/// A failed Test Connection call never overwrites a previously-valid stored
+/// token. The selected model is not a secret and is always returned alongside
+/// the key status.
 /// </summary>
 [ApiController]
 [Route("api/v1/settings")]
 [Produces("application/json")]
 public class SettingsController(
     IAnthropicTestClient anthropicTestClient,
+    IClaudeModelStore claudeModelStore,
     IClaudeTokenStore claudeTokenStore,
     ITodoistProjectHistoryService todoistProjectHistoryService,
     ITodoistTestClient todoistTestClient,
@@ -26,13 +29,15 @@ public class SettingsController(
     /// <summary>
     /// Deletes the persisted Anthropic API key. Subsequent Claude-backed
     /// operations take their deterministic-only branch until a new key is saved.
+    /// The model preference is independent of the key and is left unchanged.
     /// </summary>
     [HttpDelete("claude/token")]
     [ProducesResponseType(typeof(ClaudeTokenStatusResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ClaudeTokenStatusResponse>> ClearClaudeToken(CancellationToken cancellationToken = default)
     {
         await claudeTokenStore.ClearAsync(cancellationToken);
-        return Ok(new ClaudeTokenStatusResponse { Configured = false });
+        var model = await claudeModelStore.ReadAsync(cancellationToken);
+        return Ok(new ClaudeTokenStatusResponse { Configured = false, Model = model.ToString() });
     }
 
     /// <summary>
@@ -48,13 +53,17 @@ public class SettingsController(
         return Ok(new TodoistStatusResponse { Configured = configured });
     }
 
-    /// <summary>Returns whether an Anthropic API key is currently configured.</summary>
+    /// <summary>
+    /// Returns whether an Anthropic API key is currently configured, and the
+    /// currently selected Claude model.
+    /// </summary>
     [HttpGet("claude/status")]
     [ProducesResponseType(typeof(ClaudeTokenStatusResponse), StatusCodes.Status200OK)]
     public async Task<ActionResult<ClaudeTokenStatusResponse>> GetClaudeStatus(CancellationToken cancellationToken = default)
     {
         var configured = await claudeTokenStore.HasTokenAsync(cancellationToken);
-        return Ok(new ClaudeTokenStatusResponse { Configured = configured });
+        var model = await claudeModelStore.ReadAsync(cancellationToken);
+        return Ok(new ClaudeTokenStatusResponse { Configured = configured, Model = model.ToString() });
     }
 
     /// <summary>
@@ -89,6 +98,33 @@ public class SettingsController(
     }
 
     /// <summary>
+    /// Persists the selected Claude model preference. The model choice is not a
+    /// secret and applies to every Claude-backed call site on its next invocation —
+    /// no restart is required. An unrecognized model name is rejected with 400
+    /// rather than silently falling back, so the caller learns immediately that
+    /// its request did not take effect.
+    /// </summary>
+    [HttpPost("claude/model")]
+    [ProducesResponseType(typeof(ClaudeTokenStatusResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public async Task<ActionResult<ClaudeTokenStatusResponse>> SaveClaudeModel(
+        [FromBody] SaveClaudeModelRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        if (!ClaudeModelCatalog.TryParse(request?.Model, out var model))
+        {
+            return ValidationProblem(new ValidationProblemDetails
+            {
+                Detail = $"Model must be one of: {string.Join(", ", Enum.GetNames<ClaudeModel>())}."
+            });
+        }
+
+        await claudeModelStore.WriteAsync(model, cancellationToken);
+        var configured = await claudeTokenStore.HasTokenAsync(cancellationToken);
+        return Ok(new ClaudeTokenStatusResponse { Configured = configured, Model = model.ToString() });
+    }
+
+    /// <summary>
     /// Persists the Anthropic API key to the encrypted local store. Returns only
     /// <c>Configured = true</c> on success — the raw key is never included in the
     /// response body.
@@ -109,7 +145,8 @@ public class SettingsController(
         }
 
         await claudeTokenStore.WriteAsync(request.Token, cancellationToken);
-        return Ok(new ClaudeTokenStatusResponse { Configured = true });
+        var model = await claudeModelStore.ReadAsync(cancellationToken);
+        return Ok(new ClaudeTokenStatusResponse { Configured = true, Model = model.ToString() });
     }
 
     /// <summary>

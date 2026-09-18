@@ -1,23 +1,29 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using MealsEnPlace.Api.Features.Settings;
 
 namespace MealsEnPlace.Api.Infrastructure.Claude;
 
 /// <summary>
 /// HTTP implementation of <see cref="IAnthropicTestClient"/>. Posts a single
 /// low-cost Messages API request to <c>https://api.anthropic.com/v1/messages</c>
-/// using the supplied token. Used only for the Test Connection endpoint.
+/// using the supplied token and the currently selected <see cref="ClaudeModel"/>
+/// preference (MEP-052). Used only for the Test Connection endpoint — testing
+/// against the user's actual model choice confirms that model is reachable on
+/// their key/tier, not just that the key itself is valid.
 /// </summary>
-public sealed class AnthropicTestClient(IHttpClientFactory httpClientFactory) : IAnthropicTestClient
+public sealed class AnthropicTestClient(
+    IClaudeModelStore claudeModelStore,
+    IHttpClientFactory httpClientFactory) : IAnthropicTestClient
 {
     private const string AnthropicVersion = "2023-06-01";
     private const string HttpClientName = "Anthropic";
-    private const string Model = "claude-haiku-4-5";
 
     public async Task<AnthropicTestResult> PingAsync(string token, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(token);
 
+        var model = await claudeModelStore.ReadAsync(cancellationToken);
         var client = httpClientFactory.CreateClient(HttpClientName);
         using var request = new HttpRequestMessage(HttpMethod.Post, "/v1/messages")
         {
@@ -28,7 +34,7 @@ public sealed class AnthropicTestClient(IHttpClientFactory httpClientFactory) : 
                 {
                     new { role = "user", content = "ping" }
                 },
-                model = Model
+                model = ClaudeModelCatalog.AnthropicModelId(model)
             })
         };
         request.Headers.Add("x-api-key", token);

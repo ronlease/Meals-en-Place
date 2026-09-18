@@ -27,6 +27,10 @@ describe('AiAvailabilityService', () => {
     it('starts with the banner not dismissed', () => {
       expect(service.dismissed()).toBe(false);
     });
+
+    it('assumes Sonnet5 until told otherwise', () => {
+      expect(service.model()).toBe('Sonnet5');
+    });
   });
 
   // ── dismissBanner ───────────────────────────────────────────────────────────
@@ -65,11 +69,19 @@ describe('AiAvailabilityService', () => {
     });
   });
 
+  // ── setModel ────────────────────────────────────────────────────────────────
+
+  it('setModel sets the model signal', () => {
+    service.setModel('Opus5');
+
+    expect(service.model()).toBe('Opus5');
+  });
+
   // ── refresh ─────────────────────────────────────────────────────────────────
 
   describe('refresh', () => {
     it('adopts a configured status from the settings service', () => {
-      settingsServiceMock.getStatus.mockReturnValue(of({ configured: true }));
+      settingsServiceMock.getStatus.mockReturnValue(of({ configured: true, model: 'Sonnet5' }));
 
       service.refresh();
 
@@ -78,16 +90,24 @@ describe('AiAvailabilityService', () => {
 
     it('adopts an unconfigured status from the settings service', () => {
       service.setConfigured(true);
-      settingsServiceMock.getStatus.mockReturnValue(of({ configured: false }));
+      settingsServiceMock.getStatus.mockReturnValue(of({ configured: false, model: 'Sonnet5' }));
 
       service.refresh();
 
       expect(service.configured()).toBe(false);
     });
 
+    it('adopts the model reported by the settings service', () => {
+      settingsServiceMock.getStatus.mockReturnValue(of({ configured: true, model: 'Opus5' }));
+
+      service.refresh();
+
+      expect(service.model()).toBe('Opus5');
+    });
+
     it('un-dismisses the banner when refresh reports the key is configured', () => {
       service.dismissBanner();
-      settingsServiceMock.getStatus.mockReturnValue(of({ configured: true }));
+      settingsServiceMock.getStatus.mockReturnValue(of({ configured: true, model: 'Sonnet5' }));
 
       service.refresh();
 

@@ -3914,3 +3914,105 @@ Feature: Vitest 5 Upgrade
     Then the upgrade is deferred until a stable release is available
     And no prerelease @angular/build version is added to devDependencies
 ```
+
+---
+
+## [MEP-052] Claude Model Selector in Settings
+
+**Status:** Done
+**Priority:** Medium
+
+### Implementation Notes
+Shipped on branch `feature/mep-052-claude-model-selector`. Scope covered:
+
+- `ClaudeModel` enum (`Fable51`, `Haiku45`, `Opus5`, `Sonnet5`) and `ClaudeModelCatalog`
+  mapping each member to its Anthropic API model ID and display name, plus a
+  `TryParse` that falls back to `Default` (`Sonnet5`) for null, empty, or unrecognized
+  input — covers the "invalid/deprecated model ID" scenario without erroring the page.
+- `IClaudeModelStore` / `ClaudeModelStore`: a plain-text file store (`claude-model.txt`
+  under `%LOCALAPPDATA%/MealsEnPlace/`), separate from the DataProtection-encrypted
+  token store since the model choice is not a secret.
+- `SettingsController`: `POST /api/v1/settings/claude/model` persists the selection
+  (400 for an unrecognized name); `GET /claude/status`, `POST /claude/token`, and
+  `DELETE /claude/token` all now return the current model alongside `configured` —
+  clearing the key leaves the model preference untouched.
+- `AnthropicTestClient` (the one real outbound Claude call in the codebase, per
+  MEP-032's scope decision) now reads the model preference on every `PingAsync`
+  call instead of a hardcoded constant, so Test Connection verifies the user's
+  actual model choice and a Settings-page change takes effect without a restart.
+- Angular: `ClaudeModel` type and extended `ClaudeTokenStatusResponse` in
+  `settings.models.ts`; `SettingsService.saveModel`; `AiAvailabilityService` now
+  tracks `model` alongside `configured`; `SettingsPageComponent` adds a `mat-select`
+  model picker (Opus 5 / Sonnet 5 / Haiku 4.5 / Fable 5.1, best-to-cheapest order)
+  to the existing AI card, visible and usable with no API key configured.
+
+### Scope decisions
+- **The stubbed `IClaudeService` methods are untouched.** Per MEP-032, dietary
+  classification, UOM resolution, matching feasibility/substitution, and meal plan
+  optimization do not yet issue real Anthropic calls — there is nothing to wire the
+  model preference into on those paths until they are converted to real Claude calls
+  in a future story. `IClaudeModelStore` is the seam they will read from at that point.
+- **No per-feature-type model assignment.** One global preference applies uniformly,
+  as scoped. Per-call-site model selection remains a possible future enhancement.
+
+### Business Problem
+The app hardcodes a single Claude model for every AI-backed call. Because the user brings their own Anthropic API key and pays per token (MEP-032), model choice is a meaningful cost/quality/speed tradeoff. Lightweight operations such as colloquial unit-of-measure resolution and container reference flagging could run against a cheaper, faster model (e.g., Haiku), while higher-stakes calls -- dietary classification, recipe matching feasibility and substitution, meal plan optimization, and the future MEP-012 flyer Vision extraction -- benefit from a stronger model (e.g., Sonnet or Opus). Today the user has no way to change the model without a code change and redeploy.
+
+This story adds a model picker to the existing AI section of the Settings page so the user can choose the Claude model that all AI-backed calls use. The selection persists server-side alongside the encrypted API key (it is not a secret and may be returned plainly in the settings status response). A future enhancement could allow per-feature-type model assignment (e.g., Haiku for UOM resolution, Opus for meal plan optimization), but that is out of scope here -- a single global model preference covers the MVP need.
+
+### Acceptance Criteria
+```gherkin
+Feature: Claude Model Selector in Settings
+
+  Scenario: Model picker appears in the AI section of the Settings page
+    Given the user navigates to the Settings page
+    When the AI section renders
+    Then a model dropdown is visible below the API key controls
+    And the dropdown lists the current Claude model family: Opus 5, Sonnet 5, Haiku 4.5, Fable 5.1
+    And the default selection is Sonnet 5 if the user has not previously chosen a model
+
+  Scenario: User selects a different model
+    Given the model dropdown is displaying the current selection
+    When the user selects "Haiku 4.5" from the dropdown
+    And clicks Save (or the selection auto-saves)
+    Then the backend persists the model preference server-side
+    And the Settings page confirms the selection was saved
+
+  Scenario: Selected model persists across app restarts
+    Given the user has selected "Opus 5" as the preferred model
+    When the app is restarted and the user returns to the Settings page
+    Then the model dropdown shows "Opus 5" as the current selection
+
+  Scenario: Model preference applies to all Claude-backed calls
+    Given the user has selected "Haiku 4.5" as the preferred model
+    When any Claude-backed operation runs (UOM resolution fallback, dietary classification, recipe matching feasibility/substitution, meal plan optimization)
+    Then the Anthropic API request uses the model ID corresponding to "Haiku 4.5"
+    And no call uses a different model
+
+  Scenario: Model change takes effect without app restart
+    Given the user changes the model from "Sonnet 5" to "Opus 5"
+    When the next Claude-backed call is triggered
+    Then that call uses the model ID corresponding to "Opus 5"
+    And no app restart or redeployment is required
+
+  Scenario: Model preference is not a secret
+    Given the user has selected a model
+    When the frontend calls GET /api/v1/settings/claude/status
+    Then the response includes the selected model ID in plaintext alongside the existing { configured: bool } indicator
+    And the raw API key is still never included
+
+  Scenario: Model picker renders when no API key is configured
+    Given no Claude API key has been saved
+    When the user views the AI section of the Settings page
+    Then the model dropdown is visible and interactive
+    And the user can select and save a model preference
+    And no Claude API calls are triggered by saving the preference
+    And the selection is ready to take effect once a key is configured
+
+  Scenario: Invalid or deprecated model ID falls back to the default
+    Given the persisted model preference contains a value that is no longer recognized (e.g., a model removed in a newer app version)
+    When the Settings page loads
+    Then the dropdown shows the default model (Sonnet 5) instead of the unrecognized value
+    And when the next Claude-backed call runs it uses the default model
+    And no error is shown on the Settings page
+```
