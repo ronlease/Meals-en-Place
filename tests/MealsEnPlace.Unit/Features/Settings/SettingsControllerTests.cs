@@ -3,13 +3,20 @@
 // Claude scenarios:
 // Scenario: GET /claude/status returns configured=true when a token is stored
 // Scenario: GET /claude/status returns configured=false when no token is stored
+// Scenario: GET /claude/status includes the currently selected model
 // Scenario: POST /claude/token persists the value and response omits the raw key
 // Scenario: POST /claude/token rejects empty/whitespace tokens with 400
+// Scenario: POST /claude/token response includes the currently selected model
 // Scenario: POST /claude/test uses the candidate token when one is supplied
 // Scenario: POST /claude/test falls back to the persisted token when the request body omits one
 // Scenario: POST /claude/test with no persisted and no candidate token returns 400
 // Scenario: POST /claude/test does not overwrite the persisted token on failure
-// Scenario: DELETE /claude/token removes any persisted value
+// Scenario: DELETE /claude/token removes any persisted value but leaves the model preference untouched
+//
+// Claude model scenarios (MEP-052):
+// Scenario: POST /claude/model persists a recognized model and returns it
+// Scenario: POST /claude/model rejects an unrecognized model name with 400
+// Scenario: POST /claude/model does not require a key to be configured
 //
 // Todoist scenarios (MEP-035 / MEP-036):
 // Scenario: GET /todoist/status reports configured when the resolver returns a token
@@ -37,6 +44,7 @@ namespace MealsEnPlace.Unit.Features.Settings;
 public sealed class SettingsControllerTests
 {
     private readonly Mock<IAnthropicTestClient> _anthropicMock = new(MockBehavior.Strict);
+    private readonly FakeClaudeModelStore _claudeModelStore = new();
     private readonly FakeClaudeTokenStore _claudeStore = new();
     private readonly Mock<ITodoistProjectHistoryService> _historyServiceMock = new(MockBehavior.Strict);
     private readonly SettingsController _sut;
@@ -47,6 +55,7 @@ public sealed class SettingsControllerTests
     {
         _sut = new SettingsController(
             _anthropicMock.Object,
+            _claudeModelStore,
             _claudeStore,
             _historyServiceMock.Object,
             _todoistTestMock.Object,
@@ -75,6 +84,16 @@ public sealed class SettingsControllerTests
     }
 
     [Fact]
+    public async Task GetClaudeStatus_IncludesCurrentlySelectedModel()
+    {
+        await _claudeModelStore.WriteAsync(ClaudeModel.Opus5);
+
+        var action = await _sut.GetClaudeStatus();
+
+        GetBody<ClaudeTokenStatusResponse>(action).Model.Should().Be("Opus5");
+    }
+
+    [Fact]
     public async Task SaveClaudeToken_PersistsValue_AndResponseOmitsRawKey()
     {
         var request = new SaveClaudeTokenRequest { Token = "sk-ant-newly-issued" };
@@ -85,6 +104,16 @@ public sealed class SettingsControllerTests
         var body = GetBody<ClaudeTokenStatusResponse>(action);
         body.Configured.Should().BeTrue();
         System.Text.Json.JsonSerializer.Serialize(body).Should().NotContain("sk-ant-newly-issued");
+    }
+
+    [Fact]
+    public async Task SaveClaudeToken_ResponseIncludesCurrentlySelectedModel()
+    {
+        await _claudeModelStore.WriteAsync(ClaudeModel.Haiku45);
+
+        var action = await _sut.SaveClaudeToken(new SaveClaudeTokenRequest { Token = "sk-ant-newly-issued" });
+
+        GetBody<ClaudeTokenStatusResponse>(action).Model.Should().Be("Haiku45");
     }
 
     [Fact]
@@ -158,6 +187,68 @@ public sealed class SettingsControllerTests
 
         GetBody<ClaudeTokenStatusResponse>(action).Configured.Should().BeFalse();
         (await _claudeStore.ReadAsync()).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task ClearClaudeToken_LeavesModelPreferenceUntouched()
+    {
+        await _claudeStore.WriteAsync("sk-ant-to-go");
+        await _claudeModelStore.WriteAsync(ClaudeModel.Opus5);
+
+        var action = await _sut.ClearClaudeToken();
+
+        GetBody<ClaudeTokenStatusResponse>(action).Model.Should().Be("Opus5");
+        (await _claudeModelStore.ReadAsync()).Should().Be(ClaudeModel.Opus5);
+    }
+
+    [Fact]
+    public async Task SaveClaudeModel_PersistsRecognizedModel_AndReturnsIt()
+    {
+        var action = await _sut.SaveClaudeModel(new SaveClaudeModelRequest { Model = "Opus5" });
+
+        GetBody<ClaudeTokenStatusResponse>(action).Model.Should().Be("Opus5");
+        (await _claudeModelStore.ReadAsync()).Should().Be(ClaudeModel.Opus5);
+    }
+
+    [Fact]
+    public async Task SaveClaudeModel_IsCaseInsensitive()
+    {
+        var action = await _sut.SaveClaudeModel(new SaveClaudeModelRequest { Model = "haiku45" });
+
+        GetBody<ClaudeTokenStatusResponse>(action).Model.Should().Be("Haiku45");
+    }
+
+    [Fact]
+    public async Task SaveClaudeModel_WithUnrecognizedName_Returns400_AndDoesNotPersist()
+    {
+        await _claudeModelStore.WriteAsync(ClaudeModel.Sonnet5);
+
+        var action = await _sut.SaveClaudeModel(new SaveClaudeModelRequest { Model = "Gpt5" });
+
+        action.Result.Should().BeAssignableTo<ObjectResult>()
+            .Which.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+        (await _claudeModelStore.ReadAsync()).Should().Be(ClaudeModel.Sonnet5);
+    }
+
+    [Fact]
+    public async Task SaveClaudeModel_WithNullModel_Returns400()
+    {
+        var action = await _sut.SaveClaudeModel(new SaveClaudeModelRequest { Model = null });
+
+        action.Result.Should().BeAssignableTo<ObjectResult>()
+            .Which.StatusCode.Should().Be(StatusCodes.Status400BadRequest);
+    }
+
+    [Fact]
+    public async Task SaveClaudeModel_DoesNotRequireAConfiguredKey()
+    {
+        (await _claudeStore.HasTokenAsync()).Should().BeFalse();
+
+        var action = await _sut.SaveClaudeModel(new SaveClaudeModelRequest { Model = "Fable51" });
+
+        var body = GetBody<ClaudeTokenStatusResponse>(action);
+        body.Model.Should().Be("Fable51");
+        body.Configured.Should().BeFalse();
     }
 
     [Fact]
@@ -319,6 +410,21 @@ public sealed class SettingsControllerTests
     {
         var ok = action.Result.Should().BeOfType<OkObjectResult>().Subject;
         return ok.Value.Should().BeOfType<T>().Subject;
+    }
+
+    /// <summary>In-memory <see cref="IClaudeModelStore"/> for controller-level tests.</summary>
+    private sealed class FakeClaudeModelStore : IClaudeModelStore
+    {
+        private ClaudeModel _model = ClaudeModelCatalog.Default;
+
+        public Task<ClaudeModel> ReadAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(_model);
+
+        public Task WriteAsync(ClaudeModel model, CancellationToken cancellationToken = default)
+        {
+            _model = model;
+            return Task.CompletedTask;
+        }
     }
 
     /// <summary>In-memory <see cref="IClaudeTokenStore"/> for controller-level tests.</summary>

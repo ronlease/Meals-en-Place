@@ -8,13 +8,23 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { ClaudeModel } from '../../core/models/settings.models';
 import { AiAvailabilityService } from '../../core/services/ai-availability.service';
 import { PreferencesService } from '../../core/services/preferences.service';
 import { SettingsService } from '../../core/services/settings.service';
 import { TodoistAvailabilityService } from '../../core/services/todoist-availability.service';
 import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.component';
+
+/** Best-to-cheapest display order for the Settings page model picker (MEP-052). */
+const CLAUDE_MODEL_OPTIONS: { label: string; value: ClaudeModel }[] = [
+  { label: 'Opus 5', value: 'Opus5' },
+  { label: 'Sonnet 5', value: 'Sonnet5' },
+  { label: 'Haiku 4.5', value: 'Haiku45' },
+  { label: 'Fable 5.1', value: 'Fable51' },
+];
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -28,6 +38,7 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
     MatIconModule,
     MatInputModule,
     MatProgressSpinnerModule,
+    MatSelectModule,
     MatSlideToggleModule,
   ],
   selector: 'app-settings-page',
@@ -172,6 +183,27 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
               />
               <mat-hint>Stored encrypted; response never echoes the value back.</mat-hint>
             </mat-form-field>
+          </div>
+
+          <div class="ai-row" style="margin-top: 16px;">
+            <mat-form-field appearance="outline" class="token-field">
+              <mat-label>Claude model</mat-label>
+              <mat-select
+                [value]="aiAvailability.model()"
+                (selectionChange)="saveModel($event.value)"
+              >
+                @for (option of modelOptions; track option.value) {
+                  <mat-option [value]="option.value">{{ option.label }}</mat-option>
+                }
+              </mat-select>
+              <mat-hint>
+                Applies to every Claude-backed feature. Takes effect on the next call — no restart
+                needed.
+              </mat-hint>
+            </mat-form-field>
+            @if (modelSaving()) {
+              <mat-progress-spinner diameter="24" mode="indeterminate" />
+            }
           </div>
 
           <div class="actions">
@@ -330,6 +362,8 @@ import { ConfirmDialogComponent, ConfirmDialogData } from './confirm-dialog.comp
 })
 export class SettingsPageComponent {
   protected readonly aiAvailability = inject(AiAvailabilityService);
+  protected readonly modelOptions = CLAUDE_MODEL_OPTIONS;
+  protected readonly modelSaving = signal(false);
   protected readonly preferencesService = inject(PreferencesService);
   protected readonly saving = signal(false);
   protected readonly testResult = signal<{ message: string; success: boolean } | null>(null);
@@ -419,6 +453,23 @@ export class SettingsPageComponent {
         this.tokenInput.set('');
         this.testResult.set(null);
         this.snackBar.open('API key saved.', 'Dismiss', { duration: 4000 });
+      },
+    });
+  }
+
+  saveModel(model: ClaudeModel): void {
+    this.modelSaving.set(true);
+    this.settingsService.saveModel(model).subscribe({
+      complete: () => this.modelSaving.set(false),
+      error: () => {
+        this.modelSaving.set(false);
+        this.snackBar.open('Could not save the model. See console for details.', 'Dismiss', {
+          duration: 5000,
+        });
+      },
+      next: (status) => {
+        this.aiAvailability.setModel(status.model);
+        this.snackBar.open('Claude model saved.', 'Dismiss', { duration: 4000 });
       },
     });
   }

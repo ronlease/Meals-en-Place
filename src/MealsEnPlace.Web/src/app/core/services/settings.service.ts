@@ -3,8 +3,10 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable } from 'rxjs';
 import { environment } from '../../../environments/environment';
 import {
+  ClaudeModel,
   ClaudeTokenStatusResponse,
   ClaudeTokenTestResponse,
+  SaveClaudeModelRequest,
   SaveClaudeTokenRequest,
   SaveTodoistTokenRequest,
   TestClaudeTokenRequest,
@@ -54,6 +56,11 @@ export class SettingsService {
 
   getTodoistStatus(): Observable<TodoistStatusResponse> {
     return this.http.get<TodoistStatusResponse>(`${this.todoistUrl}/status`);
+  }
+
+  saveModel(model: ClaudeModel): Observable<ClaudeTokenStatusResponse> {
+    const body: SaveClaudeModelRequest = { model };
+    return this.http.post<ClaudeTokenStatusResponse>(`${this.claudeUrl}/model`, body);
   }
 
   saveToken(token: string): Observable<ClaudeTokenStatusResponse> {
