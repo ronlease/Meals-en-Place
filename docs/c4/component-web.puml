@@ -24,7 +24,7 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(wasteAlertsPage, "Waste Alerts Page", "Angular Standalone Component", "Card grid of expiring items with recipe suggestions and dismiss action")
 
     ' ── Settings Page ──────────────────────────────────────────
-    Component(settingsPage, "Settings Page", "Angular Standalone Component", "BYO API key and Todoist token management: save, test connection, remove")
+    Component(settingsPage, "Settings Page", "Angular Standalone Component", "BYO API key and Todoist token management: save, test connection, remove. Claude model picker (Opus 5 / Sonnet 5 / Haiku 4.5 / Fable 5.1, MEP-052) usable even with no key configured")
 
     ' ── Shared Dialogs ─────────────────────────────────────────
     Component(aiDisabledBanner, "AI Disabled Banner", "Angular Standalone Component", "Persistent banner shown when no Claude API key is configured; links to Settings and can be dismissed for the session")
@@ -34,8 +34,8 @@ Container_Boundary(web, "Angular Web App — Angular 22, Angular Material") {
     Component(ingredientAutocomplete, "Ingredient Autocomplete", "Angular Standalone Component, ControlValueAccessor", "Shared typeahead with 250 ms debounce, min-length gate, and stale-request cancellation. Optional create-new mode for inventory entry")
 
     ' ── Core Services ──────────────────────────────────────────
-    Component(aiAvailabilityService, "AiAvailabilityService", "Angular Service, providedIn: root", "Signal-backed 'is the Claude API key configured?' gate consumed by the AI-disabled banner and AI-dependent affordances")
-    Component(settingsService, "SettingsService", "Angular Service, providedIn: root", "Claude API key and Todoist token save/test/clear, Todoist project history for push-target picker")
+    Component(aiAvailabilityService, "AiAvailabilityService", "Angular Service, providedIn: root", "Signal-backed 'is the Claude API key configured?' gate and selected-model tracker (MEP-052), consumed by the AI-disabled banner, AI-dependent affordances, and the Settings model picker")
+    Component(settingsService, "SettingsService", "Angular Service, providedIn: root", "Claude API key and Todoist token save/test/clear, Claude model preference save (MEP-052), Todoist project history for push-target picker")
     Component(inventoryService, "InventoryService", "Angular Service, providedIn: root", "CRUD for inventory items, container reference detection")
     Component(mealPlanService, "MealPlanService", "Angular Service, providedIn: root", "Active plan retrieval, generation, slot swapping, consume / unconsume, reorder-by-expiry, push to Todoist")
     Component(preferencesService, "PreferencesService", "Angular Service, providedIn: root", "Display system preference (Imperial/Metric), signal-based")
