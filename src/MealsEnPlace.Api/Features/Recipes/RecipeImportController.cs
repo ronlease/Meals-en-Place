@@ -1,4 +1,5 @@
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Models.Entities;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MealsEnPlace.Api.Features.Recipes;
@@ -35,6 +36,17 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     }
 
     /// <summary>Returns a paged list of local recipes ordered by title.</summary>
+    /// <param name="dietaryTag">
+    /// Zero or more dietary tags to filter on. Repeat the parameter to supply
+    /// multiple values (e.g. <c>?dietaryTag=Vegetarian&amp;dietaryTag=GlutenFree</c>).
+    /// When multiple tags are supplied, only recipes that carry <em>all</em> specified
+    /// tags are returned. Omit to disable this filter.
+    /// </param>
+    /// <param name="ingredient">
+    /// Optional case-insensitive substring to match against canonical ingredient names.
+    /// When provided, only recipes containing at least one matching ingredient are
+    /// returned. The search is backed by a <c>pg_trgm</c> GIN index.
+    /// </param>
     /// <param name="page">
     /// 1-based page number. Values below 1 are clamped to 1. Default: 1.
     /// </param>
@@ -42,19 +54,35 @@ public sealed class RecipeImportController(IRecipeImportService recipeImportServ
     /// Items per page. Clamped to [1, 100]; the documented maximum is 100.
     /// Default: 25.
     /// </param>
+    /// <param name="q">
+    /// Optional case-insensitive substring to match against recipe titles.
+    /// When provided, only recipes whose title contains this term are returned.
+    /// The search is backed by a <c>pg_trgm</c> GIN index. Omit or leave empty
+    /// to return unfiltered paginated results identical to MEP-043 behaviour.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// 200 with a <see cref="PagedResult{RecipeListItemDto}"/> containing the requested
     /// page of recipes and pagination metadata (totalCount, totalPages, page, pageSize).
+    /// All filter predicates are applied server-side and combine with AND semantics.
     /// </returns>
     [HttpGet]
     [ProducesResponseType(typeof(PagedResult<RecipeListItemDto>), StatusCodes.Status200OK)]
     public async Task<ActionResult<PagedResult<RecipeListItemDto>>> GetLocalRecipes(
+        [FromQuery] List<DietaryTag>? dietaryTag = null,
+        [FromQuery] string? ingredient = null,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
+        [FromQuery] string? q = null,
         CancellationToken cancellationToken = default)
     {
-        var result = await recipeImportService.GetPagedLocalRecipesAsync(page, pageSize, cancellationToken);
+        var query = new RecipeSearchQuery(
+            DietaryTags: dietaryTag ?? [],
+            IngredientSearch: ingredient,
+            Page: page,
+            PageSize: pageSize,
+            TitleSearch: q);
+        var result = await recipeImportService.GetPagedLocalRecipesAsync(query, cancellationToken);
         return Ok(result);
     }
 

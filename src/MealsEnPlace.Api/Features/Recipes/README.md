@@ -11,6 +11,7 @@ Recipe library management: manual creation, recipe detail / listing, container r
 - MEP-026 Bulk Recipe Ingest from Kaggle 2M Dataset (offline tool)
 - MEP-033 Remove TheMealDB Integration
 - MEP-043 Recipe List Endpoint Pagination and Query Optimization
+- MEP-046 Recipe Search and Filtering
 
 ## Endpoints
 
@@ -30,8 +31,13 @@ Recipe library management: manual creation, recipe detail / listing, container r
 
 | Parameter | Default | Max | Behaviour |
 |-----------|---------|-----|-----------|
+| `dietaryTag` | _(none)_ | — | Repeatable enum filter (`?dietaryTag=Vegetarian&dietaryTag=GlutenFree`). Only recipes carrying **all** specified tags are returned (AND semantics). Values: `Carnivore`, `DairyFree`, `GlutenFree`, `LowCarb`, `Vegan`, `Vegetarian`. |
+| `ingredient` | _(none)_ | — | Case-insensitive substring match against canonical ingredient names. Only recipes containing at least one matching ingredient are returned. Backed by a `pg_trgm` GIN index. |
 | `page` | 1 | — | 1-based page number; values below 1 are clamped to 1 |
 | `pageSize` | 25 | 100 | Items per page; values outside [1, 100] are clamped silently |
+| `q` | _(none)_ | — | Case-insensitive substring match against recipe titles. Omit or leave empty to return unfiltered paginated results (identical to MEP-043 behaviour). Backed by a `pg_trgm` GIN index. |
+
+All filter parameters combine with AND semantics — e.g. `?q=pasta&dietaryTag=Vegetarian&ingredient=tomato` returns only recipes whose title contains "pasta", that are tagged Vegetarian, and that contain an ingredient named something like "tomato".
 
 ### GET /api/v1/recipes — Response Shape (`PagedResult<RecipeListItemDto>`)
 
@@ -69,9 +75,15 @@ rows across the full catalog, causing the 30-second Postgres command timeout.
 - **Recipe Matching**: Scores recipes by coverage ratio (matched/total ingredients), waste bonus for expiry-imminent items, and seasonal affinity. Results are tiered: Full Match (1.0), Near Match (>=0.75), Partial Match (>=0.5).
 - **Substitution Suggestions**: When a Claude API key is configured (MEP-032), Claude reviews near-match candidates and suggests substitutions for missing ingredients. Skipped when no key is configured.
 
-## Database Index
+## Database Indexes
 
-`IX_Recipes_Title` (B-tree) on `Recipes.Title` — added in migration `20260831013330_AddRecipesTitleIndex`. Supports `ORDER BY Title` on the paged list endpoint and keeps the parallel `COUNT(*)` affordable via an index-only scan at 1.6 M-row scale.
+| Index | Table | Type | Purpose |
+|-------|-------|------|---------|
+| `IX_Recipes_Title` | `Recipes` | B-tree | `ORDER BY Title` on the paged list; keeps `COUNT(*)` affordable via index-only scan at 1.6 M-row scale. Added in `20260831013330_AddRecipesTitleIndex`. |
+| `IX_Recipes_Title_Trgm` | `Recipes` | GIN (pg_trgm) | Accelerates `ILIKE '%term%'` title search (`?q=`). Added in `20260918021211_AddRecipeSearchTrigrams`. |
+| `IX_CanonicalIngredients_Name_Trgm` | `CanonicalIngredients` | GIN (pg_trgm) | Accelerates `ILIKE '%term%'` ingredient-name search (`?ingredient=`). Added in `20260918021211_AddRecipeSearchTrigrams`. |
+
+The `pg_trgm` PostgreSQL extension is enabled by migration `20260918021211_AddRecipeSearchTrigrams` (`CREATE EXTENSION IF NOT EXISTS pg_trgm`).
 
 ## Files
 
@@ -81,5 +93,5 @@ rows across the full catalog, causing the 30-second Postgres command timeout.
 - `IRecipeImportService.cs` / `RecipeImportService.cs` — Recipe CRUD for the interactive surface
 - `IContainerResolutionService.cs` / `ContainerResolutionService.cs` — Container resolution logic
 - `IRecipeMatchingService.cs` / `RecipeMatchingService.cs` — Matching and scoring pipeline
-- DTOs: `RecipeDetailDto`, `RecipeIngredientDetailDto`, `CreateRecipeRequest`, `CreateRecipeIngredientRequest`, `RecipeListItemDto`, `RecipeMatchDto`, `RecipeMatchRequest`, `RecipeMatchResponse`, `MatchedIngredientDto`, `MissingIngredientDto`, `UnresolvedRecipeResponse`, `UnresolvedIngredientResponse`, `ResolvedIngredientResponse`, `ResolveContainerRequest`, `ContainerResolutionResult`, `MatchTier`, `UnresolvedGroupResponse`, `BulkResolveGroupRequest`, `BulkResolveGroupResponse`
+- DTOs: `RecipeDetailDto`, `RecipeIngredientDetailDto`, `CreateRecipeRequest`, `CreateRecipeIngredientRequest`, `RecipeListItemDto`, `RecipeSearchQuery`, `RecipeMatchDto`, `RecipeMatchRequest`, `RecipeMatchResponse`, `MatchedIngredientDto`, `MissingIngredientDto`, `UnresolvedRecipeResponse`, `UnresolvedIngredientResponse`, `ResolvedIngredientResponse`, `ResolveContainerRequest`, `ContainerResolutionResult`, `MatchTier`, `UnresolvedGroupResponse`, `BulkResolveGroupRequest`, `BulkResolveGroupResponse`
 - `Common/PagedResult.cs` — Shared pagination envelope used by this endpoint (and future paged endpoints)

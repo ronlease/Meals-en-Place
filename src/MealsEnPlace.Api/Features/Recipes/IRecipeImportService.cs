@@ -14,14 +14,16 @@ public interface IRecipeImportService
     Task<RecipeDetailDto> CreateRecipeAsync(CreateRecipeRequest request, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Returns a single page of local recipes ordered by title, with pagination metadata.
+    /// Returns a single page of local recipes ordered by title, applying any search
+    /// and filter predicates specified in <paramref name="query"/>.
     /// </summary>
-    /// <param name="page">1-based page number. Values below 1 are clamped to 1.</param>
-    /// <param name="pageSize">Items per page. Clamped to [1, <see cref="RecipeImportService.MaxPageSize"/>].</param>
+    /// <param name="query">
+    /// Pagination parameters plus optional title search, ingredient search, and
+    /// dietary-tag filter. All filter fields are additive (AND semantics).
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task<PagedResult<RecipeListItemDto>> GetPagedLocalRecipesAsync(
-        int page,
-        int pageSize,
+        RecipeSearchQuery query,
         CancellationToken cancellationToken = default);
 
     /// <summary>Returns the full detail of a single local recipe by ID, or null if not found.</summary>
