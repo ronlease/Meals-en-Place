@@ -41,8 +41,21 @@ export class RecipeService {
     return this.http.get<RecipeDetailDto>(`${this.baseUrl}/${id}`);
   }
 
-  getRecipes(page = 1, pageSize = 25): Observable<PagedResult<RecipeListItemDto>> {
-    const params = new HttpParams().set('page', page).set('pageSize', pageSize);
+  getRecipes(
+    page = 1,
+    pageSize = 25,
+    q?: string,
+    dietaryTags?: string[],
+  ): Observable<PagedResult<RecipeListItemDto>> {
+    let params = new HttpParams().set('page', page).set('pageSize', pageSize);
+    if (q) {
+      params = params.set('q', q);
+    }
+    if (dietaryTags && dietaryTags.length > 0) {
+      for (const tag of dietaryTags) {
+        params = params.append('dietaryTag', tag);
+      }
+    }
     return this.http.get<PagedResult<RecipeListItemDto>>(this.baseUrl, { params });
   }
 
