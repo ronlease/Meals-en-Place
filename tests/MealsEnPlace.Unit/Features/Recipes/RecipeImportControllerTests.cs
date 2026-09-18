@@ -37,12 +37,37 @@
 // Scenario: GetLocalRecipes passes page and pageSize to the service
 //   Given page=3 and pageSize=50 are supplied
 //   When GetLocalRecipes is called
-//   Then the service is called with page=3 and pageSize=50
+//   Then the service is called with a RecipeSearchQuery where Page=3 and PageSize=50
 //
 // Scenario: GetLocalRecipes uses default page and pageSize when not supplied
 //   Given no pagination query parameters are provided
 //   When GetLocalRecipes is called
-//   Then the service is called with page=1 and pageSize=25
+//   Then the service is called with a RecipeSearchQuery where Page=1 and PageSize=25
+//
+// Scenario: GetLocalRecipes with q param passes TitleSearch to service
+//   Given q="tikka" is supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with a RecipeSearchQuery where TitleSearch="tikka"
+//
+// Scenario: GetLocalRecipes with ingredient param passes IngredientSearch to service
+//   Given ingredient="broccoli" is supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with a RecipeSearchQuery where IngredientSearch="broccoli"
+//
+// Scenario: GetLocalRecipes with a single dietaryTag passes it to service
+//   Given dietaryTag=Vegetarian is supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with a RecipeSearchQuery where DietaryTags=[Vegetarian]
+//
+// Scenario: GetLocalRecipes with multiple dietaryTag values passes all tags to service
+//   Given dietaryTag=Vegan and dietaryTag=GlutenFree are supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with a RecipeSearchQuery where DietaryTags contains both Vegan and GlutenFree
+//
+// Scenario: GetLocalRecipes with no filters passes null search terms and empty tag list to service
+//   Given no search or filter parameters are supplied
+//   When GetLocalRecipes is called
+//   Then the service is called with TitleSearch=null, IngredientSearch=null, and an empty DietaryTags list
 //
 // Scenario: GetById with known id returns 200 with recipe detail
 //   Given the service returns a RecipeDetailDto for a given id
@@ -247,7 +272,7 @@ public class RecipeImportControllerTests
             TotalCount = 2
         };
         _serviceMock
-            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<RecipeSearchQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(pagedResult);
 
         // Act
@@ -271,7 +296,7 @@ public class RecipeImportControllerTests
             TotalCount = 0
         };
         _serviceMock
-            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetPagedLocalRecipesAsync(It.IsAny<RecipeSearchQuery>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(pagedResult);
 
         // Act
@@ -289,7 +314,9 @@ public class RecipeImportControllerTests
         // Arrange
         var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 3, PageSize = 50, TotalCount = 0 };
         _serviceMock
-            .Setup(s => s.GetPagedLocalRecipesAsync(3, 50, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.Page == 3 && q.PageSize == 50),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(pagedResult);
 
         // Act
@@ -297,7 +324,11 @@ public class RecipeImportControllerTests
 
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
-        _serviceMock.Verify(s => s.GetPagedLocalRecipesAsync(3, 50, It.IsAny<CancellationToken>()), Times.Once);
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.Page == 3 && q.PageSize == 50),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     [Fact]
@@ -306,7 +337,9 @@ public class RecipeImportControllerTests
         // Arrange
         var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
         _serviceMock
-            .Setup(s => s.GetPagedLocalRecipesAsync(1, 25, It.IsAny<CancellationToken>()))
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.Page == 1 && q.PageSize == 25),
+                It.IsAny<CancellationToken>()))
             .ReturnsAsync(pagedResult);
 
         // Act
@@ -314,7 +347,146 @@ public class RecipeImportControllerTests
 
         // Assert
         result.Result.Should().BeOfType<OkObjectResult>();
-        _serviceMock.Verify(s => s.GetPagedLocalRecipesAsync(1, 25, It.IsAny<CancellationToken>()), Times.Once);
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.Page == 1 && q.PageSize == 25),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    // ── GetLocalRecipes — search and filter parameter forwarding ──────────────
+
+    [Fact]
+    public async Task GetLocalRecipes_WithQParam_PassesTitleSearchToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.TitleSearch == "tikka"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(q: "tikka", cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.TitleSearch == "tikka"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_WithIngredientParam_PassesIngredientSearchToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.IngredientSearch == "broccoli"),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(ingredient: "broccoli", cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q => q.IngredientSearch == "broccoli"),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_WithSingleDietaryTag_PassesSingleTagToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.DietaryTags.Count == 1 && q.DietaryTags.Contains(DietaryTag.Vegetarian)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(
+            dietaryTag: [DietaryTag.Vegetarian],
+            cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.DietaryTags.Count == 1 && q.DietaryTags.Contains(DietaryTag.Vegetarian)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_WithMultipleDietaryTags_PassesAllTagsToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.DietaryTags.Count == 2 &&
+                    q.DietaryTags.Contains(DietaryTag.Vegan) &&
+                    q.DietaryTags.Contains(DietaryTag.GlutenFree)),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(
+            dietaryTag: [DietaryTag.Vegan, DietaryTag.GlutenFree],
+            cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.DietaryTags.Count == 2 &&
+                    q.DietaryTags.Contains(DietaryTag.Vegan) &&
+                    q.DietaryTags.Contains(DietaryTag.GlutenFree)),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task GetLocalRecipes_NoFilters_PassesNullSearchTermsAndEmptyTagListToService()
+    {
+        // Arrange
+        var pagedResult = new PagedResult<RecipeListItemDto> { Items = [], Page = 1, PageSize = 25, TotalCount = 0 };
+        _serviceMock
+            .Setup(s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.TitleSearch == null &&
+                    q.IngredientSearch == null &&
+                    q.DietaryTags.Count == 0),
+                It.IsAny<CancellationToken>()))
+            .ReturnsAsync(pagedResult);
+
+        // Act
+        var result = await _sut.GetLocalRecipes(cancellationToken: CancellationToken.None);
+
+        // Assert
+        result.Result.Should().BeOfType<OkObjectResult>();
+        _serviceMock.Verify(
+            s => s.GetPagedLocalRecipesAsync(
+                It.Is<RecipeSearchQuery>(q =>
+                    q.TitleSearch == null &&
+                    q.IngredientSearch == null &&
+                    q.DietaryTags.Count == 0),
+                It.IsAny<CancellationToken>()),
+            Times.Once);
     }
 
     // ── GetById ───────────────────────────────────────────────────────────────
