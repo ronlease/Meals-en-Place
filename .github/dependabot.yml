@@ -75,6 +75,14 @@ updates:
           - "eslint"
           - "prettier"
           - "typescript-eslint"
+      # vitest and @vitest/coverage-v8 peer-depend on each other's major, so a
+      # bump to one alone leaves npm ci ERESOLVE-broken until the other half
+      # lands (#157, #158). Same failure shape as the angular/dotnet splits
+      # above — group them so they always arrive as one PR.
+      vitest:
+        patterns:
+          - "@vitest/*"
+          - "vitest"
     ignore:
       # @angular/compiler-cli@22 peers typescript ">=6.0 <6.1", so TypeScript 7
       # cannot resolve here at all. It was proposed and closed twice already
