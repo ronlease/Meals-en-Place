@@ -94,6 +94,27 @@
 //   Given "mayorelli" is a cheese name unrelated to mayonnaise
 //   When CanonicalNameNormalizer processes "mayorelli cheese"
 //   Then the fold-group key is distinct from "mayonnaise"
+//
+// Scenario: RequiresTypoCorrection returns true for a known typo dictionary entry -- MEP-053
+//   Given the input is a string present in TypoAndSynonymPhraseReplacements (e.g. "mayonaise", "leseur")
+//   When RequiresTypoCorrection is called
+//   Then the method returns true for each input
+//
+// Scenario: RequiresTypoCorrection returns false for a correctly-spelled name -- MEP-053
+//   Given the input is "mayonnaise" or "onion", neither of which appears in the typo dictionary
+//   When RequiresTypoCorrection is called
+//   Then the method returns false for each input
+//
+// Scenario: RequiresTypoCorrection returns false for a name that differs only by casing or pluralisation -- MEP-053
+//   Given the input "Onions" which differs from "onion" only by capitalisation and plural suffix
+//   And neither capitalisation nor plural removal is a typo-dictionary replacement
+//   When RequiresTypoCorrection is called
+//   Then the method returns false, because casing and pluralisation are cosmetic and do not count as typo correction
+//
+// Scenario: RequiresTypoCorrection returns false for null or whitespace input -- MEP-053
+//   Given a null, empty, or whitespace-only string
+//   When RequiresTypoCorrection is called
+//   Then the method returns false without throwing
 
 using FluentAssertions;
 using MealsEnPlace.Tools.Dedup;
@@ -411,5 +432,47 @@ public class CanonicalNameNormalizerTests
         // "mayorelli" is a cheese name that shares a substring prefix with
         // "mayonnaise". The typo dictionary must not touch it.
         _normalizer.Normalize("mayorelli cheese").Should().NotBe(_normalizer.Normalize("mayonnaise"));
+    }
+
+    // ── MEP-053: RequiresTypoCorrection ────────────────────────────────────
+
+    [Theory]
+    [InlineData("mayonaise")]        // 9-char misspelling that started the MEP-053 investigation
+    [InlineData("leseur")]           // brand misspelling also used in normalize tests above
+    public void RequiresTypoCorrection_KnownTypoEntry_ReturnsTrue(string input)
+    {
+        // Arrange / Act / Assert
+        _normalizer.RequiresTypoCorrection(input).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("mayonnaise")]
+    [InlineData("onion")]
+    public void RequiresTypoCorrection_CorrectSpelling_ReturnsFalse(string input)
+    {
+        // Correctly-spelled names are not in the typo dictionary so the method
+        // must return false without altering them.
+        _normalizer.RequiresTypoCorrection(input).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RequiresTypoCorrection_NullOrWhitespace_ReturnsFalse(string? input)
+    {
+        // Guard: the method must not throw on null or whitespace and must return false.
+        _normalizer.RequiresTypoCorrection(input).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RequiresTypoCorrection_PluralOrCasingVariant_ReturnsFalse()
+    {
+        // "Onions" differs from "onion" only by capitalisation and the plural -s
+        // suffix. Neither change is a typo-dictionary replacement, so the method
+        // must return false. This confirms that RequiresTypoCorrection measures only
+        // substantive dictionary corrections, not cosmetic normalisation steps such
+        // as lower-casing, stopword removal, or singularisation.
+        _normalizer.RequiresTypoCorrection("Onions").Should().BeFalse();
     }
 }
