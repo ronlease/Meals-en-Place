@@ -41,8 +41,21 @@ internal sealed class CanonicalIngredientFoldCandidate
     /// <summary>
     /// Sum of foreign-key references to this canonical row across
     /// RecipeIngredient, InventoryItem, ShoppingListItem, SeasonalityWindow,
-    /// and ConsumeAuditEntry. Used as the first tie-breaker in survivor
-    /// selection — the most-used row absorbs the rest.
+    /// and ConsumeAuditEntry. Used as a tie-breaker in survivor selection —
+    /// the most-used row absorbs the rest.
     /// </summary>
     public required int ReferenceCount { get; init; }
+
+    /// <summary>
+    /// <see langword="true"/> if <see cref="CanonicalNameNormalizer.RequiresTypoCorrection"/>
+    /// determined that the raw <see cref="Name"/> was altered by the typo/synonym
+    /// phrase-replacement dictionary, meaning this row is a misspelling or
+    /// split-word variant. Used as the top-priority tie-breaker in survivor
+    /// selection: a correctly-spelled row (<see langword="false"/>) always
+    /// beats a misspelled one (<see langword="true"/>), regardless of name
+    /// length or reference count. For example, "mayonaise" (9 chars, misspelled,
+    /// <see langword="true"/>) loses to "mayonnaise" (10 chars, correct,
+    /// <see langword="false"/>) even though it is shorter.
+    /// </summary>
+    public required bool RequiredTypoCorrection { get; init; }
 }

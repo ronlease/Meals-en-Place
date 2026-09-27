@@ -144,7 +144,8 @@ internal sealed class CanonicalIngredientDedupRunner
                 Id = c.Id,
                 Name = c.Name,
                 NormalizedKey = _normalizer.Normalize(c.Name),
-                ReferenceCount = count
+                ReferenceCount = count,
+                RequiredTypoCorrection = _normalizer.RequiresTypoCorrection(c.Name)
             };
         }).ToList();
 

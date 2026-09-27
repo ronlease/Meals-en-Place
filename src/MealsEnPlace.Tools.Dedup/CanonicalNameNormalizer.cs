@@ -227,6 +227,34 @@ internal sealed class CanonicalNameNormalizer
         return string.Join(' ', tokens);
     }
 
+    /// <summary>
+    /// Returns <see langword="true"/> if applying only the
+    /// <see cref="TypoAndSynonymPhraseReplacements"/> step (after lower-casing)
+    /// changes <paramref name="name"/>. A <see langword="true"/> result means
+    /// the raw name is a misspelling or split-word variant; a
+    /// <see langword="false"/> result means the name was already in the correct
+    /// canonical form as far as the typo/synonym dictionary is concerned.
+    /// <para>
+    /// This check is intentionally limited to the phrase-replacement step only —
+    /// lower-casing, stopword removal, pluralization, and token sorting are
+    /// cosmetic normalizations that do not indicate a "wrong" spelling, and must
+    /// not penalise a row in survivor selection. Only a name that required a
+    /// substantive textual correction (e.g. "mayonaise" → "mayonnaise") is
+    /// considered touched.
+    /// </para>
+    /// </summary>
+    public bool RequiresTypoCorrection(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var lower = name.ToLowerInvariant();
+        var corrected = ApplyPhraseReplacements(lower, TypoAndSynonymPhraseReplacements);
+        return !string.Equals(lower, corrected, StringComparison.Ordinal);
+    }
+
     private static string ApplyPhraseReplacements(string value, IReadOnlyList<(Regex Pattern, string Replacement)> replacements)
     {
         foreach (var (pattern, replacement) in replacements)
