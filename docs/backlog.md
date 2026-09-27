@@ -4016,3 +4016,125 @@ Feature: Claude Model Selector in Settings
     And when the next Claude-backed call runs it uses the default model
     And no error is shown on the Settings page
 ```
+
+## [MEP-054] Spike: Evaluate Hosting on Vercel via .NET Containers
+
+**Status:** Proposed
+**Priority:** Low
+
+### Business Problem
+Meals en Place is designed as a single-user, local-deployment-only application running via Docker Compose on the user's own machine. This works well but means the app is only accessible when that machine is running Docker. The user wants the option to access meal planning data from anywhere -- a phone at the grocery store, a tablet in the kitchen, a laptop while traveling -- without keeping a home server online full-time.
+
+Vercel now supports hosting .NET / ASP.NET Core applications via Docker containers (see [Vercel's .NET/ASP.NET guide](https://vercel.com/kb/guide/dot-net-asp-net-on-vercel-with-docker)), which makes cloud hosting technically feasible where it previously was not a natural fit for Vercel's platform. This spike researches whether Vercel is a viable and cost-effective hosting target for this specific application, given its particular data scale, security posture, and architectural assumptions.
+
+This is exploratory research, not a commitment to migrate. The spike should surface the trade-offs honestly -- including reasons NOT to proceed -- so the user can make an informed decision later.
+
+### Open Questions the Spike Must Answer
+
+**1. PostgreSQL hosting**
+Vercel does not host PostgreSQL itself. The app would need an external managed Postgres provider (e.g., Neon, Supabase, Railway, or a traditional cloud provider). The spike should evaluate:
+
+- Cost for a database large enough to hold the recipe catalog (see data scale below)
+- Connection limits and pooling (the app uses EF Core with a connection pool)
+- Network latency between Vercel's edge and the Postgres provider
+- Whether Vercel's partnership integrations (if any) simplify this
+
+**2. Authentication**
+The app currently has no authentication whatsoever -- it is single-user and local-only by design (per CLAUDE.md: "Auth: None -- single user, local deployment"). Hosting the app on the public internet fundamentally changes the threat model. The spike should assess:
+
+- What authentication mechanism would be needed (OAuth, passkey, basic auth behind a reverse proxy, Vercel's built-in auth features)
+- Whether adding auth is a prerequisite or could be layered on separately
+- The scope of that auth work relative to the rest of the migration
+
+**3. Secrets management**
+The app uses `dotnet user-secrets` locally for the Claude API key and Todoist token (per CLAUDE.md convention). A Vercel deployment would need to map these to Vercel's environment variable / secrets model. The spike should confirm:
+
+- Whether Vercel's encrypted environment variables are a sufficient replacement
+- Whether the existing `DataProtection` key ring (see MEP-039) needs rearchitecting for a containerized deployment
+
+**4. Data scale**
+The Kaggle bulk ingest (MEP-026) produces approximately 1.64M recipes, 14M recipe ingredients, and 146K canonical ingredients (MEP-038). The spike should evaluate:
+
+- Whether a managed Postgres free or low-cost tier can store this volume affordably
+- Whether the ~2.3GB CSV ingest step is feasible inside a Vercel container (memory limits, execution time limits) or must remain a one-time local operation run directly against the remote database
+- Query performance at this scale on a shared/serverless Postgres tier vs. a dedicated local instance
+
+**5. Cost**
+The current deployment cost is effectively $0 (Docker Compose on hardware the user already owns). The spike should document:
+
+- Vercel pricing for always-on Docker containers vs. serverless functions (and which model this app needs -- it is a stateful API server, not a collection of stateless functions)
+- Managed Postgres costs at the required data scale
+- Total monthly cost estimate for a realistic deployment
+- Whether the cost is justifiable for a single-user personal tool
+
+**6. Architectural alignment**
+CLAUDE.md records "Single-user, local deployment only" as a foundational design decision. The spike should address:
+
+- Whether this decision needs to be formally revisited and revised before any hosting work begins
+- What other parts of the codebase assume local-only deployment (e.g., file-based stores, localhost-only CORS, no rate limiting, no multi-tenancy)
+- Whether a hosted deployment would still be single-user (just remotely accessible) or whether multi-tenancy pressure would follow
+
+**7. Angular frontend hosting**
+The Angular frontend is currently served alongside the API. The spike should consider:
+
+- Whether the frontend should deploy as a static site on Vercel's CDN (its strength) with the API as a separate container
+- CORS and routing implications of splitting frontend and backend
+
+### Acceptance Criteria
+```gherkin
+Feature: Evaluate Hosting on Vercel via .NET Containers
+
+  Scenario: Evaluate Vercel container hosting feasibility
+    Given Vercel's documentation on .NET container support has been reviewed
+    When the app's Dockerfile and startup requirements are compared against Vercel's container constraints
+    Then the spike documents whether the existing Docker Compose setup can be adapted for Vercel
+    And any container size, memory, or execution-time limits that would affect the app are noted
+
+  Scenario: Evaluate managed PostgreSQL options
+    Given the app requires PostgreSQL with approximately 1.64M recipes and 14M recipe ingredients
+    When at least three managed Postgres providers are compared (e.g., Neon, Supabase, Railway)
+    Then each provider's free tier capacity and paid tier pricing is documented
+    And connection pooling compatibility with EF Core is confirmed or flagged
+    And estimated monthly cost at the required data scale is recorded
+
+  Scenario: Assess authentication requirements
+    Given the app currently has no authentication
+    When the security implications of public internet hosting are evaluated
+    Then the spike documents the minimum viable authentication approach
+    And the estimated scope of adding authentication is categorized (small/medium/large)
+
+  Scenario: Evaluate secrets migration path
+    Given the app uses dotnet user-secrets and DataProtection locally
+    When Vercel's environment variable and secrets model is reviewed
+    Then the spike confirms whether existing secrets can map directly to Vercel's model
+    And any DataProtection key ring changes needed for containerized deployment are documented
+
+  Scenario: Assess bulk ingest feasibility in a hosted context
+    Given the Kaggle CSV ingest processes approximately 2.3GB of data
+    When Vercel's container memory and execution-time limits are applied
+    Then the spike determines whether ingest can run inside the Vercel container
+    Or documents that ingest must remain a local operation against a remote database
+    And the recommended ingest workflow for a hosted deployment is described
+
+  Scenario: Document total cost of ownership
+    Given Vercel container pricing and managed Postgres pricing have been researched
+    When costs are estimated for a single-user deployment at the app's data scale
+    Then the spike documents the estimated monthly cost
+    And compares it to the current $0 local deployment cost
+    And states whether the cost is reasonable for a single-user personal tool
+
+  Scenario: Assess impact on the local-deployment-only design decision
+    Given CLAUDE.md records "Single-user, local deployment only" as a design constraint
+    When the implications of hosting are evaluated against this constraint
+    Then the spike documents which codebase assumptions depend on local-only deployment
+    And recommends whether the design decision should be revised, relaxed, or left unchanged
+    And documents what codebase changes (auth, CORS, rate limiting, secrets) would follow from revision
+
+  Scenario: Produce a recommendation
+    Given all evaluation criteria have been assessed
+    When the spike is complete
+    Then a written recommendation states whether Vercel hosting is viable, cost-effective, and worthwhile for this application
+    And the recommendation is honest about trade-offs, including reasons not to proceed
+    And if the recommendation is to proceed, it proposes a phased approach (e.g., frontend-only first, then API container)
+    And the recommendation is published to docs/spikes/ following the MEP-025 precedent
+```
