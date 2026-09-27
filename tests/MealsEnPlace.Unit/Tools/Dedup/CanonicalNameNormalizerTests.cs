@@ -66,6 +66,34 @@
 // Scenario: Forward slash is a split delimiter -- MEP-050
 //   Given "peas/carrots"
 //   Then the tokens are "carrot" and "pea", not one glued token
+//
+// Scenario: All 26 confirmed mayonnaise misspellings fold to same key as "mayonnaise" -- MEP-053
+//   Given the TypoAndSynonymPhraseReplacements dictionary includes all 26 confirmed misspellings
+//   When CanonicalNameNormalizer processes any of them
+//   Then each normalizes to the same fold-group key as "mayonnaise"
+//
+// Scenario: Compound-concatenation mayonnaise forms split and fold correctly -- MEP-053
+//   Given "cupmayonnaise" is mapped to "cup mayonnaise" in the phrase dictionary
+//   And "lightmayonnaise" is mapped to "light mayonnaise" in the phrase dictionary
+//   When CanonicalNameNormalizer processes each concatenated form
+//   Then the key for "cupmayonnaise" matches the key for "cup mayonnaise"
+//   And the key for "lightmayonnaise" matches the key for "light mayonnaise"
+//
+// Scenario: Abbreviation "mayo" stays distinct from "mayonnaise" -- MEP-053
+//   Given "mayo" is a legitimate abbreviation, not a typo
+//   When CanonicalNameNormalizer processes "mayo"
+//   Then the fold-group key for "mayo" is not the same as the key for "mayonnaise"
+//
+// Scenario: "mayocoba" is not modified and stays distinct from "mayonnaise" -- MEP-053
+//   Given "mayocoba" is a bean variety unrelated to mayonnaise
+//   When CanonicalNameNormalizer processes "mayocoba beans"
+//   Then the fold-group key is distinct from "mayonnaise"
+//   And the result is non-empty (the word is preserved as-is by the dictionary)
+//
+// Scenario: "mayorelli" stays distinct from "mayonnaise" -- MEP-053
+//   Given "mayorelli" is a cheese name unrelated to mayonnaise
+//   When CanonicalNameNormalizer processes "mayorelli cheese"
+//   Then the fold-group key is distinct from "mayonnaise"
 
 using FluentAssertions;
 using MealsEnPlace.Tools.Dedup;
@@ -305,5 +333,83 @@ public class CanonicalNameNormalizerTests
     public void Normalize_AllTokensAreFillerStopwords_ReturnsEmpty()
     {
         _normalizer.Normalize("handful of choice").Should().Be(string.Empty);
+    }
+
+    // ── MEP-053: mayonnaise misspellings ──────────────────────────────────────
+
+    [Fact]
+    public void Normalize_MayoAbbreviation_RemainsDistinctFromMayonnaise()
+    {
+        // "mayo" is a legitimate abbreviation in wide use (52 occurrences in the
+        // Kaggle catalog), not a typo for "mayonnaise". It must stay its own
+        // fold-group key so recipes using "mayo" stay linked to the correct
+        // CanonicalIngredient.
+        _normalizer.Normalize("mayo").Should().NotBe(_normalizer.Normalize("mayonnaise"));
+    }
+
+    [Fact]
+    public void Normalize_MayocobaBean_RemainsDistinctFromMayonnaise()
+    {
+        // "mayocoba" is a bean variety (mayocoba beans) that shares a substring
+        // prefix with "mayonnaise" but is an entirely different ingredient.
+        // The typo dictionary must not touch it, and the result must be non-empty.
+        var key = _normalizer.Normalize("mayocoba beans");
+
+        key.Should().NotBe(_normalizer.Normalize("mayonnaise"));
+        key.Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("cupmayonnaise", "cup mayonnaise")]
+    [InlineData("lightmayonnaise", "light mayonnaise")]
+    public void Normalize_MayonnaiseConcatenation_FoldsToSameKeyAsSplitForm(string concatenated, string splitForm)
+    {
+        // Compound-concatenation artifacts from ingest (missing inter-word space)
+        // must expand to their split-word forms before normalization so they share
+        // a fold-group key with correctly-spaced variants.
+        _normalizer.Normalize(concatenated).Should().Be(_normalizer.Normalize(splitForm));
+    }
+
+    [Theory]
+    [InlineData("mayoaise")]
+    [InlineData("mayomaise")]
+    [InlineData("mayonaiese")]
+    [InlineData("mayonais")]
+    [InlineData("mayonaise")]        // high-frequency: 15 occurrences in catalog
+    [InlineData("mayonaisse")]       // 2 occurrences in catalog
+    [InlineData("mayonasie")]
+    [InlineData("mayonassaise")]
+    [InlineData("mayoneise")]
+    [InlineData("mayonesa")]
+    [InlineData("mayonese")]
+    [InlineData("mayoniase")]
+    [InlineData("mayoniasse")]
+    [InlineData("mayonise")]
+    [InlineData("mayonnaiae")]
+    [InlineData("mayonnaiase")]
+    [InlineData("mayonnaiie")]
+    [InlineData("mayonnais")]
+    [InlineData("mayonnaisee")]
+    [InlineData("mayonnaisel")]
+    [InlineData("mayonnase")]
+    [InlineData("mayonnasie")]
+    [InlineData("mayonnasise")]
+    [InlineData("mayonniase")]
+    [InlineData("mayonnnaise")]
+    [InlineData("mayonnoise")]
+    public void Normalize_MayonnaiseMisspelling_FoldsToSameKeyAsMayonnaise(string misspelling)
+    {
+        // Every confirmed misspelling of "mayonnaise" found in the Kaggle catalog
+        // must normalize to the same fold-group key as the correctly-spelled word
+        // so recipe matching works across all variants.
+        _normalizer.Normalize(misspelling).Should().Be(_normalizer.Normalize("mayonnaise"));
+    }
+
+    [Fact]
+    public void Normalize_MayorelliCheese_RemainsDistinctFromMayonnaise()
+    {
+        // "mayorelli" is a cheese name that shares a substring prefix with
+        // "mayonnaise". The typo dictionary must not touch it.
+        _normalizer.Normalize("mayorelli cheese").Should().NotBe(_normalizer.Normalize("mayonnaise"));
     }
 }
