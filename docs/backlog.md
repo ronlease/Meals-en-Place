@@ -4247,3 +4247,69 @@ Feature: Evaluate Hosting on Vercel via .NET Containers
     And if the recommendation is to proceed, it proposes a phased approach (e.g., frontend-only first, then API container)
     And the recommendation is published to docs/spikes/ following the MEP-025 precedent
 ```
+
+---
+## [MEP-055] Incorporate GPG Commit/Tag Signing (Kleopatra / GnuPG)
+
+**Status:** Proposed
+**Priority:** Low
+
+### Business Problem
+I previously relied on Kleopatra (Gpg4win / GnuPG) to cryptographically sign my git commits and tags as part of my development workflow, and I want to reinstate that practice for this repository. Without GPG signing, my commits appear as unsigned on GitHub -- there is no cryptographic proof that the person identified by the git author string actually authored the commit. Enabling signing means my commits and tags display GitHub's "Verified" badge, providing tamper-evident attribution. This is a developer-workflow hygiene item, not an application feature, so the scope is documentation and local tooling configuration rather than application code.
+
+**Out of scope:** Compiled-artifact or installer signing. There is no distributed binary or installer in this project -- it runs locally via Docker Compose for a single user -- so code-signing a compiled output is not applicable today.
+
+### Open Items and Scope Notes
+
+- **Local git config changes (per-machine, not committed):**
+  `user.signingkey` set to the user's GPG key ID; `commit.gpgsign = true`;
+  `tag.gpgSign = true`; on Windows, `gpg.program` must point at the correct
+  `gpg.exe` from the Gpg4win / Kleopatra installation (e.g.,
+  `C:/Program Files (x86)/GnuPG/bin/gpg.exe`). These are local git config
+  settings, not repository-level configuration, because the private key and
+  tool paths are machine-specific.
+
+- **GitHub account setup:** The user's public GPG key must be uploaded to
+  their GitHub account (Settings > SSH and GPG keys) for commits pushed to
+  GitHub to display the "Verified" badge. Without this step, signing works
+  locally but GitHub cannot verify the signature.
+
+- **Agent-authored commits -- open question:** This session's own tooling
+  guidance already prohibits bypassing signing (`--no-gpg-sign`) unless
+  explicitly asked. However, commits made by Claude Code or another AI agent
+  on the user's behalf present a real operational constraint: the agent has no
+  access to the user's GPG private key or passphrase and cannot sign commits
+  on the user's behalf. This means agent-authored commits will likely remain
+  unsigned even after this item ships, unless a separate mechanism is devised
+  (e.g., the user signs agent commits retroactively via `git commit --amend
+  -S`, or a GPG agent with cached passphrase is available in the session
+  environment). This is an unresolved constraint worth acknowledging rather
+  than glossing over.
+
+- **CI enforcement of signed commits (stretch goal):** A GitHub Actions
+  workflow or branch protection rule could verify that all commits on `main`
+  or in PRs carry valid GPG signatures. This is explicitly a stretch goal and
+  is not required for this item to be considered done -- it would also
+  conflict with the agent-authored-commit constraint above unless a policy
+  exception is carved out for unsigned agent commits.
+
+- **No application code to write:** The "implementation" is a short section
+  in a contributing guide or README documenting the one-time Kleopatra /
+  GnuPG setup steps and the required git config entries, plus the human's
+  own local setup, which Claude Code cannot perform on the user's behalf
+  (no access to generate or manage private key material).
+
+### Acceptance Criteria
+
+- [ ] Documentation exists (e.g., a section in CONTRIBUTING.md or README.md)
+      describing the Kleopatra / GnuPG setup steps and the required git config
+      entries (`user.signingkey`, `commit.gpgsign`, `tag.gpgSign`, and
+      `gpg.program` on Windows).
+- [ ] The documentation notes the requirement to upload the public GPG key to
+      the user's GitHub account for "Verified" badge display.
+- [ ] A test commit made after setup shows as "Verified" on GitHub.
+- [ ] The agent-authored commit signing constraint is documented as a known
+      limitation with the current resolution status (unsigned, retroactive
+      signing, or other mechanism).
+- [ ] CI signed-commit enforcement is explicitly called out as an optional
+      stretch goal, not required for Done.
