@@ -79,10 +79,11 @@
 //   Then the key for "cupmayonnaise" matches the key for "cup mayonnaise"
 //   And the key for "lightmayonnaise" matches the key for "light mayonnaise"
 //
-// Scenario: Abbreviation "mayo" stays distinct from "mayonnaise" -- MEP-053
-//   Given "mayo" is a legitimate abbreviation, not a typo
+// Scenario: Abbreviation "mayo" folds to the same key as "mayonnaise" -- MEP-053
+//   Given "mayo" is a pure abbreviation for "mayonnaise" (same product, zero information lost)
+//   And "mayo" is listed in TypoAndSynonymPhraseReplacements mapping to "mayonnaise"
 //   When CanonicalNameNormalizer processes "mayo"
-//   Then the fold-group key for "mayo" is not the same as the key for "mayonnaise"
+//   Then the fold-group key for "mayo" is the same as the key for "mayonnaise"
 //
 // Scenario: "mayocoba" is not modified and stays distinct from "mayonnaise" -- MEP-053
 //   Given "mayocoba" is a bean variety unrelated to mayonnaise
@@ -359,13 +360,13 @@ public class CanonicalNameNormalizerTests
     // ── MEP-053: mayonnaise misspellings ──────────────────────────────────────
 
     [Fact]
-    public void Normalize_MayoAbbreviation_RemainsDistinctFromMayonnaise()
+    public void Normalize_MayoAbbreviation_FoldsToSameKeyAsMayonnaise()
     {
-        // "mayo" is a legitimate abbreviation in wide use (52 occurrences in the
-        // Kaggle catalog), not a typo for "mayonnaise". It must stay its own
-        // fold-group key so recipes using "mayo" stay linked to the correct
-        // CanonicalIngredient.
-        _normalizer.Normalize("mayo").Should().NotBe(_normalizer.Normalize("mayonnaise"));
+        // "mayo" is a pure abbreviation of "mayonnaise" (same product, zero information
+        // lost treating them as identical) — unlike a produce variety such as roma vs.
+        // beefsteak tomato, which are genuinely different products. It therefore belongs
+        // in the synonym dictionary alongside "chickpea" → "chick pea".
+        _normalizer.Normalize("mayo").Should().Be(_normalizer.Normalize("mayonnaise"));
     }
 
     [Fact]
