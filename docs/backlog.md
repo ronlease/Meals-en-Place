@@ -4016,3 +4016,124 @@ Feature: Claude Model Selector in Settings
     And when the next Claude-backed call runs it uses the default model
     And no error is shown on the Settings page
 ```
+
+---
+
+## [MEP-056] Spike: Produce Substitution Groups for Recipe Matching
+
+**Status:** Proposed
+**Priority:** Medium
+
+### Business Problem
+The recipe matching pipeline (MEP-006, "What Can I Make?") relies on exact `CanonicalIngredient` identity when scoring inventory against recipe ingredient lists. This is correct for ingredients that are substantively different -- "tomato paste" is not a substitute for a fresh "tomato," and "baby carrot" may behave differently from a full-sized "carrot" in certain preparations. But for raw produce varieties within the same family, exact-match semantics are too strict: the live database shows `tomato` (139,018 recipe references), `roma tomato` (1,775), `cherry tomato`, `grape tomato`, `green tomato`, `italian tomato`, `italian plum tomato`, and others -- all fully distinct `CanonicalIngredient` rows. A recipe calling for "roma tomato" will not match against inventory containing "beefsteak tomato," even though in practice substitution is the norm, not the exception.
+
+This gap was identified during MEP-053 (mayonnaise misspelling normalization) investigation. The user's own framing: "Rarely does the tomato variety matter in terms of the recipe. I like Roma tomatoes because it's easier to remove the seeds. If I were making a sandwich, I'd prefer beefsteak tomatoes. But if one were on sale, I'd use it." The real-world behavior is a mild situational preference, not a hard requirement -- if a recipe calls for "roma tomato" and the user has "beefsteak tomato" in the pantry (or vice versa), the flagship "What can I make?" feature should very likely still count that as a match rather than silently excluding the recipe because the canonical IDs differ.
+
+**This is not a dedup/fold problem.** Merging "roma tomato" into "tomato" via the existing MEP-038 Dedup tool would be the wrong approach: it would destroy the user's ability to track which specific variety they actually have in inventory. The pantry list should still say "3 roma tomatoes," not just "3 tomatoes." What is needed is a new concept at the **matching layer** (MEP-006's scoring) -- an optional grouping that lets MatchScore computation treat several distinct `CanonicalIngredient` rows as interchangeable for matching purposes, while keeping them fully distinct rows for inventory display, recipe ingredient lists, and shopping lists.
+
+This spike researches the mechanism design, scope, and curation strategy before committing to an implementation approach.
+
+### Open Questions the Spike Must Answer
+
+**1. Curation strategy: manual vs. AI-assisted**
+How would substitution groups be populated? Two ends of the spectrum:
+
+- **Hand-curated allowlist** -- similar in spirit to how `TypoAndSynonymPhraseReplacements` in `CanonicalNameNormalizer` is maintained today: a static dictionary of known-interchangeable produce families. Predictable, auditable, zero runtime cost, but requires ongoing manual maintenance as new varieties appear in the catalog.
+- **AI-assisted clustering** -- Claude could plausibly group produce varieties by family given a list of canonical ingredient names. More scalable, but introduces non-determinism and requires a review/approval step to avoid false positives (e.g., grouping "tomato sauce" with "tomato" would be wrong).
+- **Hybrid** -- a hand-curated seed list with an optional Claude-assisted discovery pass that proposes new groups for user confirmation.
+
+The spike should evaluate which approach best fits a single-user personal tool where correctness matters more than automation speed.
+
+**2. Scope: which produce categories?**
+Tomatoes are the concrete motivating example, but the same logic applies to other produce families:
+
+- **Onions:** yellow, red, white, sweet, Vidalia, shallot (shallot may be borderline -- different enough in some preparations)
+- **Peppers:** bell pepper colors (red/green/yellow/orange) are near-universal substitutes; mild chiles (poblano, Anaheim) may form a second group; hot peppers are substantively different and should not group with mild
+- **Potatoes:** russet, Yukon Gold, red, fingerling -- broadly interchangeable for most home cooking
+- **Apples:** Granny Smith, Fuji, Honeycrisp, Gala -- interchangeable in most recipes, though baking apples vs. eating apples is a real distinction
+- **Citrus:** lemon and lime are often (not always) interchangeable; orange is typically distinct
+- **Lettuce / greens:** romaine, iceberg, butter lettuce -- salad greens are broadly substitutable
+
+Should this stay narrow (a curated allowlist of well-understood families) or aim broader? The spike should propose initial scope and a principle for deciding when a variety is "close enough" vs. substantively different.
+
+**3. Exclusion of processed/prepared forms**
+"Tomato paste," "tomato sauce," "sun-dried tomato," and "crushed tomatoes" (canned) are NOT substitutes for fresh "tomato" in most recipes, and the existing data correctly keeps these as separate `CanonicalIngredient` rows. Whatever grouping mechanism is chosen must not regress this -- substitution groups should apply only to raw produce varieties, not to processed or prepared forms that share a base word. The spike should define how this boundary is enforced (e.g., exclusion by suffix pattern, by a "processed" flag, or by requiring explicit inclusion rather than pattern-based grouping).
+
+**4. Interaction with the existing AI substitution step**
+The Recipe Matching Pipeline (documented in CLAUDE.md) already includes step 5: "Claude reviews the top N NearMatch candidates for feasibility and suggests substitutions for gaps." Produce-variety substitution overlaps with that step's intent. The spike should evaluate:
+
+- Is produce-variety grouping a natural extension of the existing Claude substitution pass (i.e., let Claude handle it case-by-case at query time)?
+- Or does it need to be a separate, deterministic pre-scoring mechanism -- more reliable, more predictable, closer to how the typo dictionary works deterministically rather than via an LLM call?
+- Could both coexist: deterministic grouping handles the well-known produce families at scoring time, while the Claude pass handles edge cases and non-produce substitutions?
+
+**5. Default behavior: opt-in or opt-out?**
+Should substitution groups broaden matching automatically (default-on), or should the user explicitly enable them? The user's framing ("if one were on sale, I'd use it") suggests default-on makes sense for produce, but this is a design decision with trade-offs:
+
+- **Default-on** -- more useful out of the box; matches the user's stated behavior; reduces "silent misses" where a recipe is excluded despite a viable substitute being on hand.
+- **Default-off / opt-in** -- safer for users who may have strong variety preferences for specific recipes; avoids surprising match results.
+- **Per-group toggle** -- the user could enable substitution for tomatoes but not for peppers, for example. More flexible but adds UI complexity.
+
+The spike should recommend a default and document the rationale.
+
+**6. Impact on MatchScore semantics**
+Today, MatchScore computes (matched ingredients / total ingredients) with a bonus for expiry-imminent items. If a recipe ingredient's `CanonicalIngredient` differs from the inventory item's but they belong to the same substitution group, how should this affect the score?
+
+- Full match credit (treat group members as identical for scoring)?
+- Partial credit (e.g., 0.8x weight, reflecting that it is a viable but not exact match)?
+- A separate match tier (e.g., "Substitutable Match" between Full Match and Near Match)?
+
+The spike should propose scoring semantics and consider how the result surfaces in the UI (does the user see "roma tomato -> beefsteak tomato" noted anywhere, or is the substitution silent?).
+
+### Acceptance Criteria
+```gherkin
+Feature: Spike -- Produce Substitution Groups for Recipe Matching
+
+  Scenario: Concrete example -- tomato variety substitution as a matching goal
+    Given a recipe requires "roma tomato" as an ingredient
+    And the user's inventory contains "beefsteak tomato" but no "roma tomato"
+    When the produce substitution feature is implemented (mechanism TBD by this spike)
+    Then the recipe matching pipeline should count the tomato ingredient as at least a partial match
+    And the recipe should not be silently excluded from "What can I make?" results solely because the tomato variety differs
+
+  Scenario: Evaluate curation strategy
+    Given the options of hand-curated, AI-assisted, and hybrid group curation have been considered
+    When each approach is assessed for correctness, maintainability, and fit for a single-user tool
+    Then the spike documents a recommended curation strategy with rationale
+
+  Scenario: Define initial scope of produce families
+    Given the produce categories listed in the open questions (tomatoes, onions, peppers, potatoes, apples, citrus, greens) have been reviewed
+    When each category is evaluated for substitutability
+    Then the spike documents which families belong in the initial scope
+    And states the principle for deciding "close enough" vs. substantively different
+    And identifies any families that need sub-groups (e.g., mild peppers vs. hot peppers)
+
+  Scenario: Confirm processed forms are excluded
+    Given "tomato paste," "tomato sauce," "sun-dried tomato," and similar processed forms exist as separate CanonicalIngredient rows
+    When the proposed grouping mechanism is applied
+    Then none of these processed forms are grouped with fresh "tomato"
+    And the spike documents how the boundary between raw produce varieties and processed forms is enforced
+
+  Scenario: Evaluate deterministic vs. AI-driven matching
+    Given the existing Claude substitution pass (pipeline step 5) already handles ad-hoc substitution suggestions
+    When deterministic pre-scoring grouping is compared against extending the Claude pass
+    Then the spike documents the trade-offs of each approach
+    And recommends whether grouping should be deterministic, AI-driven, or a combination
+
+  Scenario: Recommend default behavior
+    Given the options of default-on, default-off, and per-group toggle have been considered
+    When each option is evaluated against the user's stated behavior and UI complexity
+    Then the spike documents a recommended default with rationale
+
+  Scenario: Propose MatchScore impact
+    Given MatchScore currently computes matched-ingredient ratio with expiry bonus
+    When group-based substitution matches are introduced
+    Then the spike proposes how substitution matches affect the score (full credit, partial credit, or separate tier)
+    And documents how the substitution is surfaced to the user in the results
+
+  Scenario: Produce a recommendation
+    Given all open questions have been evaluated
+    When the spike is complete
+    Then a written recommendation is published to docs/spikes/ following the MEP-025 and MEP-054 precedent
+    And the recommendation covers curation strategy, initial scope, exclusion rules, matching mechanism, default behavior, and scoring semantics
+    And the recommendation is honest about trade-offs and open risks
+```
