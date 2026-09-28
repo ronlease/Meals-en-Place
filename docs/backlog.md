@@ -4033,6 +4033,20 @@ This gap was identified during MEP-053 (mayonnaise misspelling normalization) in
 
 This spike researches the mechanism design, scope, and curation strategy before committing to an implementation approach.
 
+### Examples Gathered So Far
+The following examples come directly from the user and form a seed list -- not an exhaustive taxonomy. They illustrate that substitutability is not uniform across ingredient categories and cannot be safely guessed from naming patterns alone.
+
+| Category | Substitutable? | User guidance |
+|---|---|---|
+| **Fresh tomato varieties** (roma, beefsteak, cherry, grape, etc.) | **Yes** -- interchangeable with each other and with plain "tomato." | Variety is a mild preference, not a hard requirement. "If one were on sale, I'd use it." |
+| **Types of relish** | **Yes** -- interchangeable. | Different relishes can stand in for each other in recipes. |
+| **Types of apple** (Granny Smith, Fuji, Honeycrisp, Gala, etc.) | **Yes** -- interchangeable. | Apple varieties are broadly substitutable for recipe purposes. |
+| **Types of mustard** (dijon, yellow, spicy brown, whole-grain, etc.) | **No -- requires human judgment.** | Different mustards differ enough in flavor and character that the system should NOT assume interchangeability. The user wants to decide case-by-case. |
+
+**Processed/prepared forms are never substitutable for the fresh form** -- this is a general principle, not specific to tomatoes. "Tomato paste," "tomato sauce," and "sun-dried tomato" are not interchangeable with fresh "tomato," and this rule extends to any ingredient family (e.g., "apple butter" is not a substitute for "apple," "pickled onion" is not a substitute for "onion").
+
+The mustard example is particularly instructive: it looks similar to tomatoes, relish, and apples on the surface (varieties of the same base ingredient), but the user explicitly called it out as NOT automatically substitutable. An agent guessing from ingredient names alone would likely have gotten this wrong. This is why curation must be collaborative (see the implementation note below).
+
 ### Open Questions the Spike Must Answer
 
 **1. Curation strategy: manual vs. AI-assisted**
@@ -4044,20 +4058,22 @@ How would substitution groups be populated? Two ends of the spectrum:
 
 The spike should evaluate which approach best fits a single-user personal tool where correctness matters more than automation speed.
 
-**2. Scope: which produce categories?**
-Tomatoes are the concrete motivating example, but the same logic applies to other produce families:
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up for implementation or curation work, the assigned agent MUST ask the user for additional examples and categories rather than inventing a full ingredient substitution taxonomy unilaterally. The four examples in "Examples Gathered So Far" above are a seed list, not exhaustive. The mustard example demonstrates why guessing is dangerous: it looks structurally identical to tomato/relish/apple on the surface (varieties of the same base ingredient), but the user explicitly said mustard types are NOT automatically interchangeable. An agent reasoning from ingredient names alone would very likely have gotten this wrong. The user's judgment is the ground truth for which categories are safe to group and which are not.
+
+**2. Scope: which ingredient categories?**
+Tomatoes are the concrete motivating example, but the same logic applies to other produce families and potentially beyond produce -- the user's seed examples already include condiments (relish as substitutable, mustard as not):
 
 - **Onions:** yellow, red, white, sweet, Vidalia, shallot (shallot may be borderline -- different enough in some preparations)
 - **Peppers:** bell pepper colors (red/green/yellow/orange) are near-universal substitutes; mild chiles (poblano, Anaheim) may form a second group; hot peppers are substantively different and should not group with mild
 - **Potatoes:** russet, Yukon Gold, red, fingerling -- broadly interchangeable for most home cooking
-- **Apples:** Granny Smith, Fuji, Honeycrisp, Gala -- interchangeable in most recipes, though baking apples vs. eating apples is a real distinction
+- **Apples:** Granny Smith, Fuji, Honeycrisp, Gala -- confirmed interchangeable by the user
 - **Citrus:** lemon and lime are often (not always) interchangeable; orange is typically distinct
 - **Lettuce / greens:** romaine, iceberg, butter lettuce -- salad greens are broadly substitutable
 
 Should this stay narrow (a curated allowlist of well-understood families) or aim broader? The spike should propose initial scope and a principle for deciding when a variety is "close enough" vs. substantively different.
 
 **3. Exclusion of processed/prepared forms**
-"Tomato paste," "tomato sauce," "sun-dried tomato," and "crushed tomatoes" (canned) are NOT substitutes for fresh "tomato" in most recipes, and the existing data correctly keeps these as separate `CanonicalIngredient` rows. Whatever grouping mechanism is chosen must not regress this -- substitution groups should apply only to raw produce varieties, not to processed or prepared forms that share a base word. The spike should define how this boundary is enforced (e.g., exclusion by suffix pattern, by a "processed" flag, or by requiring explicit inclusion rather than pattern-based grouping).
+**General principle (confirmed by user): processed or prepared forms of an ingredient are never substitutable for the fresh form, even when they share a base word.** This is not specific to tomatoes -- it applies across all ingredient families. "Tomato paste," "tomato sauce," "sun-dried tomato," and "crushed tomatoes" (canned) are NOT substitutes for fresh "tomato"; "apple butter" is not a substitute for "apple"; "pickled onion" is not a substitute for "onion." The existing data correctly keeps these as separate `CanonicalIngredient` rows, and whatever grouping mechanism is chosen must not regress this. Substitution groups should apply only to varieties of the raw/fresh ingredient, never to processed or prepared forms. The spike should define how this boundary is enforced (e.g., exclusion by suffix pattern, by a "processed" flag, or by requiring explicit inclusion rather than pattern-based grouping).
 
 **4. Interaction with the existing AI substitution step**
 The Recipe Matching Pipeline (documented in CLAUDE.md) already includes step 5: "Claude reviews the top N NearMatch candidates for feasibility and suggests substitutions for gaps." Produce-variety substitution overlaps with that step's intent. The spike should evaluate:
