@@ -135,7 +135,7 @@ internal sealed class CanonicalNameNormalizer
     /// fuzzy/edit-distance matching: automatic distance-based folding is
     /// dangerous in this domain ("pea" and "pear" are one edit apart) and
     /// could silently corrupt recipe matching data. Every entry here was
-    /// found and manually verified during the MEP-050 investigation.
+    /// found and manually verified during the MEP-050 and MEP-053 investigations.
     /// Applied before <see cref="BrandPhraseReplacements"/> so a corrected
     /// spelling (e.g. "lesuer" to "lesueur") is still eligible for brand
     /// stripping.
@@ -148,6 +148,7 @@ internal sealed class CanonicalNameNormalizer
         (BuildWholeWordPattern("blackeyed"), "black eyed"),
         (BuildWholeWordPattern("chickpeas"), "chick peas"),
         (BuildWholeWordPattern("chickpea"), "chick pea"),
+        (BuildWholeWordPattern("cupmayonnaise"), "cup mayonnaise"),
         // "e.g." keeps its trailing period out of the trailing \b assertion:
         // \b needs a word/non-word transition, and two punctuation characters
         // in a row (". ") never produce one.
@@ -157,6 +158,34 @@ internal sealed class CanonicalNameNormalizer
         (BuildWholeWordPattern("leseur"), "lesueur"),
         (BuildWholeWordPattern("lesueuer"), "lesueur"),
         (BuildWholeWordPattern("lesuer"), "lesueur"),
+        (BuildWholeWordPattern("lightmayonnaise"), "light mayonnaise"),
+        (BuildWholeWordPattern("mayo"), "mayonnaise"),
+        (BuildWholeWordPattern("mayoaise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayomaise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonaiese"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonais"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonaise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonaisse"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonasie"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonassaise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayoneise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonesa"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonese"), "mayonnaise"),
+        (BuildWholeWordPattern("mayoniase"), "mayonnaise"),
+        (BuildWholeWordPattern("mayoniasse"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnaiae"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnaiase"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnaiie"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnais"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnaisee"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnaisel"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnase"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnasie"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnasise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonniase"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnnaise"), "mayonnaise"),
+        (BuildWholeWordPattern("mayonnoise"), "mayonnaise"),
         (BuildWholeWordPattern("pidgeaon"), "pigeon"),
         (BuildWholeWordPattern("slit"), "split"),
         (BuildWholeWordPattern("sping"), "spring"),
@@ -197,6 +226,34 @@ internal sealed class CanonicalNameNormalizer
             .ToArray();
 
         return string.Join(' ', tokens);
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> if applying only the
+    /// <see cref="TypoAndSynonymPhraseReplacements"/> step (after lower-casing)
+    /// changes <paramref name="name"/>. A <see langword="true"/> result means
+    /// the raw name is a misspelling or split-word variant; a
+    /// <see langword="false"/> result means the name was already in the correct
+    /// canonical form as far as the typo/synonym dictionary is concerned.
+    /// <para>
+    /// This check is intentionally limited to the phrase-replacement step only —
+    /// lower-casing, stopword removal, pluralization, and token sorting are
+    /// cosmetic normalizations that do not indicate a "wrong" spelling, and must
+    /// not penalise a row in survivor selection. Only a name that required a
+    /// substantive textual correction (e.g. "mayonaise" → "mayonnaise") is
+    /// considered touched.
+    /// </para>
+    /// </summary>
+    public bool RequiresTypoCorrection(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var lower = name.ToLowerInvariant();
+        var corrected = ApplyPhraseReplacements(lower, TypoAndSynonymPhraseReplacements);
+        return !string.Equals(lower, corrected, StringComparison.Ordinal);
     }
 
     private static string ApplyPhraseReplacements(string value, IReadOnlyList<(Regex Pattern, string Replacement)> replacements)

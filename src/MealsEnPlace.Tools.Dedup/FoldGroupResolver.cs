@@ -7,7 +7,15 @@ namespace MealsEnPlace.Tools.Dedup;
 /// <para>
 /// Survivor selection rule (first to distinguish wins):
 /// <list type="number">
-///   <item><description>Shortest <c>Name</c> (most generic wins).</description></item>
+///   <item><description>
+///     <c>RequiredTypoCorrection == false</c> wins over <c>true</c>. A
+///     correctly-spelled row always beats a misspelled one that required the
+///     typo/synonym phrase dictionary to reach the same normalized key. Without
+///     this rule, a shorter misspelling such as "mayonaise" (9 chars) would
+///     beat the correct "mayonnaise" (10 chars) on rule 2 alone, leaving the
+///     misspelling as the survivor and the correct spelling as an alias.
+///   </description></item>
+///   <item><description>Shortest <c>Name</c> (most generic wins, within the same correction tier).</description></item>
 ///   <item><description>Highest <c>ReferenceCount</c> (most-used row absorbs the rest so matching history is preserved).</description></item>
 ///   <item><description>Alphabetical <c>Name</c> (stable final tie-breaker).</description></item>
 /// </list>
@@ -40,7 +48,8 @@ internal static class FoldGroupResolver
             }
 
             var ordered = members
-                .OrderBy(c => c.Name.Length)
+                .OrderBy(c => c.RequiredTypoCorrection ? 1 : 0)
+                .ThenBy(c => c.Name.Length)
                 .ThenByDescending(c => c.ReferenceCount)
                 .ThenBy(c => c.Name, StringComparer.Ordinal)
                 .ToList();

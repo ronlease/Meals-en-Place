@@ -66,6 +66,56 @@
 // Scenario: Forward slash is a split delimiter -- MEP-050
 //   Given "peas/carrots"
 //   Then the tokens are "carrot" and "pea", not one glued token
+//
+// Scenario: All 26 confirmed mayonnaise misspellings fold to same key as "mayonnaise" -- MEP-053
+//   Given the TypoAndSynonymPhraseReplacements dictionary includes all 26 confirmed misspellings
+//   When CanonicalNameNormalizer processes any of them
+//   Then each normalizes to the same fold-group key as "mayonnaise"
+//
+// Scenario: Compound-concatenation mayonnaise forms split and fold correctly -- MEP-053
+//   Given "cupmayonnaise" is mapped to "cup mayonnaise" in the phrase dictionary
+//   And "lightmayonnaise" is mapped to "light mayonnaise" in the phrase dictionary
+//   When CanonicalNameNormalizer processes each concatenated form
+//   Then the key for "cupmayonnaise" matches the key for "cup mayonnaise"
+//   And the key for "lightmayonnaise" matches the key for "light mayonnaise"
+//
+// Scenario: Abbreviation "mayo" folds to the same key as "mayonnaise" -- MEP-053
+//   Given "mayo" is a pure abbreviation for "mayonnaise" (same product, zero information lost)
+//   And "mayo" is listed in TypoAndSynonymPhraseReplacements mapping to "mayonnaise"
+//   When CanonicalNameNormalizer processes "mayo"
+//   Then the fold-group key for "mayo" is the same as the key for "mayonnaise"
+//
+// Scenario: "mayocoba" is not modified and stays distinct from "mayonnaise" -- MEP-053
+//   Given "mayocoba" is a bean variety unrelated to mayonnaise
+//   When CanonicalNameNormalizer processes "mayocoba beans"
+//   Then the fold-group key is distinct from "mayonnaise"
+//   And the result is non-empty (the word is preserved as-is by the dictionary)
+//
+// Scenario: "mayorelli" stays distinct from "mayonnaise" -- MEP-053
+//   Given "mayorelli" is a cheese name unrelated to mayonnaise
+//   When CanonicalNameNormalizer processes "mayorelli cheese"
+//   Then the fold-group key is distinct from "mayonnaise"
+//
+// Scenario: RequiresTypoCorrection returns true for a known typo dictionary entry -- MEP-053
+//   Given the input is a string present in TypoAndSynonymPhraseReplacements (e.g. "mayonaise", "leseur")
+//   When RequiresTypoCorrection is called
+//   Then the method returns true for each input
+//
+// Scenario: RequiresTypoCorrection returns false for a correctly-spelled name -- MEP-053
+//   Given the input is "mayonnaise" or "onion", neither of which appears in the typo dictionary
+//   When RequiresTypoCorrection is called
+//   Then the method returns false for each input
+//
+// Scenario: RequiresTypoCorrection returns false for a name that differs only by casing or pluralisation -- MEP-053
+//   Given the input "Onions" which differs from "onion" only by capitalisation and plural suffix
+//   And neither capitalisation nor plural removal is a typo-dictionary replacement
+//   When RequiresTypoCorrection is called
+//   Then the method returns false, because casing and pluralisation are cosmetic and do not count as typo correction
+//
+// Scenario: RequiresTypoCorrection returns false for null or whitespace input -- MEP-053
+//   Given a null, empty, or whitespace-only string
+//   When RequiresTypoCorrection is called
+//   Then the method returns false without throwing
 
 using FluentAssertions;
 using MealsEnPlace.Tools.Dedup;
@@ -305,5 +355,125 @@ public class CanonicalNameNormalizerTests
     public void Normalize_AllTokensAreFillerStopwords_ReturnsEmpty()
     {
         _normalizer.Normalize("handful of choice").Should().Be(string.Empty);
+    }
+
+    // ── MEP-053: mayonnaise misspellings ──────────────────────────────────────
+
+    [Fact]
+    public void Normalize_MayoAbbreviation_FoldsToSameKeyAsMayonnaise()
+    {
+        // "mayo" is a pure abbreviation of "mayonnaise" (same product, zero information
+        // lost treating them as identical) — unlike a produce variety such as roma vs.
+        // beefsteak tomato, which are genuinely different products. It therefore belongs
+        // in the synonym dictionary alongside "chickpea" → "chick pea".
+        _normalizer.Normalize("mayo").Should().Be(_normalizer.Normalize("mayonnaise"));
+    }
+
+    [Fact]
+    public void Normalize_MayocobaBean_RemainsDistinctFromMayonnaise()
+    {
+        // "mayocoba" is a bean variety (mayocoba beans) that shares a substring
+        // prefix with "mayonnaise" but is an entirely different ingredient.
+        // The typo dictionary must not touch it, and the result must be non-empty.
+        var key = _normalizer.Normalize("mayocoba beans");
+
+        key.Should().NotBe(_normalizer.Normalize("mayonnaise"));
+        key.Should().NotBeEmpty();
+    }
+
+    [Theory]
+    [InlineData("cupmayonnaise", "cup mayonnaise")]
+    [InlineData("lightmayonnaise", "light mayonnaise")]
+    public void Normalize_MayonnaiseConcatenation_FoldsToSameKeyAsSplitForm(string concatenated, string splitForm)
+    {
+        // Compound-concatenation artifacts from ingest (missing inter-word space)
+        // must expand to their split-word forms before normalization so they share
+        // a fold-group key with correctly-spaced variants.
+        _normalizer.Normalize(concatenated).Should().Be(_normalizer.Normalize(splitForm));
+    }
+
+    [Theory]
+    [InlineData("mayoaise")]
+    [InlineData("mayomaise")]
+    [InlineData("mayonaiese")]
+    [InlineData("mayonais")]
+    [InlineData("mayonaise")]        // high-frequency: 15 occurrences in catalog
+    [InlineData("mayonaisse")]       // 2 occurrences in catalog
+    [InlineData("mayonasie")]
+    [InlineData("mayonassaise")]
+    [InlineData("mayoneise")]
+    [InlineData("mayonesa")]
+    [InlineData("mayonese")]
+    [InlineData("mayoniase")]
+    [InlineData("mayoniasse")]
+    [InlineData("mayonise")]
+    [InlineData("mayonnaiae")]
+    [InlineData("mayonnaiase")]
+    [InlineData("mayonnaiie")]
+    [InlineData("mayonnais")]
+    [InlineData("mayonnaisee")]
+    [InlineData("mayonnaisel")]
+    [InlineData("mayonnase")]
+    [InlineData("mayonnasie")]
+    [InlineData("mayonnasise")]
+    [InlineData("mayonniase")]
+    [InlineData("mayonnnaise")]
+    [InlineData("mayonnoise")]
+    public void Normalize_MayonnaiseMisspelling_FoldsToSameKeyAsMayonnaise(string misspelling)
+    {
+        // Every confirmed misspelling of "mayonnaise" found in the Kaggle catalog
+        // must normalize to the same fold-group key as the correctly-spelled word
+        // so recipe matching works across all variants.
+        _normalizer.Normalize(misspelling).Should().Be(_normalizer.Normalize("mayonnaise"));
+    }
+
+    [Fact]
+    public void Normalize_MayorelliCheese_RemainsDistinctFromMayonnaise()
+    {
+        // "mayorelli" is a cheese name that shares a substring prefix with
+        // "mayonnaise". The typo dictionary must not touch it.
+        _normalizer.Normalize("mayorelli cheese").Should().NotBe(_normalizer.Normalize("mayonnaise"));
+    }
+
+    // ── MEP-053: RequiresTypoCorrection ────────────────────────────────────
+
+    [Theory]
+    [InlineData("mayonaise")]        // 9-char misspelling that started the MEP-053 investigation
+    [InlineData("leseur")]           // brand misspelling also used in normalize tests above
+    public void RequiresTypoCorrection_KnownTypoEntry_ReturnsTrue(string input)
+    {
+        // Arrange / Act / Assert
+        _normalizer.RequiresTypoCorrection(input).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("mayonnaise")]
+    [InlineData("onion")]
+    public void RequiresTypoCorrection_CorrectSpelling_ReturnsFalse(string input)
+    {
+        // Correctly-spelled names are not in the typo dictionary so the method
+        // must return false without altering them.
+        _normalizer.RequiresTypoCorrection(input).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void RequiresTypoCorrection_NullOrWhitespace_ReturnsFalse(string? input)
+    {
+        // Guard: the method must not throw on null or whitespace and must return false.
+        _normalizer.RequiresTypoCorrection(input).Should().BeFalse();
+    }
+
+    [Fact]
+    public void RequiresTypoCorrection_PluralOrCasingVariant_ReturnsFalse()
+    {
+        // "Onions" differs from "onion" only by capitalisation and the plural -s
+        // suffix. Neither change is a typo-dictionary replacement, so the method
+        // must return false. This confirms that RequiresTypoCorrection measures only
+        // substantive dictionary corrections, not cosmetic normalisation steps such
+        // as lower-casing, stopword removal, or singularisation.
+        _normalizer.RequiresTypoCorrection("Onions").Should().BeFalse();
     }
 }

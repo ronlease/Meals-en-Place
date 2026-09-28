@@ -4016,3 +4016,111 @@ Feature: Claude Model Selector in Settings
     And when the next Claude-backed call runs it uses the default model
     And no error is shown on the Settings page
 ```
+
+---
+
+## [MEP-053] Canonical Ingredient Normalization: Mayonnaise Misspellings
+
+**Status:** Done
+**Priority:** Low
+**Depends on:** MEP-050 (typo/synonym phrase dictionary this story extends)
+
+### Implementation Notes
+Shipped on branch `feature/mep-053-mayonnaise-misspellings`. Two commits:
+
+- `ed3b05b` feat(dedup): added 28 entries (26 misspellings + 2 compound-word splits) to
+  `TypoAndSynonymPhraseReplacements` in
+  `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`. All 26 single-word misspellings
+  map to `"mayonnaise"`; the two compound-concatenation artifacts (`cupmayonnaise`,
+  `lightmayonnaise`) map to their space-separated forms. Build succeeded with 0 warnings.
+- `b7318af` test(dedup): extended
+  `tests/MealsEnPlace.Unit/Tools/Dedup/CanonicalNameNormalizerTests.cs` with 31 new test
+  cases across 5 methods covering all acceptance criteria -- high-frequency misspellings,
+  compound splits, negative cases (`mayo`, `mayocoba`, `mayorelli`), and a full sweep of all
+  28 dictionary entries. Full unit suite: 847 passed, 0 failed, no regressions.
+
+The destructive MEP-049 reset-and-re-ingest procedure to apply these dictionary entries to
+the live database is being run separately in this same session, authorized directly by the
+user, and is not part of this ticket's own acceptance criteria (see Data-application note
+below).
+
+### Business Problem
+A user-reported search for "mayonnaise" in the canonical ingredient catalog revealed approximately 28 distinct misspelled or compound-concatenated variants of "mayonnaise," each persisted as its own `CanonicalIngredient` row. These variants originated from the Kaggle bulk ingest (MEP-026) and survived the MEP-038 dedup pass because the existing `TypoAndSynonymPhraseReplacements` dictionary in `CanonicalNameNormalizer` (added by MEP-050) does not yet include mayonnaise misspellings.
+
+The fragmentation has two concrete consequences: (1) a recipe sourced from Kaggle that uses a misspelled variant (e.g., "mayonaise") is linked to a different `CanonicalIngredient` than the correctly-spelled "mayonnaise," so it will not match against a user's correctly-spelled inventory item, and the user's "What can I make?" results silently omit recipes they could actually cook; (2) the ingredient autocomplete surfaces multiple near-identical entries ("mayonnaise," "mayonaise," "mayonaisse," etc.), cluttering the dropdown and eroding confidence in data quality.
+
+Confirmed misspellings (distinct word tokens matching `^mayo` or containing `mayonn?` across all `CanonicalIngredient.Name` values, with counts where greater than 1):
+
+- mayoaise, mayomaise, mayonaiese, mayonais, **mayonaise (15)**, **mayonaisse (2)**, mayonasie, mayonassaise, mayoneise, mayonesa, mayonese, mayoniase, mayoniasse, mayonise, mayonnaiae, mayonnaiase, mayonnaiie, mayonnais, mayonnaisee, mayonnaisel, mayonnase, mayonnasie, mayonnasise, mayonniase, mayonnnaise, mayonnoise
+
+Compound-concatenation artifacts (missing space, same class of issue MEP-050 already handles):
+
+- cupmayonnaise (should become "cup mayonnaise")
+- lightmayonnaise (should become "light mayonnaise")
+
+**Non-goals:**
+- Do NOT fold "mayo" (52 occurrences) into "mayonnaise." "Mayo" is a legitimate abbreviation, not a typo, and is out of scope for the typo dictionary.
+- Do NOT fold "mayocoba" (1 occurrence, a bean variety -- e.g., "mayocoba beans") or "mayorelli" (1 occurrence, "mayorelli cheese"). These are unrelated words that happen to share a substring prefix with "mayonnaise."
+
+**Data-application note:** As documented in MEP-050, applying this dictionary extension is not just a code change. The ~28 bad `CanonicalIngredient` rows already exist in the live database. Folding them requires the full MEP-049 reset-and-re-ingest procedure (drop/recreate Postgres DB, apply migrations, run ingest, run `Dedup --dry-run`, run `Dedup` live) because the MEP-038 dedup pass destructively deletes loser rows and `CanonicalIngredientAliases` does not preserve row-level lineage. That destructive step is out of scope for this backlog item's acceptance criteria (code and tests only) and requires explicit user sign-off before anyone runs it against real data.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization -- Mayonnaise Misspellings
+
+  Scenario: High-frequency misspelling "mayonaise" folds to "mayonnaise"
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "mayonaise" mapped to "mayonnaise"
+    When CanonicalNameNormalizer processes a token containing "mayonaise"
+    Then the token normalizes to the same fold-group key as "mayonnaise"
+
+  Scenario: Misspelling "mayonaisse" folds to "mayonnaise"
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "mayonaisse" mapped to "mayonnaise"
+    When CanonicalNameNormalizer processes a token containing "mayonaisse"
+    Then the token normalizes to the same fold-group key as "mayonnaise"
+
+  Scenario: Misspelling "mayonniase" folds to "mayonnaise"
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "mayonniase" mapped to "mayonnaise"
+    When CanonicalNameNormalizer processes a token containing "mayonniase"
+    Then the token normalizes to the same fold-group key as "mayonnaise"
+
+  Scenario: Compound-concatenation "cupmayonnaise" splits to "cup mayonnaise"
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "cupmayonnaise" mapped to "cup mayonnaise"
+    When CanonicalNameNormalizer processes "cupmayonnaise"
+    Then the token normalizes as if it were "cup mayonnaise"
+    And the fold-group key matches that of "cup mayonnaise"
+
+  Scenario: Compound-concatenation "lightmayonnaise" splits to "light mayonnaise"
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "lightmayonnaise" mapped to "light mayonnaise"
+    When CanonicalNameNormalizer processes "lightmayonnaise"
+    Then the token normalizes as if it were "light mayonnaise"
+    And the fold-group key matches that of "light mayonnaise"
+
+  Scenario: Abbreviation "mayo" does NOT fold into "mayonnaise"
+    Given "mayo" is a legitimate abbreviation, not a typo
+    When CanonicalNameNormalizer processes "mayo"
+    Then the fold-group key for "mayo" remains distinct from the fold-group key for "mayonnaise"
+
+  Scenario: Unrelated word "mayocoba" does NOT fold into "mayonnaise"
+    Given "mayocoba" is a bean variety unrelated to mayonnaise
+    When CanonicalNameNormalizer processes "mayocoba beans"
+    Then the fold-group key remains distinct from the fold-group key for "mayonnaise"
+    And "mayocoba" is not modified by the typo dictionary
+
+  Scenario: Unrelated word "mayorelli" does NOT fold into "mayonnaise"
+    Given "mayorelli" is a cheese name unrelated to mayonnaise
+    When CanonicalNameNormalizer processes "mayorelli cheese"
+    Then the fold-group key remains distinct from the fold-group key for "mayonnaise"
+
+  Scenario: All remaining misspellings are covered by the full dictionary
+    Given the TypoAndSynonymPhraseReplacements dictionary includes entries for all ~28 confirmed misspellings listed in Implementation Notes
+    When CanonicalNameNormalizer processes any of them
+    Then each normalizes to the same fold-group key as "mayonnaise"
+    And no fuzzy or edit-distance matching is used
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all dictionary entries have been added
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups showing the ~28 misspelling rows folding into the "mayonnaise" survivor
+    And the user can review the output before running the live pass
+```
