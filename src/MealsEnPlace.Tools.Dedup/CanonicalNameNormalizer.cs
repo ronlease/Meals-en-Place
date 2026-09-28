@@ -159,6 +159,7 @@ internal sealed class CanonicalNameNormalizer
         (BuildWholeWordPattern("lesueuer"), "lesueur"),
         (BuildWholeWordPattern("lesuer"), "lesueur"),
         (BuildWholeWordPattern("lightmayonnaise"), "light mayonnaise"),
+        (BuildWholeWordPattern("mayo"), "mayonnaise"),
         (BuildWholeWordPattern("mayoaise"), "mayonnaise"),
         (BuildWholeWordPattern("mayomaise"), "mayonnaise"),
         (BuildWholeWordPattern("mayonaiese"), "mayonnaise"),
