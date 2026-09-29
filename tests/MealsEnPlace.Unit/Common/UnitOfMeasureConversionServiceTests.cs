@@ -105,6 +105,31 @@
 //   When ConvertToBaseUnitsAsync is called
 //   Then the returned quantity is 473.176 ml
 //   And Success is true
+//
+// Scenario: Repeated calls within one scope do not re-query the UnitsOfMeasure table (MEP-061)
+//   Given the cache has been warmed by a prior ConvertToBaseUnitsAsync call on a known unit of measure ID
+//   And the underlying UnitsOfMeasure row for that ID is mutated directly in the store afterward
+//   When ConvertToBaseUnitsAsync is called again for the same ID on the same service instance
+//   Then the returned quantity reflects the OLD, pre-mutation ConversionFactor
+//   And this proves no second query was issued against the mutated store
+//
+// Scenario: A new scope does not see stale data after a UnitsOfMeasure correction (MEP-061 acceptance criterion 3)
+//   Given a service instance has already cached the UnitsOfMeasure table and converted using the old factor
+//   And the ConversionFactor for that unit is corrected directly in the underlying store afterward
+//   When a brand-new UnitOfMeasureConversionService instance — representing a new request scope — converts the same ID
+//   Then the returned quantity reflects the CORRECTED ConversionFactor
+//
+// Scenario: An unknown unit of measure ID after the cache is warm does not poison the cache
+//   Given the cache has been warmed by a successful conversion on a known unit of measure ID
+//   When ConvertToBaseUnitsAsync is called with an unknown Guid
+//   Then Success is false, ConvertedQuantity is 0, and ErrorMessage references the unknown Guid
+//   And a subsequent conversion on the known unit of measure ID still succeeds
+//
+// Scenario: An unknown unit of measure ID as the very first call still loads the full table
+//   Given a fresh service instance that has not yet cached anything
+//   When ConvertToBaseUnitsAsync is called first with an unknown Guid
+//   Then Success is false
+//   And a subsequent conversion on a known unit of measure ID succeeds, proving the full table was loaded on the first call
 
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
@@ -258,6 +283,20 @@ public class UnitOfMeasureConversionServiceTests
     private static UnitOfMeasureConversionService BuildService(MealsEnPlaceDbContext dbContext) =>
         new(dbContext);
 
+    /// <summary>
+    /// Opens a new, unseeded <see cref="MealsEnPlaceDbContext"/> against an already-seeded
+    /// in-memory database identified by <paramref name="dbName"/>. Used to simulate a brand-new
+    /// dependency injection scope (i.e. a new HTTP request) reading the same underlying store.
+    /// </summary>
+    private static MealsEnPlaceDbContext CreateDbContext(string dbName)
+    {
+        var options = new DbContextOptionsBuilder<MealsEnPlaceDbContext>()
+            .UseInMemoryDatabase(dbName)
+            .Options;
+
+        return new MealsEnPlaceDbContext(options);
+    }
+
     // ── ConvertToBaseUnitsAsync — factor correctness ──────────────────────────
 
     [Fact]
@@ -409,4 +448,103 @@ public class UnitOfMeasureConversionServiceTests
         result.ErrorMessage.Should().Contain(unknownId.ToString());
     }
 
+    // ── Per-scope caching (MEP-061) ───────────────────────────────────────────
+
+    [Fact]
+    public async Task ConvertToBaseUnitsAsync_CalledTwiceOnSameInstanceAfterUnderlyingMutation_ReturnsOldCachedFactor()
+    {
+        // Arrange
+        var dbName = nameof(ConvertToBaseUnitsAsync_CalledTwiceOnSameInstanceAfterUnderlyingMutation_ReturnsOldCachedFactor);
+        await using var dbContext = CreateSeededDbContext(dbName);
+        var service = BuildService(dbContext);
+
+        // Act — warm the cache with the original factor
+        var firstResult = await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Mutate the underlying store directly, bypassing the service's cache
+        var ounce = await dbContext.UnitsOfMeasure.SingleAsync(u => u.Id == UnitOfMeasureConfiguration.OzId);
+        ounce.ConversionFactor = 999m;
+        await dbContext.SaveChangesAsync();
+
+        // Convert the same ID again on the SAME service instance
+        var secondResult = await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Assert — both calls reflect the OLD, pre-mutation factor, proving no re-query occurred
+        firstResult.ConvertedQuantity.Should().BeApproximately(28.350m, 0.001m);
+        secondResult.ConvertedQuantity.Should().BeApproximately(28.350m, 0.001m);
+    }
+
+    [Fact]
+    public async Task ConvertToBaseUnitsAsync_NewServiceInstanceAfterUnderlyingMutation_ReflectsCorrectedFactor()
+    {
+        // Arrange
+        var dbName = nameof(ConvertToBaseUnitsAsync_NewServiceInstanceAfterUnderlyingMutation_ReflectsCorrectedFactor);
+        await using var dbContext = CreateSeededDbContext(dbName);
+        var service = BuildService(dbContext);
+
+        // Warm the first instance's cache with the original factor
+        await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Correct the ConversionFactor directly in the underlying store
+        var ounce = await dbContext.UnitsOfMeasure.SingleAsync(u => u.Id == UnitOfMeasureConfiguration.OzId);
+        ounce.ConversionFactor = 100m;
+        await dbContext.SaveChangesAsync();
+
+        // Act — a brand-new service instance backed by a brand-new DbContext (a new request scope)
+        // against the same underlying in-memory database
+        await using var newScopeDbContext = CreateDbContext(dbName);
+        var newScopeService = BuildService(newScopeDbContext);
+        var result = await newScopeService.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Assert — the new scope sees the corrected factor, proving the cache does not outlive its scope
+        result.ConvertedQuantity.Should().Be(100m);
+    }
+
+    [Fact]
+    public async Task ConvertToBaseUnitsAsync_UnknownIdAfterCacheIsWarm_DoesNotPoisonCache()
+    {
+        // Arrange
+        var dbName = nameof(ConvertToBaseUnitsAsync_UnknownIdAfterCacheIsWarm_DoesNotPoisonCache);
+        await using var dbContext = CreateSeededDbContext(dbName);
+        var service = BuildService(dbContext);
+        var unknownId = Guid.NewGuid();
+
+        // Act — warm the cache with a successful conversion on a known ID
+        var warmResult = await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Convert an unknown ID on the same, already-warm instance
+        var missResult = await service.ConvertToBaseUnitsAsync(1m, unknownId);
+
+        // Convert the known ID again on the same instance
+        var secondKnownResult = await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.OzId);
+
+        // Assert
+        warmResult.Success.Should().BeTrue();
+        missResult.Success.Should().BeFalse();
+        missResult.ConvertedQuantity.Should().Be(0m);
+        missResult.ErrorMessage.Should().Contain(unknownId.ToString());
+        secondKnownResult.Success.Should().BeTrue();
+        secondKnownResult.ConvertedQuantity.Should().BeApproximately(28.350m, 0.001m);
+    }
+
+    [Fact]
+    public async Task ConvertToBaseUnitsAsync_UnknownIdAsFirstCall_StillLoadsFullTableForSubsequentKnownId()
+    {
+        // Arrange
+        var dbName = nameof(ConvertToBaseUnitsAsync_UnknownIdAsFirstCall_StillLoadsFullTableForSubsequentKnownId);
+        await using var dbContext = CreateSeededDbContext(dbName);
+        var service = BuildService(dbContext);
+        var unknownId = Guid.NewGuid();
+
+        // Act — unknown ID is the very first call on a fresh instance
+        var firstResult = await service.ConvertToBaseUnitsAsync(1m, unknownId);
+
+        // A known ID converted afterward on the same instance
+        var secondResult = await service.ConvertToBaseUnitsAsync(1m, UnitOfMeasureConfiguration.CupId);
+
+        // Assert
+        firstResult.Success.Should().BeFalse();
+        secondResult.Success.Should().BeTrue();
+        secondResult.ConvertedQuantity.Should().BeApproximately(236.588m, 0.001m);
+    }
 }

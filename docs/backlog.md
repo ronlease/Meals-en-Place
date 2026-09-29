@@ -4449,3 +4449,492 @@ Feature: Spike -- Produce Substitution Groups for Recipe Matching
     And the recommendation covers curation strategy, initial scope, exclusion rules, matching mechanism, default behavior, and scoring semantics
     And the recommendation is honest about trade-offs and open risks
 ```
+
+---
+## [MEP-057] Canonical Ingredient Normalization: Pasta/Noodle Shape Synonym Deduplication
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-050 (typo/synonym phrase dictionary this story extends)
+
+### Business Problem
+The Kaggle bulk ingest (MEP-026) produced thousands of fragmented `CanonicalIngredient` rows for pasta and noodle shapes where the same physical product appears under multiple names -- typically the shape name alone ("penne"), the shape name with the generic category suffix "pasta" ("penne pasta"), and/or the suffix "noodles" ("penne noodles"). These are not distinct ingredients; they are alternate phrasings for the same product. The fragmentation causes the same class of silent recipe-matching failure documented in MEP-053 (mayonnaise misspellings): a user whose pantry lists "penne" will not match against a recipe calling for "penne pasta," and vice versa.
+
+This is the same dedup/one-canonical-row problem addressed by MEP-038 (initial dedup), MEP-050 (normalization gaps), and MEP-053 (mayonnaise misspellings), and the fix mechanism is the same: a curated set of phrase-replacement entries in `TypoAndSynonymPhraseReplacements` inside `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`. It is **not** the matching-layer substitution concept from MEP-056 (produce substitution groups), which keeps distinct rows separate but treats them as interchangeable at scoring time. Here, the rows should collapse into one canonical row because the names refer to the identical product.
+
+**Scale of the problem.** A read-only query against the live `CanonicalIngredients` table (top rows by `RecipeReferenceCount` where the name contains "pasta" or "noodle") shows tens of thousands of recipe references spread across fragmented rows:
+
+| Name | RecipeReferenceCount |
+|---|---|
+| noodle | 12,211 |
+| pasta | 9,697 |
+| egg noodle | 6,266 |
+| lasagna noodle | 4,387 |
+| penne pasta | 1,988 |
+| shell pasta | 1,563 |
+| pasta sauce | 1,346 |
+| ramen noodle | 1,246 |
+| orzo pasta | 1,006 |
+| rice noodle | 984 |
+| mein noodles | 957 |
+| chinese noodles | 735 |
+| rotini pasta | 734 |
+| angel hair pasta | 674 |
+| wide noodles | 545 |
+| rigatoni pasta | 466 |
+| lasagne noodles | 368 |
+| macaroni noodles | 288 |
+| wide egg noodles | 232 |
+| spiral pasta | 218 |
+| linguine pasta | 196 |
+| noodle udon | 189 |
+| pasta wheat | 189 |
+| hair pasta | 183 |
+| vermicelli noodles | 174 |
+| rotini noodles | 169 |
+| jumbo shell pasta | 158 |
+| thin noodles | 130 |
+| pasta noodle | 117 |
+| chicken noodle | 116 |
+| rice vermicelli noodles | 112 |
+| thin egg noodles | 100 |
+| cavatappi pasta | 97 |
+| mostaccioli noodles | 96 |
+| broad noodles | 95 |
+| pasta water | 95 |
+| shell noodle | 93 |
+| tomato pasta sauce | 93 |
+| fettucini noodles | 91 |
+| thin rice noodles | 90 |
+| spiral noodles | 89 |
+| short pasta | 88 |
+| chicken flavored ramen noodles | 87 |
+| rotelle pasta | 81 |
+| extra wide egg noodles | 78 |
+| elbow noodles | 78 |
+| whole wheat lasagna noodles | 76 |
+| noodle soup | 74 |
+| mostaccioli pasta | 74 |
+| fettucine noodles | 71 |
+| farfalle pasta | 70 |
+| bucatini pasta | 67 |
+| fresh pasta | 62 |
+| rigatoni noodles | 62 |
+| whole wheat penne pasta | 60 |
+| chicken ramen noodles | 60 |
+| jumbo pasta | 56 |
+| bowtie pasta | 56 |
+| curly noodles | 56 |
+| alphabet pasta | 54 |
+| linguine noodles | 53 |
+| fusilli pasta | 52 |
+| elbow pasta | 52 |
+| flat noodles | 48 |
+| vermicelli pasta | 48 |
+| seashell pasta | 47 |
+| hot buttered noodles | 44 |
+| chicken noodle soup | 43 |
+| hokkien noodles | 41 |
+| glass noodle | 40 |
+| chinese egg noodles | 38 |
+| egg pasta | 38 |
+| gemelli pasta | 38 |
+| twist pasta | 36 |
+| beef ramen noodles | 36 |
+| tri-color spiral pasta | 35 |
+| somen noodles | 35 |
+
+This data is evidence of scope, not a finished dictionary. Many entries are clear candidates for folding ("penne pasta" to "penne," "rotini noodles" to "rotini"), but others are ambiguous or outright false positives for any naive suffix-stripping approach.
+
+**False-positive risks.** The data contains rows where "pasta" or "noodle" is part of the ingredient's identity, not a strippable suffix:
+
+- **"pasta water"** (95 refs) -- a preparation byproduct, not a pasta shape
+- **"pasta sauce"** / **"tomato pasta sauce"** (1,346 / 93 refs) -- a sauce, not a pasta
+- **"noodle soup"** / **"chicken noodle soup"** (74 / 43 refs) -- a dish, not a noodle ingredient
+- **"hot buttered noodles"** (44 refs) -- a dish name, not an ingredient
+- **"chicken noodle"** (116 refs) -- ambiguous (could be a dish reference or a flavored noodle product)
+
+A blanket "strip trailing pasta/noodles" rule would corrupt these entries. The dictionary must be built entry-by-entry, not derived from a regex or suffix-stripping heuristic.
+
+**Modifier ambiguity.** Beyond false positives, some modifiers that look like filler actually denote genuinely different products:
+
+- **"spaghetti" vs. "thin spaghetti"** -- "thin" is not filler here; thin spaghetti is a distinct cut (closer to capellini than to standard spaghetti). These must NOT be folded together.
+- **"wide noodles" vs. "wide egg noodles" vs. "extra wide egg noodles"** -- width and base-ingredient descriptors may or may not denote different products.
+- **"thin noodles" vs. "thin egg noodles" vs. "thin rice noodles"** -- the base-ingredient qualifier changes the product entirely.
+
+The user explicitly rejected a blanket rule ("strip a bare pasta/noodles suffix, keep other modifiers") as a general principle. Every shape/modifier combination requires individual case-by-case judgment -- the same caution as the mustard counterexample in MEP-056.
+
+**Confirmed seed examples from the user:**
+
+1. **Fold:** "penne," "penne pasta," and "penne noodles" should collapse into one canonical row. The words "pasta" and "noodles" here are generic category suffixes tacked onto a specific shape name, adding no distinguishing information.
+2. **Do NOT fold:** "spaghetti" and "thin spaghetti" must remain separate canonical rows. "Thin" denotes a distinct cut, not filler.
+
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up, the assigned agent MUST present the user with a candidate list of proposed folds (built from a query like the one above) and obtain shape-by-shape, modifier-by-modifier confirmation before writing any entries into `TypoAndSynonymPhraseReplacements`. The two seed examples above are starting points, not a complete dictionary. The "spaghetti" / "thin spaghetti" non-match and the false-positive traps ("pasta water," "noodle soup," etc.) demonstrate that interchangeability cannot be safely inferred from naming patterns alone. Do not invent fold rules without explicit user sign-off on each entry.
+
+**Data-application note:** As with MEP-053, applying the dictionary extension to the live database requires the full MEP-049 reset-and-re-ingest procedure (drop/recreate Postgres DB, apply migrations, run ingest, run `Dedup --dry-run`, run `Dedup` live). That destructive step is out of scope for this backlog item's acceptance criteria (code and tests only) and requires explicit user sign-off.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization -- Pasta/Noodle Shape Synonym Deduplication
+
+  Scenario: Generic suffix "pasta" folds to the bare shape name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "penne pasta" mapped to "penne"
+    When CanonicalNameNormalizer processes "penne pasta"
+    Then the fold-group key matches that of "penne"
+
+  Scenario: Generic suffix "noodles" folds to the bare shape name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "penne noodles" mapped to "penne"
+    When CanonicalNameNormalizer processes "penne noodles"
+    Then the fold-group key matches that of "penne"
+
+  Scenario: All three penne variants produce the same fold-group key
+    Given "penne," "penne pasta," and "penne noodles" are processed by CanonicalNameNormalizer
+    When the fold-group keys are compared
+    Then all three keys are identical
+
+  Scenario: Modifier "thin" preserves distinctness for spaghetti
+    Given "spaghetti" and "thin spaghetti" are both processed by CanonicalNameNormalizer
+    When the fold-group keys are compared
+    Then the keys are different
+    And "thin spaghetti" is NOT folded into "spaghetti"
+
+  Scenario: "pasta water" is not affected by pasta/noodle normalization
+    Given "pasta water" is a preparation byproduct, not a pasta shape
+    When CanonicalNameNormalizer processes "pasta water"
+    Then the fold-group key remains distinct from any pasta shape key
+    And the word "pasta" is not stripped from the name
+
+  Scenario: "pasta sauce" is not affected by pasta/noodle normalization
+    Given "pasta sauce" is a sauce, not a pasta shape
+    When CanonicalNameNormalizer processes "pasta sauce"
+    Then the fold-group key remains distinct from any pasta shape key
+    And the word "pasta" is not stripped from the name
+
+  Scenario: "noodle soup" is not affected by pasta/noodle normalization
+    Given "noodle soup" is a dish, not a noodle ingredient
+    When CanonicalNameNormalizer processes "noodle soup"
+    Then the fold-group key remains distinct from any noodle shape key
+    And the word "noodle" is not stripped from the name
+
+  Scenario: "chicken noodle soup" is not affected by pasta/noodle normalization
+    Given "chicken noodle soup" is a dish name, not a noodle ingredient
+    When CanonicalNameNormalizer processes "chicken noodle soup"
+    Then the fold-group key remains distinct from any noodle shape key
+
+  Scenario: "hot buttered noodles" is not affected by pasta/noodle normalization
+    Given "hot buttered noodles" is a dish name, not a noodle ingredient
+    When CanonicalNameNormalizer processes "hot buttered noodles"
+    Then the fold-group key remains distinct from any noodle shape key
+
+  Scenario: No dictionary entry is added without user confirmation
+    Given a candidate list of pasta/noodle fold pairs has been generated from the CanonicalIngredients table
+    When the assigned agent proposes entries for TypoAndSynonymPhraseReplacements
+    Then each proposed entry is presented to the user for individual approval
+    And no entry is written into the dictionary until the user confirms it
+    And the agent does not infer interchangeability from naming patterns alone
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all user-confirmed dictionary entries have been added
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups showing the affected pasta/noodle rows folding into their target survivors
+    And the user can review the output before running the live pass
+```
+
+---
+## [MEP-058] Canonical Ingredient Normalization: Ground Turkey Variant Deduplication
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-050 (typo/synonym phrase dictionary this story extends)
+
+### Business Problem
+The user reported that the database contains numerous entries for "ground turkey," each slightly different but meaning the same thing. A read-only query against the live `CanonicalIngredients` table confirms 46 distinct rows whose names contain both "turkey" and "ground," none of which is a bare "ground turkey" -- the closest and most-referenced entry is "ground raw turkey" (42 recipe references). These fragmented rows are the same class of silent recipe-matching failure documented in MEP-053 (mayonnaise misspellings) and MEP-057 (pasta/noodle shape synonyms): a user whose pantry lists one variant will not match against a recipe calling for a different variant of the same product.
+
+This is the same dedup/one-canonical-row problem addressed by MEP-038 (initial dedup), MEP-050 (normalization gaps), MEP-053, and MEP-057, and the fix mechanism is the same: curated phrase-replacement entries in `TypoAndSynonymPhraseReplacements` inside `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`. It is **not** the matching-layer substitution concept from MEP-056 (produce substitution groups), which keeps distinct rows separate but treats them as interchangeable at scoring time. Here, the rows that are genuinely the same product should collapse into one canonical row.
+
+**Scale of the problem.** All 46 rows with their `RecipeReferenceCount`:
+
+| Name | RecipeReferenceCount |
+|---|---|
+| ground raw turkey | 42 |
+| extra-lean ground turkey breast | 13 |
+| fresh lean ground turkey | 5 |
+| ground lean white turkey meat | 5 |
+| very lean ground turkey | 4 |
+| ground organic turkey | 4 |
+| freshly ground turkey | 4 |
+| frozen raw ground turkey | 3 |
+| ground smoked turkey | 3 |
+| ground raw turkey breast | 2 |
+| ground beef/turkey | 2 |
+| percent lean ground turkey | 2 |
+| freshly ground raw turkey | 2 |
+| ground skinless turkey breast | 2 |
+| ground uncooked turkey | 2 |
+| roll turkey ground meat | 1 |
+| low-fat ground turkey | 1 |
+| fresh ground lean turkey breast | 1 |
+| italian seasoned ground turkey | 1 |
+| lean uncooked ground turkey | 1 |
+| turkey ground turkey | 1 |
+| o lean ground turkey | 1 |
+| lean ground turkey i | 1 |
+| mr. turkey lean ground turkey | 1 |
+| butterball ground turkey | 1 |
+| lean ground dark meat turkey | 1 |
+| lean ground beef/turkey/chicken | 1 |
+| ground beef/turkey/chicken | 1 |
+| weight ground turkey breakfast | 1 |
+| shady brook ground turkey | 1 |
+| ground organic turkey breast meat | 1 |
+| ground white turkey breasts | 1 |
+| ground cooked turkey meat | 1 |
+| ground smoked turkey slices | 1 |
+| market ground turkey | 1 |
+| turkey grounded | 1 |
+| lean ground white meat skinless turkey | 1 |
+| lean cooked ground turkey | 1 |
+| regular ground turkey | 1 |
+| turkey store lean ground turkey | 1 |
+| fresh ground organic dark turkey meat | 1 |
+| extra lean ground turkey w | 1 |
+| ground turkey cumin | 1 |
+| fresh ground turkey meat | 1 |
+| ground chuck/turkey | 1 |
+| ground round and turkey | 1 |
+
+**Important: no bare "ground turkey" exists.** Unlike MEP-053 where "mayonnaise" (correctly spelled) already existed as the obvious survivor, no plain "ground turkey" row is present in the table. The most-referenced entry is "ground raw turkey" (42 refs). The canonical survivor name is therefore undetermined and must be chosen by the user during curation -- not assumed by the implementing agent.
+
+**Categorized risk analysis.** The 46 rows fall into several categories with very different fold-safety profiles. Not every row is a safe fold candidate; several modifier categories plausibly denote genuinely different products, by the same logic the user established in MEP-057 (where "thin spaghetti" vs. "spaghetti" was ruled a meaningful distinction):
+
+*Likely-safe phrasing/typo variants (genuine duplicates, lowest risk):*
+- Word-reordering and redundancy artifacts: "roll turkey ground meat," "turkey ground turkey," "fresh ground turkey meat," "regular ground turkey," "freshly ground turkey," "freshly ground raw turkey"
+- Verb-form/grammatical errors: "turkey grounded" (likely meant "ground turkey")
+- Minor qualifier shuffling: "ground raw turkey" / "ground uncooked turkey" (both mean uncooked ground turkey, and most ground turkey is sold raw)
+
+These are closest to the MEP-053 mayo-typo case -- same product, just re-worded or malformed text.
+
+*Fat/lean grade modifiers -- plausibly distinct, handle with caution:*
+- "lean ground turkey," "extra-lean ground turkey breast," "very lean ground turkey," "low-fat ground turkey," "percent lean ground turkey," "fresh lean ground turkey," "lean ground white meat skinless turkey"
+- Lean percentage is a real product distinction on retail packaging. Different fat content changes cooking behavior. These may NOT be safe to fold into an unqualified "ground turkey," similar to how "thin" changed spaghetti's identity in MEP-057.
+
+*Cut/part modifiers -- plausibly distinct:*
+- "ground turkey breast" / "ground white turkey breasts" / "ground skinless turkey breast" (white meat only, leaner)
+- "lean ground dark meat turkey" / "fresh ground organic dark turkey meat" (dark meat, higher fat)
+- The cut/part qualifier changes the actual product. White-meat-only ground turkey is a different product from a light/dark blend.
+
+*Doneness/state modifiers -- almost certainly distinct:*
+- Raw/uncooked: "ground raw turkey," "ground uncooked turkey," "frozen raw ground turkey," "lean uncooked ground turkey"
+- Cooked: "ground cooked turkey meat," "lean cooked ground turkey"
+- Raw vs. cooked is a substantive prep-state difference for recipe matching and should almost certainly NOT fold together.
+
+*Brand names -- likely belongs to the existing BrandPhraseReplacements mechanism:*
+- "butterball ground turkey," "shady brook ground turkey," "mr. turkey lean ground turkey," "turkey store lean ground turkey," "market ground turkey"
+- These look like brand-phrase stripping candidates using the existing `BrandPhraseReplacements` mechanism in the same normalizer file, not phrase-synonym folding in `TypoAndSynonymPhraseReplacements`. If the user agrees, these should be routed to brand-stripping rather than treated as synonyms.
+
+*Multi-ingredient/combination entries -- probably out of scope:*
+- "ground beef/turkey," "ground beef/turkey/chicken," "lean ground beef/turkey/chicken," "ground chuck/turkey," "ground round and turkey"
+- These name a meat blend, not a ground turkey variant. They likely should not fold into any single-protein canonical entry.
+
+*Garbled/ambiguous data needing eyeball review:*
+- "weight ground turkey breakfast" -- possibly a truncated "Weight Watchers ground turkey breakfast sausage"
+- "o lean ground turkey" / "lean ground turkey i" -- garbled OCR or data artifacts from the Kaggle source
+- "ground turkey cumin" -- possibly a garbled multi-ingredient string, not a single ingredient
+- "extra lean ground turkey w" -- truncated entry
+- "italian seasoned ground turkey" -- a seasoned product, arguably different from plain ground turkey
+- "ground smoked turkey" / "ground smoked turkey slices" -- smoked is a processing method that changes flavor and usage
+
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up, the assigned agent MUST present the user with the full 46-row candidate list, organized by the risk categories above, and obtain row-by-row confirmation before writing any entries into `TypoAndSynonymPhraseReplacements`. The survivor name must also be confirmed by the user, since no bare "ground turkey" row currently exists and the choice cannot be assumed. Brand-name rows should be flagged separately for potential routing to `BrandPhraseReplacements` if the user agrees that mechanism is more appropriate. The risk categorization above is a starting point for the conversation, not a finished dictionary. Do not write fold rules without explicit user sign-off on each entry.
+
+**Data-application note:** As with MEP-053 and MEP-057, applying the dictionary extension to the live database requires the full MEP-049 reset-and-re-ingest procedure (drop/recreate Postgres DB, apply migrations, run ingest, run `Dedup --dry-run`, run `Dedup` live). That destructive step is out of scope for this backlog item's acceptance criteria (code and tests only) and requires explicit user sign-off.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization -- Ground Turkey Variant Deduplication
+
+  Scenario: Phrasing variant "turkey grounded" folds to the chosen survivor name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "turkey grounded" mapped to the user-confirmed ground turkey survivor name
+    When CanonicalNameNormalizer processes "turkey grounded"
+    Then the fold-group key matches that of the survivor name
+
+  Scenario: Word-reordering variant folds to the chosen survivor name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "roll turkey ground meat" mapped to the user-confirmed ground turkey survivor name
+    When CanonicalNameNormalizer processes "roll turkey ground meat"
+    Then the fold-group key matches that of the survivor name
+
+  Scenario: Fat/lean grade modifier preserves distinctness when user confirms it is a different product
+    Given the user has confirmed that "lean ground turkey" and the plain ground turkey survivor are different products
+    When CanonicalNameNormalizer processes "lean ground turkey" and the survivor name
+    Then the fold-group keys are different
+    And "lean ground turkey" is NOT folded into the survivor
+
+  Scenario: Raw vs. cooked ground turkey preserves distinctness
+    Given "ground raw turkey" and "ground cooked turkey meat" denote different prep states
+    When CanonicalNameNormalizer processes both entries
+    Then the fold-group keys are different
+    And raw and cooked variants are NOT folded together
+
+  Scenario: Cut/part modifier "turkey breast" preserves distinctness when user confirms it is a different product
+    Given the user has confirmed that "ground turkey breast" and the plain ground turkey survivor are different products
+    When CanonicalNameNormalizer processes "ground turkey breast" and the survivor name
+    Then the fold-group keys are different
+    And "ground turkey breast" is NOT folded into the survivor
+
+  Scenario: Brand name is routed to brand-stripping rather than treated as a synonym
+    Given "butterball ground turkey" contains a brand name
+    When the assigned agent categorizes this entry
+    Then it is flagged for potential addition to BrandPhraseReplacements rather than TypoAndSynonymPhraseReplacements
+    And the user confirms the routing before any dictionary entry is written
+
+  Scenario: No dictionary entry is added without user confirmation
+    Given a candidate list of ground turkey fold pairs has been generated from the CanonicalIngredients table
+    When the assigned agent proposes entries for TypoAndSynonymPhraseReplacements
+    Then each proposed entry is presented to the user for individual approval
+    And no entry is written into the dictionary until the user confirms it
+    And the agent does not infer interchangeability from naming patterns alone
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all user-confirmed dictionary entries have been added
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups showing the affected ground turkey rows folding into their target survivors
+    And the user can review the output before running the live pass
+```
+
+---
+
+## [MEP-059] Waste Alerts Endpoint Loads Entire Recipe Catalog Into Memory
+
+**Status:** Backlog
+**Priority:** High
+
+### Business Problem
+`WasteAlertService.EvaluateAlertsAsync` (in `src/MealsEnPlace.Api/Features/WasteReduction/WasteAlertService.cs`, lines 42-46) loads every fully-resolved recipe and its full `RecipeIngredients` collection into application memory on every GET request to the waste-alerts endpoint. `WasteAlertController` (line 33) calls `EvaluateAlertsAsync` -- the expensive full-rescan method -- unconditionally on every page load instead of the lighter `GetActiveAlertsAsync`.
+
+The query pulls the entire resolved recipe catalog (millions of `RecipeIngredient` rows at Kaggle bulk-ingest scale per MEP-026/MEP-049/MEP-050) into a `List<Recipe>`, then builds an in-memory `Dictionary<Guid, List<Guid>>` mapping `CanonicalIngredientId` to recipe IDs in a foreach loop, purely to match against the typically small set of expiry-imminent inventory items already filtered to `ExpiryDate <= threshold`. The match direction is backwards: it materializes the entire catalog to find recipes containing a handful of ingredients, when it should start from those ingredients and query only the recipes that reference them.
+
+This is the same full-table-scan-into-memory pattern already fixed across other endpoints in MEP-043 (recipe list pagination), MEP-044 (keyset pagination), MEP-045 (inventory ingredient pagination), and MEP-048 (server-side ingredient search). The fix follows the same direction: restructure the query to filter in SQL rather than in application memory.
+
+The targeted fix has two parts: (1) replace the unbounded recipe load with a query that starts from the expiring items' `CanonicalIngredientId` set and retrieves only matching recipes directly in SQL; (2) separate the fast path (`GetActiveAlertsAsync`, returning cached/precomputed alerts) from the full rescan (`EvaluateAlertsAsync`), so a normal page view or poll uses the fast path and the full rescan runs only when inventory changes or on an explicit trigger. The exact mechanism for the rescan trigger (background job, event-driven, or still synchronous but scoped) is an implementation decision for the Backend Engineer.
+
+### Acceptance Criteria
+```gherkin
+Feature: Waste Alerts Endpoint Performance
+
+  Scenario: Alert evaluation queries only recipes matching expiring ingredients
+    Given the recipe catalog contains over 1,600,000 fully-resolved recipes
+    And 3 inventory items are approaching expiry with distinct CanonicalIngredientIds
+    When the system evaluates waste alerts for those expiring items
+    Then the database query filters recipes by those 3 CanonicalIngredientIds in SQL
+    And the query does not load the full recipe catalog into application memory
+    And the number of recipe rows materialized is bounded by the recipes referencing those ingredients, not the total catalog size
+
+  Scenario: Normal page view uses the fast path
+    Given waste alerts have been previously evaluated
+    When I call GET /api/v1/waste-alerts as a normal page load
+    Then the endpoint returns precomputed active alerts without running a full catalog rescan
+    And the response returns well within 2 seconds
+
+  Scenario: Alert results are unchanged after optimization
+    Given the recipe catalog and inventory are in a known state
+    And 5 inventory items are approaching expiry
+    When the system evaluates waste alerts using the optimized query
+    Then the matched recipes in the resulting alerts are identical to those produced by the original implementation
+    And no alerts are lost or duplicated
+
+  Scenario: Full rescan runs when inventory changes
+    Given waste alerts were last evaluated 10 minutes ago
+    When an inventory item with an expiry date is added, updated, or removed
+    Then the system re-evaluates waste alerts incorporating the inventory change
+    And the re-evaluation uses the targeted query, not a full catalog load
+```
+
+---
+
+## [MEP-060] Expiring Soon Page Displays "NaN days" for Items Without an Expiry Date
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+The "Expiring Soon" page (`src/MealsEnPlace.Web/src/app/features/expiration/expiration-page.component.ts`) displays "NaN days" in the Days Remaining column for inventory items that have no expiry date set.
+
+The root cause spans the API serialization layer and a filter predicate in the frontend component. The API configures `JsonIgnoreCondition.WhenWritingNull` globally (`src/MealsEnPlace.Api/Program.cs`, line 28), so when `InventoryItemResponse.ExpiryDate` (a nullable `DateOnly?`, see `src/MealsEnPlace.Api/Features/Inventory/InventoryItemResponse.cs` line 18) is null, the `expiryDate` property is omitted from the JSON response entirely rather than sent as `"expiryDate": null`. On the Angular side, the `expiryDate` field is typed `string | null` (`src/MealsEnPlace.Web/src/app/core/models/inventory.models.ts` line 43), but an omitted JSON property arrives as `undefined` at runtime, not `null`.
+
+In `expiration-page.component.ts` (lines 262-270), the filter predicate inside `loadItems()` checks `item.expiryDate !== null && item.expiryDate !== ''`, which excludes explicit `null` and empty string but does not exclude `undefined`. Items with no expiry date pass the filter, `new Date(undefined)` produces an Invalid Date, `.getTime()` returns `NaN`, and "NaN days" renders in the template (line 112).
+
+The inventory table component (`inventory-table.component.ts`) does not have this bug -- its template uses `@if (item.expiryDate)`, a truthy check that correctly treats `undefined` as falsy. Only the Expiring Soon page is affected.
+
+### Acceptance Criteria
+```gherkin
+Feature: Expiring Soon Page Excludes Items Without Expiry Dates
+
+  Scenario: Item with no expiry date is excluded from the Expiring Soon list
+    Given an inventory item "Olive Oil" exists with no expiry date set
+    And the API response for that item omits the expiryDate property entirely
+    When I open the Expiring Soon page
+    Then "Olive Oil" does not appear in the list
+    And only items with a valid expiry date are displayed
+
+  Scenario: "NaN days" never renders in the Days Remaining column
+    Given the inventory contains a mix of items with and without expiry dates
+    When I open the Expiring Soon page
+    Then the Days Remaining column shows a numeric value for every displayed item
+    And the text "NaN" does not appear anywhere on the page
+
+  Scenario: Filter predicate handles undefined expiryDate from omitted JSON property
+    Given the API serializer is configured with WhenWritingNull
+    And an inventory item has a null ExpiryDate on the server
+    When the Angular component receives the API response
+    Then the expiryDate field is undefined at runtime (not null)
+    And the filter predicate excludes the item using a check consistent with the inventory table's existing truthy-check pattern
+
+  Scenario: Regression test uses realistic API response shape
+    Given a mocked API response where the expiryDate property is omitted (not set to explicit null)
+    When the Expiring Soon component processes the response
+    Then no item with an omitted expiryDate appears in the filtered list
+    And no NaN value is computed for days remaining
+```
+
+---
+
+## [MEP-061] Recipe Matching N+1 Query Against UnitsOfMeasure
+
+**Status:** Done
+**Priority:** Critical
+
+### Business Problem
+`RecipeMatchingService.MatchRecipesAsync` (in `src/MealsEnPlace.Api/Features/Recipes/RecipeMatchingService.cs`, lines 25-64) is the core "What can I make?" pipeline (MEP-006) and is effectively unusable at full recipe-catalog scale. With no filters applied, `LoadCandidateRecipesAsync` returns every fully-resolved recipe in the catalog. For each recipe, `ScoreRecipeAsync` (lines 132-196) loops over every `RecipeIngredient` (line 140) and calls `unitOfMeasureConversionService.ConvertToBaseUnitsAsync` (line 144) -- and `BuildMissingDtoAsync` (lines 198-209) calls it again (line 203) for unmatched ingredients. Each call bottoms out in `UnitOfMeasureConversionService.FindUnitOfMeasureAsync` (lines 105-108), which issues a fresh `dbContext.UnitsOfMeasure.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ...)` -- one single-row DB round trip per call.
+
+`UnitsOfMeasure` is a small, effectively static reference table (a few dozen canonical units with conversion factors). Looking it up one row at a time, once per recipe ingredient, across a catalog with millions of `RecipeIngredient` rows (per Kaggle bulk-ingest scale from MEP-026/MEP-049/MEP-050) produces millions of sequential, tiny DB round trips for a single request. Each round trip is individually fast and CPU-light (the API process CPU stays flat), but the sheer sequential volume makes the endpoint take an extremely long time and floods the console with near-identical EF Core command logs. This is not an infinite loop -- it terminates -- but it is not practically usable at catalog scale. This is worse than MEP-059 since recipe matching is the primary user-facing flow, not a secondary alerts feature.
+
+The same `ConvertToBaseUnitsAsync` per-row pattern also appears in `ShoppingListService.cs`, `MealConsumptionService.cs`, and `MealPlanService.cs` (via `InventoryBaseHelper.ConvertToBaseUnitsAsync`), but those loop over small, user-owned collections (a single meal plan, shopping list, or inventory set), not the full recipe catalog, so they are not severely affected. If the fix introduces a shared caching mechanism those call sites also benefit from, that is a free bonus but not a requirement of this item.
+
+The fix direction is to load all `UnitsOfMeasure` rows into an in-memory lookup (e.g. `Dictionary<Guid, UnitOfMeasure>`) once and resolve from it instead of querying per call. This mirrors the existing per-request caching pattern already used for `DisplaySystem` in `UnitOfMeasureDisplayConverter.cs` (`_cachedDisplaySystem` field, `GetDisplaySystemAsync` method, lines 27 and 88-101). The exact caching mechanism (per-request field, `IMemoryCache`, or a singleton loaded at startup) is an implementation decision for the Backend Engineer, but the cache must not be so long-lived that a genuine `UnitsOfMeasure` data correction becomes invisible without an application restart.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe Matching UnitsOfMeasure Query Elimination
+
+  Scenario: Match request issues a bounded number of UnitsOfMeasure queries
+    Given the recipe catalog contains over 1,600,000 fully-resolved recipes
+    And the UnitsOfMeasure table contains 30 canonical units
+    When I request "What can I make?" with no filters applied
+    Then the total number of queries against the UnitsOfMeasure table is at most equal to the number of rows in the table
+    And the system does not issue one query per recipe ingredient
+
+  Scenario: Match results are unchanged after optimization
+    Given the recipe catalog and inventory are in a known state
+    And 10 inventory items span 6 distinct CanonicalIngredientIds
+    When I request "What can I make?" using the optimized matching pipeline
+    Then the match scores, tier assignments, and matched/missing ingredient lists are identical to those produced by the original per-query implementation
+    And no recipes are gained or lost in the results
+
+  Scenario: Cache does not serve stale data after a UnitsOfMeasure update
+    Given the UnitsOfMeasure lookup has been cached for the current request or cache window
+    And an administrator updates the ConversionFactor for an existing unit
+    When a subsequent match request executes after the cache's intended lifetime expires
+    Then the updated ConversionFactor is used in base-unit conversion
+    And match scores reflect the corrected conversion
+```

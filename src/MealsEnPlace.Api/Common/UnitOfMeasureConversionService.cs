@@ -74,6 +74,8 @@ public interface IUnitOfMeasureConversionService
 /// </summary>
 public class UnitOfMeasureConversionService(MealsEnPlaceDbContext dbContext) : IUnitOfMeasureConversionService
 {
+    private Dictionary<Guid, UnitOfMeasure>? _cachedUnitsOfMeasure;
+
     /// <inheritdoc />
     public async Task<ConversionResult> ConvertToBaseUnitsAsync(
         decimal quantity,
@@ -102,8 +104,35 @@ public class UnitOfMeasureConversionService(MealsEnPlaceDbContext dbContext) : I
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private Task<UnitOfMeasure?> FindUnitOfMeasureAsync(Guid id, CancellationToken cancellationToken) =>
-        dbContext.UnitsOfMeasure
+    /// <summary>
+    /// Looks up a unit of measure by ID from the request-scoped cache.
+    /// Returns <see langword="null"/> for an unknown ID — this is expected/valid input
+    /// (e.g., a stale or malformed ID), not a signal that the cache is stale, so a miss
+    /// never triggers a reload.
+    /// </summary>
+    private async Task<UnitOfMeasure?> FindUnitOfMeasureAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var unitsOfMeasure = await GetUnitsOfMeasureAsync(cancellationToken);
+        return unitsOfMeasure.GetValueOrDefault(id);
+    }
+
+    /// <summary>
+    /// Loads all <see cref="UnitOfMeasure"/> rows in a single query and caches them for the
+    /// lifetime of this service instance — one dependency injection scope, i.e. one HTTP request.
+    /// <c>UnitsOfMeasure</c> is a small, static reference table (~30 rows), so loading it
+    /// once per request eliminates a per-ingredient round trip during recipe matching.
+    /// </summary>
+    private async Task<Dictionary<Guid, UnitOfMeasure>> GetUnitsOfMeasureAsync(CancellationToken cancellationToken)
+    {
+        if (_cachedUnitsOfMeasure is not null)
+        {
+            return _cachedUnitsOfMeasure;
+        }
+
+        _cachedUnitsOfMeasure = await dbContext.UnitsOfMeasure
             .AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
+            .ToDictionaryAsync(u => u.Id, cancellationToken);
+
+        return _cachedUnitsOfMeasure;
+    }
 }
