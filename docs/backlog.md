@@ -4938,3 +4938,91 @@ Feature: Recipe Matching UnitsOfMeasure Query Elimination
     Then the updated ConversionFactor is used in base-unit conversion
     And match scores reflect the corrected conversion
 ```
+
+---
+
+## [MEP-062] Meal Plan Generation Loads Entire Recipe Catalog Into Memory
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-026 (bulk ingest created the data volume that makes the unbounded query fatal)
+
+### Business Problem
+Clicking "Generate Plan" on the Meal Plan page is slow. The root cause is in
+`MealPlanService.GenerateMealPlanAsync` -- specifically `LoadCandidateRecipesAsync`
+(MealPlanService.cs, lines 244-272), which runs unconditionally on every generation request:
+
+```csharp
+var query = dbContext.Recipes.AsNoTracking()
+    .Include(r => r.DietaryTags)
+    .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.CanonicalIngredient).ThenInclude(ci => ci.SeasonalityWindows)
+    .Include(r => r.RecipeIngredients).ThenInclude(ri => ri.UnitOfMeasure)
+    .Where(r => r.RecipeIngredients.All(ri => ri.IsContainerResolved) && r.RecipeIngredients.Any());
+```
+
+With no pagination or inventory-relevance pre-filtering, this materializes every
+fully-resolved recipe in the catalog -- at Kaggle bulk-ingest scale (MEP-026 / MEP-049 /
+MEP-050), that is 1.6M+ recipes and their full RecipeIngredients, CanonicalIngredient, and
+SeasonalityWindows navigation-property graphs -- into a single `List<Recipe>` (line 261,
+`ToListAsync`) before any inventory-based filtering happens. The only narrowing that occurs
+(the `DietaryTags` filter and the optional `SeasonalOnly` filter) either targets a small join
+table or runs after the full load -- neither bounds the result set to something
+inventory-relevant.
+
+After the full load, `GenerateMealPlanAsync` runs an O(candidates) `foreach` scoring pass
+(`ScoreRecipe`, lines 299-337) over every loaded recipe, and the greedy slot-assignment loop
+(lines 62-82) does a linear `FirstOrDefault` scan over all scored recipes per slot (14 times
+for the default 7-day / 2-meal-per-day plan). That CPU cost is dwarfed by materializing
+millions of rows and their navigation properties from PostgreSQL first.
+
+This is the exact same "match direction is backwards" anti-pattern already diagnosed and
+filed as MEP-059 for the Waste Alerts endpoint: the code starts from the full recipe catalog
+and filters down, when it should start from the user's inventory (a small set of
+CanonicalIngredientIds) and query SQL for only recipes referencing those ingredients. MEP-062
+is a different endpoint and service (meal plan generation vs. waste alerts) hitting the same
+root cause. It is also distinct from MEP-061 (an N+1 query-count problem against
+UnitsOfMeasure, already fixed) -- this is a single query that returns too much data, not too
+many queries. `MealPlanService` already benefits from the MEP-061 UnitOfMeasure caching fix
+(shared scoped service), so that is not part of this problem.
+
+Like MEP-043 and MEP-059, this defect was always technically present but was invisible when
+the recipe catalog was on the order of hundreds of rows (TheMealDB's roughly 600 recipes).
+MEP-026's Kaggle ingest grew the data by five orders of magnitude and exposed the unbounded
+query. The endpoint under load is the primary user-facing action for the Meal Plan feature --
+every click of "Generate Plan" hits this path, with no cached or incremental alternative.
+
+### Acceptance Criteria
+```gherkin
+Feature: Meal Plan Generation Bounded by Inventory-Relevant Recipes
+
+  Scenario: Candidate recipe query is bounded by the user's current inventory
+    Given the recipe catalog contains over 1,600,000 fully-resolved recipes
+    And the user's inventory contains ingredients mapping to N distinct CanonicalIngredientIds
+    When I click "Generate Plan" to generate a meal plan for the current week
+    Then the SQL query issued by LoadCandidateRecipesAsync retrieves only recipes
+      whose ingredients overlap with the user's current inventory
+    And the number of recipes materialized into memory is proportional to the
+      inventory-relevant subset, not the full catalog size
+    And the response returns in under 5 seconds (excluding the Claude optimization call)
+
+  Scenario: Generated meal plans are functionally identical before and after the fix
+    Given the recipe catalog and inventory are held constant
+    And a meal plan was generated using the previous unbounded implementation
+    When I generate a meal plan using the optimized implementation with the same
+      date range, slot preferences, and dietary filters
+    Then the set of recipes eligible for selection is identical
+    And the scoring (waste-reduction, seasonal affinity, dietary, variety) produces
+      the same ranked order
+    And no recipe that would have been selected under the old implementation is
+      excluded by the new query
+
+  Scenario: Plan generation stays responsive at bulk-ingest catalog scale
+    Given the recipe catalog contains over 1,600,000 rows with full navigation
+      property graphs (RecipeIngredients, CanonicalIngredient, SeasonalityWindows,
+      UnitOfMeasure, DietaryTags)
+    When I generate a meal plan for a 7-day / 2-meal-per-day plan
+    Then no Npgsql command timeout or cancellation exception occurs
+    And peak memory consumption during generation does not grow proportionally
+      to the total catalog size
+    And the generation completes without an HTTP 500 or gateway timeout
+```
