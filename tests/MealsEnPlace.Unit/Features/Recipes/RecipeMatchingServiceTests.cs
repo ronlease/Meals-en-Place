@@ -69,6 +69,18 @@
 //   When MatchRecipesAsync is called
 //   Then the recipe does not appear as a FullMatch
 //   And the Chicken ingredient appears in the MissingIngredients list
+//
+// Scenario: MEP-061 baseline — match results are unchanged after the UnitsOfMeasure caching optimization
+//   Given the recipe catalog and inventory are in a known state
+//   And 10 inventory items span 6 distinct CanonicalIngredientIds
+//   When "What can I make?" is requested using the (pre-optimization) per-query matching pipeline
+//   Then the FullMatch recipe's MatchScore, FinalScore, and matched ingredient list are exactly as expected
+//   And the NearMatch recipe's MatchScore, FinalScore, and matched/missing ingredient lists are exactly as expected
+//   And the PartialMatch recipe's MatchScore, FinalScore, and matched/missing ingredient lists are exactly as expected
+//   And the recipe scoring below 0.5 does not appear in any match tier
+//   This test is a pinned baseline captured before MEP-061's UnitOfMeasureConversionService
+//   caching change lands. It must continue to pass unmodified after that change, proving the
+//   optimization is behavior-preserving.
 
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
@@ -1104,5 +1116,182 @@ public class RecipeMatchingServiceTests : IDisposable
                 It.IsAny<IReadOnlyList<InventoryItem>>(),
                 It.IsAny<CancellationToken>()),
             Times.Never);
+    }
+
+    // ── MEP-061: baseline regression — pinned before the UnitsOfMeasure caching optimization ──
+    //
+    // Captures exact MatchScore, FinalScore, MatchTier, and matched/missing ingredient lists
+    // (names, quantities, display units) for a known catalog spanning Full/Near/Partial/excluded
+    // tiers. Must pass unmodified both before and after UnitOfMeasureConversionService switches
+    // from per-call DB lookups to an in-memory cache (MEP-061 acceptance criterion #2).
+
+    private sealed record Mep061BaselineCatalog(
+        Recipe BelowThresholdRecipe,
+        Recipe FullMatchRecipe,
+        Recipe NearMatchRecipe,
+        Recipe PartialMatchRecipe);
+
+    /// <summary>
+    /// Seeds 6 distinct CanonicalIngredients across 10 InventoryItems (per the MEP-061
+    /// acceptance criteria), plus 3 canonical ingredients that are never stocked so recipes
+    /// can exercise the MissingIngredients path, and 4 fully resolved recipes landing in
+    /// FullMatch, NearMatch, PartialMatch, and below-threshold (excluded) tiers respectively.
+    /// </summary>
+    private Mep061BaselineCatalog SeedMep061BaselineCatalog()
+    {
+        // Stocked ingredients (6 distinct CanonicalIngredientIds, 10 InventoryItems total)
+        var chickenBreast = SeedCanonicalIngredient("Chicken Breast Baseline");
+        var oliveOil = SeedCanonicalIngredient("Olive Oil Baseline");
+        var garlic = SeedCanonicalIngredient("Garlic Baseline");
+        var onion = SeedCanonicalIngredient("Onion Baseline");
+        var basil = SeedCanonicalIngredient("Basil Baseline");
+        var parmesan = SeedCanonicalIngredient("Parmesan Baseline");
+
+        SeedInventoryItem(chickenBreast.Id, 500m, GramId);
+        SeedInventoryItem(chickenBreast.Id, 300m, GramId);   // Chicken Breast total: 800g
+        SeedInventoryItem(oliveOil.Id, 500m, MlId);          // Olive Oil total: 500ml
+        SeedInventoryItem(garlic.Id, 50m, GramId);
+        SeedInventoryItem(garlic.Id, 30m, GramId);           // Garlic total: 80g
+        SeedInventoryItem(onion.Id, 200m, GramId);
+        SeedInventoryItem(onion.Id, 150m, GramId);           // Onion total: 350g
+        SeedInventoryItem(basil.Id, 20m, GramId);
+        SeedInventoryItem(basil.Id, 15m, GramId);            // Basil total: 35g
+        SeedInventoryItem(parmesan.Id, 100m, GramId);        // Parmesan total: 100g
+
+        // Never-stocked ingredients, used only to force MissingIngredients entries
+        var thyme = SeedCanonicalIngredient("Thyme Baseline");
+        var rosemary = SeedCanonicalIngredient("Rosemary Baseline");
+        var sage = SeedCanonicalIngredient("Sage Baseline");
+
+        var fullMatchRecipe = SeedFullyResolvedRecipe("Chicken Piccata Baseline", "Italian", [
+            (chickenBreast.Id, 400m, GramId),
+            (oliveOil.Id, 100m, MlId),
+            (garlic.Id, 20m, GramId),
+            (parmesan.Id, 50m, GramId)
+        ]);
+
+        var nearMatchRecipe = SeedFullyResolvedRecipe("Sauteed Vegetables Baseline", "French", [
+            (onion.Id, 100m, GramId),
+            (basil.Id, 10m, GramId),
+            (garlic.Id, 15m, GramId),
+            (thyme.Id, 5m, GramId)   // not stocked → missing → 3/4 = 0.75
+        ]);
+
+        var partialMatchRecipe = SeedFullyResolvedRecipe("Basic Aioli Baseline", "French", [
+            (garlic.Id, 10m, GramId),
+            (oliveOil.Id, 50m, MlId),
+            (thyme.Id, 5m, GramId),      // not stocked → missing
+            (rosemary.Id, 5m, GramId)    // not stocked → missing → 2/4 = 0.5
+        ]);
+
+        var belowThresholdRecipe = SeedFullyResolvedRecipe("Herb Garnish Baseline", "French", [
+            (basil.Id, 5m, GramId),
+            (thyme.Id, 5m, GramId),      // not stocked → missing
+            (rosemary.Id, 5m, GramId),   // not stocked → missing
+            (sage.Id, 5m, GramId)        // not stocked → missing → 1/4 = 0.25 → excluded
+        ]);
+
+        return new Mep061BaselineCatalog(belowThresholdRecipe, fullMatchRecipe, nearMatchRecipe, partialMatchRecipe);
+    }
+
+    [Fact]
+    public async Task MatchRecipesAsync_Mep061BaselineCatalog_FullMatchScoreAndIngredientListsAreExact()
+    {
+        // Arrange
+        var catalog = SeedMep061BaselineCatalog();
+
+        // Act
+        var response = await _sut.MatchRecipesAsync(EmptyRequest());
+
+        // Assert
+        var match = response.FullMatches.Single(m => m.RecipeId == catalog.FullMatchRecipe.Id);
+
+        match.MatchScore.Should().Be(1.0m);
+        match.FinalScore.Should().Be(1.0m);
+        match.MatchTier.Should().Be(MatchTier.FullMatch);
+        match.MissingIngredients.Should().BeEmpty();
+
+        match.MatchedIngredients.Should().BeEquivalentTo(new[]
+        {
+            new MatchedIngredientDto { AvailableQuantity = 1.76m, AvailableUnitOfMeasure = "lb", IngredientName = "Chicken Breast Baseline", IsExpiryImminent = false, RequiredQuantity = 14.11m, RequiredUnitOfMeasure = "oz" },
+            new MatchedIngredientDto { AvailableQuantity = 2.11m, AvailableUnitOfMeasure = "cups", IngredientName = "Olive Oil Baseline", IsExpiryImminent = false, RequiredQuantity = 0.42m, RequiredUnitOfMeasure = "cups" },
+            new MatchedIngredientDto { AvailableQuantity = 2.82m, AvailableUnitOfMeasure = "oz", IngredientName = "Garlic Baseline", IsExpiryImminent = false, RequiredQuantity = 0.71m, RequiredUnitOfMeasure = "oz" },
+            new MatchedIngredientDto { AvailableQuantity = 3.53m, AvailableUnitOfMeasure = "oz", IngredientName = "Parmesan Baseline", IsExpiryImminent = false, RequiredQuantity = 1.76m, RequiredUnitOfMeasure = "oz" }
+        });
+    }
+
+    [Fact]
+    public async Task MatchRecipesAsync_Mep061BaselineCatalog_NearMatchScoreAndIngredientListsAreExact()
+    {
+        // Arrange
+        var catalog = SeedMep061BaselineCatalog();
+
+        // Act
+        var response = await _sut.MatchRecipesAsync(EmptyRequest());
+
+        // Assert
+        var match = response.NearMatches.Single(m => m.RecipeId == catalog.NearMatchRecipe.Id);
+
+        match.MatchScore.Should().Be(0.75m);
+        match.FinalScore.Should().Be(0.75m);
+        match.MatchTier.Should().Be(MatchTier.NearMatch);
+
+        match.MatchedIngredients.Should().BeEquivalentTo(new[]
+        {
+            new MatchedIngredientDto { AvailableQuantity = 12.35m, AvailableUnitOfMeasure = "oz", IngredientName = "Onion Baseline", IsExpiryImminent = false, RequiredQuantity = 3.53m, RequiredUnitOfMeasure = "oz" },
+            new MatchedIngredientDto { AvailableQuantity = 1.23m, AvailableUnitOfMeasure = "oz", IngredientName = "Basil Baseline", IsExpiryImminent = false, RequiredQuantity = 0.35m, RequiredUnitOfMeasure = "oz" },
+            new MatchedIngredientDto { AvailableQuantity = 2.82m, AvailableUnitOfMeasure = "oz", IngredientName = "Garlic Baseline", IsExpiryImminent = false, RequiredQuantity = 0.53m, RequiredUnitOfMeasure = "oz" }
+        });
+
+        match.MissingIngredients.Should().BeEquivalentTo(new[]
+        {
+            new MissingIngredientDto { IngredientName = "Thyme Baseline", RequiredQuantity = 0.18m, RequiredUnitOfMeasure = "oz" }
+        });
+    }
+
+    [Fact]
+    public async Task MatchRecipesAsync_Mep061BaselineCatalog_PartialMatchScoreAndIngredientListsAreExact()
+    {
+        // Arrange
+        var catalog = SeedMep061BaselineCatalog();
+
+        // Act
+        var response = await _sut.MatchRecipesAsync(EmptyRequest());
+
+        // Assert
+        var match = response.PartialMatches.Single(m => m.RecipeId == catalog.PartialMatchRecipe.Id);
+
+        match.MatchScore.Should().Be(0.5m);
+        match.FinalScore.Should().Be(0.5m);
+        match.MatchTier.Should().Be(MatchTier.PartialMatch);
+
+        match.MatchedIngredients.Should().BeEquivalentTo(new[]
+        {
+            new MatchedIngredientDto { AvailableQuantity = 2.82m, AvailableUnitOfMeasure = "oz", IngredientName = "Garlic Baseline", IsExpiryImminent = false, RequiredQuantity = 0.35m, RequiredUnitOfMeasure = "oz" },
+            new MatchedIngredientDto { AvailableQuantity = 2.11m, AvailableUnitOfMeasure = "cups", IngredientName = "Olive Oil Baseline", IsExpiryImminent = false, RequiredQuantity = 1.69m, RequiredUnitOfMeasure = "fl oz" }
+        });
+
+        match.MissingIngredients.Should().BeEquivalentTo(new[]
+        {
+            new MissingIngredientDto { IngredientName = "Thyme Baseline", RequiredQuantity = 0.18m, RequiredUnitOfMeasure = "oz" },
+            new MissingIngredientDto { IngredientName = "Rosemary Baseline", RequiredQuantity = 0.18m, RequiredUnitOfMeasure = "oz" }
+        });
+    }
+
+    [Fact]
+    public async Task MatchRecipesAsync_Mep061BaselineCatalog_BelowThresholdRecipeExcludedFromAllTiers()
+    {
+        // Arrange
+        var catalog = SeedMep061BaselineCatalog();
+
+        // Act
+        var response = await _sut.MatchRecipesAsync(EmptyRequest());
+
+        // Assert — 1 of 4 ingredients covered (0.25) is below the 0.5 PartialMatch floor
+        var allIds = response.FullMatches.Select(m => m.RecipeId)
+            .Concat(response.NearMatches.Select(m => m.RecipeId))
+            .Concat(response.PartialMatches.Select(m => m.RecipeId));
+
+        allIds.Should().NotContain(catalog.BelowThresholdRecipe.Id);
     }
 }

@@ -4124,3 +4124,817 @@ Feature: Canonical Ingredient Normalization -- Mayonnaise Misspellings
     Then the tool reports the projected fold groups showing the ~28 misspelling rows folding into the "mayonnaise" survivor
     And the user can review the output before running the live pass
 ```
+
+---
+## [MEP-054] Spike: Evaluate Hosting on Vercel via .NET Containers
+
+**Status:** Proposed
+**Priority:** Low
+
+### Business Problem
+Meals en Place is designed as a single-user, local-deployment-only application running via Docker Compose on the user's own machine. This works well but means the app is only accessible when that machine is running Docker. The user wants the option to access meal planning data from anywhere -- a phone at the grocery store, a tablet in the kitchen, a laptop while traveling -- without keeping a home server online full-time.
+
+Vercel now supports hosting .NET / ASP.NET Core applications via Docker containers (see [Vercel's .NET/ASP.NET guide](https://vercel.com/kb/guide/dot-net-asp-net-on-vercel-with-docker)), which makes cloud hosting technically feasible where it previously was not a natural fit for Vercel's platform. This spike researches whether Vercel is a viable and cost-effective hosting target for this specific application, given its particular data scale, security posture, and architectural assumptions.
+
+This is exploratory research, not a commitment to migrate. The spike should surface the trade-offs honestly -- including reasons NOT to proceed -- so the user can make an informed decision later.
+
+### Open Questions the Spike Must Answer
+
+**1. PostgreSQL hosting**
+Vercel does not host PostgreSQL itself. The app would need an external managed Postgres provider (e.g., Neon, Supabase, Railway, or a traditional cloud provider). The spike should evaluate:
+
+- Cost for a database large enough to hold the recipe catalog (see data scale below)
+- Connection limits and pooling (the app uses EF Core with a connection pool)
+- Network latency between Vercel's edge and the Postgres provider
+- Whether Vercel's partnership integrations (if any) simplify this
+
+**2. Authentication**
+The app currently has no authentication whatsoever -- it is single-user and local-only by design (per CLAUDE.md: "Auth: None -- single user, local deployment"). Hosting the app on the public internet fundamentally changes the threat model. The spike should assess:
+
+- What authentication mechanism would be needed (OAuth, passkey, basic auth behind a reverse proxy, Vercel's built-in auth features)
+- Whether adding auth is a prerequisite or could be layered on separately
+- The scope of that auth work relative to the rest of the migration
+
+**3. Secrets management**
+The app uses `dotnet user-secrets` locally for the Claude API key and Todoist token (per CLAUDE.md convention). A Vercel deployment would need to map these to Vercel's environment variable / secrets model. The spike should confirm:
+
+- Whether Vercel's encrypted environment variables are a sufficient replacement
+- Whether the existing `DataProtection` key ring (see MEP-039) needs rearchitecting for a containerized deployment
+
+**4. Data scale**
+The Kaggle bulk ingest (MEP-026) produces approximately 1.64M recipes, 14M recipe ingredients, and 146K canonical ingredients (MEP-038). The spike should evaluate:
+
+- Whether a managed Postgres free or low-cost tier can store this volume affordably
+- Whether the ~2.3GB CSV ingest step is feasible inside a Vercel container (memory limits, execution time limits) or must remain a one-time local operation run directly against the remote database
+- Query performance at this scale on a shared/serverless Postgres tier vs. a dedicated local instance
+
+**5. Cost**
+The current deployment cost is effectively $0 (Docker Compose on hardware the user already owns). The spike should document:
+
+- Vercel pricing for always-on Docker containers vs. serverless functions (and which model this app needs -- it is a stateful API server, not a collection of stateless functions)
+- Managed Postgres costs at the required data scale
+- Total monthly cost estimate for a realistic deployment
+- Whether the cost is justifiable for a single-user personal tool
+
+**6. Architectural alignment**
+CLAUDE.md records "Single-user, local deployment only" as a foundational design decision. The spike should address:
+
+- Whether this decision needs to be formally revisited and revised before any hosting work begins
+- What other parts of the codebase assume local-only deployment (e.g., file-based stores, localhost-only CORS, no rate limiting, no multi-tenancy)
+- Whether a hosted deployment would still be single-user (just remotely accessible) or whether multi-tenancy pressure would follow
+
+**7. Angular frontend hosting**
+The Angular frontend is currently served alongside the API. The spike should consider:
+
+- Whether the frontend should deploy as a static site on Vercel's CDN (its strength) with the API as a separate container
+- CORS and routing implications of splitting frontend and backend
+
+### Acceptance Criteria
+```gherkin
+Feature: Evaluate Hosting on Vercel via .NET Containers
+
+  Scenario: Evaluate Vercel container hosting feasibility
+    Given Vercel's documentation on .NET container support has been reviewed
+    When the app's Dockerfile and startup requirements are compared against Vercel's container constraints
+    Then the spike documents whether the existing Docker Compose setup can be adapted for Vercel
+    And any container size, memory, or execution-time limits that would affect the app are noted
+
+  Scenario: Evaluate managed PostgreSQL options
+    Given the app requires PostgreSQL with approximately 1.64M recipes and 14M recipe ingredients
+    When at least three managed Postgres providers are compared (e.g., Neon, Supabase, Railway)
+    Then each provider's free tier capacity and paid tier pricing is documented
+    And connection pooling compatibility with EF Core is confirmed or flagged
+    And estimated monthly cost at the required data scale is recorded
+
+  Scenario: Assess authentication requirements
+    Given the app currently has no authentication
+    When the security implications of public internet hosting are evaluated
+    Then the spike documents the minimum viable authentication approach
+    And the estimated scope of adding authentication is categorized (small/medium/large)
+
+  Scenario: Evaluate secrets migration path
+    Given the app uses dotnet user-secrets and DataProtection locally
+    When Vercel's environment variable and secrets model is reviewed
+    Then the spike confirms whether existing secrets can map directly to Vercel's model
+    And any DataProtection key ring changes needed for containerized deployment are documented
+
+  Scenario: Assess bulk ingest feasibility in a hosted context
+    Given the Kaggle CSV ingest processes approximately 2.3GB of data
+    When Vercel's container memory and execution-time limits are applied
+    Then the spike determines whether ingest can run inside the Vercel container
+    Or documents that ingest must remain a local operation against a remote database
+    And the recommended ingest workflow for a hosted deployment is described
+
+  Scenario: Document total cost of ownership
+    Given Vercel container pricing and managed Postgres pricing have been researched
+    When costs are estimated for a single-user deployment at the app's data scale
+    Then the spike documents the estimated monthly cost
+    And compares it to the current $0 local deployment cost
+    And states whether the cost is reasonable for a single-user personal tool
+
+  Scenario: Assess impact on the local-deployment-only design decision
+    Given CLAUDE.md records "Single-user, local deployment only" as a design constraint
+    When the implications of hosting are evaluated against this constraint
+    Then the spike documents which codebase assumptions depend on local-only deployment
+    And recommends whether the design decision should be revised, relaxed, or left unchanged
+    And documents what codebase changes (auth, CORS, rate limiting, secrets) would follow from revision
+
+  Scenario: Produce a recommendation
+    Given all evaluation criteria have been assessed
+    When the spike is complete
+    Then a written recommendation states whether Vercel hosting is viable, cost-effective, and worthwhile for this application
+    And the recommendation is honest about trade-offs, including reasons not to proceed
+    And if the recommendation is to proceed, it proposes a phased approach (e.g., frontend-only first, then API container)
+    And the recommendation is published to docs/spikes/ following the MEP-025 precedent
+```
+
+---
+## [MEP-055] Incorporate GPG Commit/Tag Signing (Kleopatra / GnuPG)
+
+**Status:** Proposed
+**Priority:** Low
+
+### Business Problem
+I previously relied on Kleopatra (Gpg4win / GnuPG) to cryptographically sign my git commits and tags as part of my development workflow, and I want to reinstate that practice for this repository. Without GPG signing, my commits appear as unsigned on GitHub -- there is no cryptographic proof that the person identified by the git author string actually authored the commit. Enabling signing means my commits and tags display GitHub's "Verified" badge, providing tamper-evident attribution. This is a developer-workflow hygiene item, not an application feature, so the scope is documentation and local tooling configuration rather than application code.
+
+**Out of scope:** Compiled-artifact or installer signing. There is no distributed binary or installer in this project -- it runs locally via Docker Compose for a single user -- so code-signing a compiled output is not applicable today.
+
+### Open Items and Scope Notes
+
+- **Local git config changes (per-machine, not committed):**
+  `user.signingkey` set to the user's GPG key ID; `commit.gpgsign = true`;
+  `tag.gpgSign = true`; on Windows, `gpg.program` must point at the correct
+  `gpg.exe` from the Gpg4win / Kleopatra installation (e.g.,
+  `C:/Program Files (x86)/GnuPG/bin/gpg.exe`). These are local git config
+  settings, not repository-level configuration, because the private key and
+  tool paths are machine-specific.
+
+- **GitHub account setup:** The user's public GPG key must be uploaded to
+  their GitHub account (Settings > SSH and GPG keys) for commits pushed to
+  GitHub to display the "Verified" badge. Without this step, signing works
+  locally but GitHub cannot verify the signature.
+
+- **Agent-authored commits -- open question:** This session's own tooling
+  guidance already prohibits bypassing signing (`--no-gpg-sign`) unless
+  explicitly asked. However, commits made by Claude Code or another AI agent
+  on the user's behalf present a real operational constraint: the agent has no
+  access to the user's GPG private key or passphrase and cannot sign commits
+  on the user's behalf. This means agent-authored commits will likely remain
+  unsigned even after this item ships, unless a separate mechanism is devised
+  (e.g., the user signs agent commits retroactively via `git commit --amend
+  -S`, or a GPG agent with cached passphrase is available in the session
+  environment). This is an unresolved constraint worth acknowledging rather
+  than glossing over.
+
+- **CI enforcement of signed commits (stretch goal):** A GitHub Actions
+  workflow or branch protection rule could verify that all commits on `main`
+  or in PRs carry valid GPG signatures. This is explicitly a stretch goal and
+  is not required for this item to be considered done -- it would also
+  conflict with the agent-authored-commit constraint above unless a policy
+  exception is carved out for unsigned agent commits.
+
+- **No application code to write:** The "implementation" is a short section
+  in a contributing guide or README documenting the one-time Kleopatra /
+  GnuPG setup steps and the required git config entries, plus the human's
+  own local setup, which Claude Code cannot perform on the user's behalf
+  (no access to generate or manage private key material).
+
+### Acceptance Criteria
+
+- [ ] Documentation exists (e.g., a section in CONTRIBUTING.md or README.md)
+      describing the Kleopatra / GnuPG setup steps and the required git config
+      entries (`user.signingkey`, `commit.gpgsign`, `tag.gpgSign`, and
+      `gpg.program` on Windows).
+- [ ] The documentation notes the requirement to upload the public GPG key to
+      the user's GitHub account for "Verified" badge display.
+- [ ] A test commit made after setup shows as "Verified" on GitHub.
+- [ ] The agent-authored commit signing constraint is documented as a known
+      limitation with the current resolution status (unsigned, retroactive
+      signing, or other mechanism).
+- [ ] CI signed-commit enforcement is explicitly called out as an optional
+      stretch goal, not required for Done.
+
+---
+## [MEP-056] Spike: Produce Substitution Groups for Recipe Matching
+
+**Status:** Proposed
+**Priority:** Medium
+
+### Business Problem
+The recipe matching pipeline (MEP-006, "What Can I Make?") relies on exact `CanonicalIngredient` identity when scoring inventory against recipe ingredient lists. This is correct for ingredients that are substantively different -- "tomato paste" is not a substitute for a fresh "tomato," and "baby carrot" may behave differently from a full-sized "carrot" in certain preparations. But for raw produce varieties within the same family, exact-match semantics are too strict: the live database shows `tomato` (139,018 recipe references), `roma tomato` (1,775), `cherry tomato`, `grape tomato`, `green tomato`, `italian tomato`, `italian plum tomato`, and others -- all fully distinct `CanonicalIngredient` rows. A recipe calling for "roma tomato" will not match against inventory containing "beefsteak tomato," even though in practice substitution is the norm, not the exception.
+
+This gap was identified during MEP-053 (mayonnaise misspelling normalization) investigation. The user's own framing: "Rarely does the tomato variety matter in terms of the recipe. I like Roma tomatoes because it's easier to remove the seeds. If I were making a sandwich, I'd prefer beefsteak tomatoes. But if one were on sale, I'd use it." The real-world behavior is a mild situational preference, not a hard requirement -- if a recipe calls for "roma tomato" and the user has "beefsteak tomato" in the pantry (or vice versa), the flagship "What can I make?" feature should very likely still count that as a match rather than silently excluding the recipe because the canonical IDs differ.
+
+**This is not a dedup/fold problem.** Merging "roma tomato" into "tomato" via the existing MEP-038 Dedup tool would be the wrong approach: it would destroy the user's ability to track which specific variety they actually have in inventory. The pantry list should still say "3 roma tomatoes," not just "3 tomatoes." What is needed is a new concept at the **matching layer** (MEP-006's scoring) -- an optional grouping that lets MatchScore computation treat several distinct `CanonicalIngredient` rows as interchangeable for matching purposes, while keeping them fully distinct rows for inventory display, recipe ingredient lists, and shopping lists.
+
+This spike researches the mechanism design, scope, and curation strategy before committing to an implementation approach.
+
+### Examples Gathered So Far
+The following examples come directly from the user and form a seed list -- not an exhaustive taxonomy. They illustrate that substitutability is not uniform across ingredient categories and cannot be safely guessed from naming patterns alone.
+
+| Category | Substitutable? | User guidance |
+|---|---|---|
+| **Fresh tomato varieties** (roma, beefsteak, cherry, grape, etc.) | **Yes** -- interchangeable with each other and with plain "tomato." | Variety is a mild preference, not a hard requirement. "If one were on sale, I'd use it." |
+| **Types of relish** | **Yes** -- interchangeable. | Different relishes can stand in for each other in recipes. |
+| **Types of apple** (Granny Smith, Fuji, Honeycrisp, Gala, etc.) | **Yes** -- interchangeable. | Apple varieties are broadly substitutable for recipe purposes. |
+| **Types of mustard** (dijon, yellow, spicy brown, whole-grain, etc.) | **No -- requires human judgment.** | Different mustards differ enough in flavor and character that the system should NOT assume interchangeability. The user wants to decide case-by-case. |
+
+**Processed/prepared forms are never substitutable for the fresh form** -- this is a general principle, not specific to tomatoes. "Tomato paste," "tomato sauce," and "sun-dried tomato" are not interchangeable with fresh "tomato," and this rule extends to any ingredient family (e.g., "apple butter" is not a substitute for "apple," "pickled onion" is not a substitute for "onion").
+
+The mustard example is particularly instructive: it looks similar to tomatoes, relish, and apples on the surface (varieties of the same base ingredient), but the user explicitly called it out as NOT automatically substitutable. An agent guessing from ingredient names alone would likely have gotten this wrong. This is why curation must be collaborative (see the implementation note below).
+
+### Open Questions the Spike Must Answer
+
+**1. Curation strategy: manual vs. AI-assisted**
+How would substitution groups be populated? Two ends of the spectrum:
+
+- **Hand-curated allowlist** -- similar in spirit to how `TypoAndSynonymPhraseReplacements` in `CanonicalNameNormalizer` is maintained today: a static dictionary of known-interchangeable produce families. Predictable, auditable, zero runtime cost, but requires ongoing manual maintenance as new varieties appear in the catalog.
+- **AI-assisted clustering** -- Claude could plausibly group produce varieties by family given a list of canonical ingredient names. More scalable, but introduces non-determinism and requires a review/approval step to avoid false positives (e.g., grouping "tomato sauce" with "tomato" would be wrong).
+- **Hybrid** -- a hand-curated seed list with an optional Claude-assisted discovery pass that proposes new groups for user confirmation.
+
+The spike should evaluate which approach best fits a single-user personal tool where correctness matters more than automation speed.
+
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up for implementation or curation work, the assigned agent MUST ask the user for additional examples and categories rather than inventing a full ingredient substitution taxonomy unilaterally. The four examples in "Examples Gathered So Far" above are a seed list, not exhaustive. The mustard example demonstrates why guessing is dangerous: it looks structurally identical to tomato/relish/apple on the surface (varieties of the same base ingredient), but the user explicitly said mustard types are NOT automatically interchangeable. An agent reasoning from ingredient names alone would very likely have gotten this wrong. The user's judgment is the ground truth for which categories are safe to group and which are not.
+
+**2. Scope: which ingredient categories?**
+Tomatoes are the concrete motivating example, but the same logic applies to other produce families and potentially beyond produce -- the user's seed examples already include condiments (relish as substitutable, mustard as not):
+
+- **Onions:** yellow, red, white, sweet, Vidalia, shallot (shallot may be borderline -- different enough in some preparations)
+- **Peppers:** bell pepper colors (red/green/yellow/orange) are near-universal substitutes; mild chiles (poblano, Anaheim) may form a second group; hot peppers are substantively different and should not group with mild
+- **Potatoes:** russet, Yukon Gold, red, fingerling -- broadly interchangeable for most home cooking
+- **Apples:** Granny Smith, Fuji, Honeycrisp, Gala -- confirmed interchangeable by the user
+- **Citrus:** lemon and lime are often (not always) interchangeable; orange is typically distinct
+- **Lettuce / greens:** romaine, iceberg, butter lettuce -- salad greens are broadly substitutable
+
+Should this stay narrow (a curated allowlist of well-understood families) or aim broader? The spike should propose initial scope and a principle for deciding when a variety is "close enough" vs. substantively different.
+
+**3. Exclusion of processed/prepared forms**
+**General principle (confirmed by user): processed or prepared forms of an ingredient are never substitutable for the fresh form, even when they share a base word.** This is not specific to tomatoes -- it applies across all ingredient families. "Tomato paste," "tomato sauce," "sun-dried tomato," and "crushed tomatoes" (canned) are NOT substitutes for fresh "tomato"; "apple butter" is not a substitute for "apple"; "pickled onion" is not a substitute for "onion." The existing data correctly keeps these as separate `CanonicalIngredient` rows, and whatever grouping mechanism is chosen must not regress this. Substitution groups should apply only to varieties of the raw/fresh ingredient, never to processed or prepared forms. The spike should define how this boundary is enforced (e.g., exclusion by suffix pattern, by a "processed" flag, or by requiring explicit inclusion rather than pattern-based grouping).
+
+**4. Interaction with the existing AI substitution step**
+The Recipe Matching Pipeline (documented in CLAUDE.md) already includes step 5: "Claude reviews the top N NearMatch candidates for feasibility and suggests substitutions for gaps." Produce-variety substitution overlaps with that step's intent. The spike should evaluate:
+
+- Is produce-variety grouping a natural extension of the existing Claude substitution pass (i.e., let Claude handle it case-by-case at query time)?
+- Or does it need to be a separate, deterministic pre-scoring mechanism -- more reliable, more predictable, closer to how the typo dictionary works deterministically rather than via an LLM call?
+- Could both coexist: deterministic grouping handles the well-known produce families at scoring time, while the Claude pass handles edge cases and non-produce substitutions?
+
+**5. Default behavior: opt-in or opt-out?**
+Should substitution groups broaden matching automatically (default-on), or should the user explicitly enable them? The user's framing ("if one were on sale, I'd use it") suggests default-on makes sense for produce, but this is a design decision with trade-offs:
+
+- **Default-on** -- more useful out of the box; matches the user's stated behavior; reduces "silent misses" where a recipe is excluded despite a viable substitute being on hand.
+- **Default-off / opt-in** -- safer for users who may have strong variety preferences for specific recipes; avoids surprising match results.
+- **Per-group toggle** -- the user could enable substitution for tomatoes but not for peppers, for example. More flexible but adds UI complexity.
+
+The spike should recommend a default and document the rationale.
+
+**6. Impact on MatchScore semantics**
+Today, MatchScore computes (matched ingredients / total ingredients) with a bonus for expiry-imminent items. If a recipe ingredient's `CanonicalIngredient` differs from the inventory item's but they belong to the same substitution group, how should this affect the score?
+
+- Full match credit (treat group members as identical for scoring)?
+- Partial credit (e.g., 0.8x weight, reflecting that it is a viable but not exact match)?
+- A separate match tier (e.g., "Substitutable Match" between Full Match and Near Match)?
+
+The spike should propose scoring semantics and consider how the result surfaces in the UI (does the user see "roma tomato -> beefsteak tomato" noted anywhere, or is the substitution silent?).
+
+### Acceptance Criteria
+```gherkin
+Feature: Spike -- Produce Substitution Groups for Recipe Matching
+
+  Scenario: Concrete example -- tomato variety substitution as a matching goal
+    Given a recipe requires "roma tomato" as an ingredient
+    And the user's inventory contains "beefsteak tomato" but no "roma tomato"
+    When the produce substitution feature is implemented (mechanism TBD by this spike)
+    Then the recipe matching pipeline should count the tomato ingredient as at least a partial match
+    And the recipe should not be silently excluded from "What can I make?" results solely because the tomato variety differs
+
+  Scenario: Evaluate curation strategy
+    Given the options of hand-curated, AI-assisted, and hybrid group curation have been considered
+    When each approach is assessed for correctness, maintainability, and fit for a single-user tool
+    Then the spike documents a recommended curation strategy with rationale
+
+  Scenario: Define initial scope of produce families
+    Given the produce categories listed in the open questions (tomatoes, onions, peppers, potatoes, apples, citrus, greens) have been reviewed
+    When each category is evaluated for substitutability
+    Then the spike documents which families belong in the initial scope
+    And states the principle for deciding "close enough" vs. substantively different
+    And identifies any families that need sub-groups (e.g., mild peppers vs. hot peppers)
+
+  Scenario: Confirm processed forms are excluded
+    Given "tomato paste," "tomato sauce," "sun-dried tomato," and similar processed forms exist as separate CanonicalIngredient rows
+    When the proposed grouping mechanism is applied
+    Then none of these processed forms are grouped with fresh "tomato"
+    And the spike documents how the boundary between raw produce varieties and processed forms is enforced
+
+  Scenario: Evaluate deterministic vs. AI-driven matching
+    Given the existing Claude substitution pass (pipeline step 5) already handles ad-hoc substitution suggestions
+    When deterministic pre-scoring grouping is compared against extending the Claude pass
+    Then the spike documents the trade-offs of each approach
+    And recommends whether grouping should be deterministic, AI-driven, or a combination
+
+  Scenario: Recommend default behavior
+    Given the options of default-on, default-off, and per-group toggle have been considered
+    When each option is evaluated against the user's stated behavior and UI complexity
+    Then the spike documents a recommended default with rationale
+
+  Scenario: Propose MatchScore impact
+    Given MatchScore currently computes matched-ingredient ratio with expiry bonus
+    When group-based substitution matches are introduced
+    Then the spike proposes how substitution matches affect the score (full credit, partial credit, or separate tier)
+    And documents how the substitution is surfaced to the user in the results
+
+  Scenario: Produce a recommendation
+    Given all open questions have been evaluated
+    When the spike is complete
+    Then a written recommendation is published to docs/spikes/ following the MEP-025 and MEP-054 precedent
+    And the recommendation covers curation strategy, initial scope, exclusion rules, matching mechanism, default behavior, and scoring semantics
+    And the recommendation is honest about trade-offs and open risks
+```
+
+---
+## [MEP-057] Canonical Ingredient Normalization: Pasta/Noodle Shape Synonym Deduplication
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-050 (typo/synonym phrase dictionary this story extends)
+
+### Business Problem
+The Kaggle bulk ingest (MEP-026) produced thousands of fragmented `CanonicalIngredient` rows for pasta and noodle shapes where the same physical product appears under multiple names -- typically the shape name alone ("penne"), the shape name with the generic category suffix "pasta" ("penne pasta"), and/or the suffix "noodles" ("penne noodles"). These are not distinct ingredients; they are alternate phrasings for the same product. The fragmentation causes the same class of silent recipe-matching failure documented in MEP-053 (mayonnaise misspellings): a user whose pantry lists "penne" will not match against a recipe calling for "penne pasta," and vice versa.
+
+This is the same dedup/one-canonical-row problem addressed by MEP-038 (initial dedup), MEP-050 (normalization gaps), and MEP-053 (mayonnaise misspellings), and the fix mechanism is the same: a curated set of phrase-replacement entries in `TypoAndSynonymPhraseReplacements` inside `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`. It is **not** the matching-layer substitution concept from MEP-056 (produce substitution groups), which keeps distinct rows separate but treats them as interchangeable at scoring time. Here, the rows should collapse into one canonical row because the names refer to the identical product.
+
+**Scale of the problem.** A read-only query against the live `CanonicalIngredients` table (top rows by `RecipeReferenceCount` where the name contains "pasta" or "noodle") shows tens of thousands of recipe references spread across fragmented rows:
+
+| Name | RecipeReferenceCount |
+|---|---|
+| noodle | 12,211 |
+| pasta | 9,697 |
+| egg noodle | 6,266 |
+| lasagna noodle | 4,387 |
+| penne pasta | 1,988 |
+| shell pasta | 1,563 |
+| pasta sauce | 1,346 |
+| ramen noodle | 1,246 |
+| orzo pasta | 1,006 |
+| rice noodle | 984 |
+| mein noodles | 957 |
+| chinese noodles | 735 |
+| rotini pasta | 734 |
+| angel hair pasta | 674 |
+| wide noodles | 545 |
+| rigatoni pasta | 466 |
+| lasagne noodles | 368 |
+| macaroni noodles | 288 |
+| wide egg noodles | 232 |
+| spiral pasta | 218 |
+| linguine pasta | 196 |
+| noodle udon | 189 |
+| pasta wheat | 189 |
+| hair pasta | 183 |
+| vermicelli noodles | 174 |
+| rotini noodles | 169 |
+| jumbo shell pasta | 158 |
+| thin noodles | 130 |
+| pasta noodle | 117 |
+| chicken noodle | 116 |
+| rice vermicelli noodles | 112 |
+| thin egg noodles | 100 |
+| cavatappi pasta | 97 |
+| mostaccioli noodles | 96 |
+| broad noodles | 95 |
+| pasta water | 95 |
+| shell noodle | 93 |
+| tomato pasta sauce | 93 |
+| fettucini noodles | 91 |
+| thin rice noodles | 90 |
+| spiral noodles | 89 |
+| short pasta | 88 |
+| chicken flavored ramen noodles | 87 |
+| rotelle pasta | 81 |
+| extra wide egg noodles | 78 |
+| elbow noodles | 78 |
+| whole wheat lasagna noodles | 76 |
+| noodle soup | 74 |
+| mostaccioli pasta | 74 |
+| fettucine noodles | 71 |
+| farfalle pasta | 70 |
+| bucatini pasta | 67 |
+| fresh pasta | 62 |
+| rigatoni noodles | 62 |
+| whole wheat penne pasta | 60 |
+| chicken ramen noodles | 60 |
+| jumbo pasta | 56 |
+| bowtie pasta | 56 |
+| curly noodles | 56 |
+| alphabet pasta | 54 |
+| linguine noodles | 53 |
+| fusilli pasta | 52 |
+| elbow pasta | 52 |
+| flat noodles | 48 |
+| vermicelli pasta | 48 |
+| seashell pasta | 47 |
+| hot buttered noodles | 44 |
+| chicken noodle soup | 43 |
+| hokkien noodles | 41 |
+| glass noodle | 40 |
+| chinese egg noodles | 38 |
+| egg pasta | 38 |
+| gemelli pasta | 38 |
+| twist pasta | 36 |
+| beef ramen noodles | 36 |
+| tri-color spiral pasta | 35 |
+| somen noodles | 35 |
+
+This data is evidence of scope, not a finished dictionary. Many entries are clear candidates for folding ("penne pasta" to "penne," "rotini noodles" to "rotini"), but others are ambiguous or outright false positives for any naive suffix-stripping approach.
+
+**False-positive risks.** The data contains rows where "pasta" or "noodle" is part of the ingredient's identity, not a strippable suffix:
+
+- **"pasta water"** (95 refs) -- a preparation byproduct, not a pasta shape
+- **"pasta sauce"** / **"tomato pasta sauce"** (1,346 / 93 refs) -- a sauce, not a pasta
+- **"noodle soup"** / **"chicken noodle soup"** (74 / 43 refs) -- a dish, not a noodle ingredient
+- **"hot buttered noodles"** (44 refs) -- a dish name, not an ingredient
+- **"chicken noodle"** (116 refs) -- ambiguous (could be a dish reference or a flavored noodle product)
+
+A blanket "strip trailing pasta/noodles" rule would corrupt these entries. The dictionary must be built entry-by-entry, not derived from a regex or suffix-stripping heuristic.
+
+**Modifier ambiguity.** Beyond false positives, some modifiers that look like filler actually denote genuinely different products:
+
+- **"spaghetti" vs. "thin spaghetti"** -- "thin" is not filler here; thin spaghetti is a distinct cut (closer to capellini than to standard spaghetti). These must NOT be folded together.
+- **"wide noodles" vs. "wide egg noodles" vs. "extra wide egg noodles"** -- width and base-ingredient descriptors may or may not denote different products.
+- **"thin noodles" vs. "thin egg noodles" vs. "thin rice noodles"** -- the base-ingredient qualifier changes the product entirely.
+
+The user explicitly rejected a blanket rule ("strip a bare pasta/noodles suffix, keep other modifiers") as a general principle. Every shape/modifier combination requires individual case-by-case judgment -- the same caution as the mustard counterexample in MEP-056.
+
+**Confirmed seed examples from the user:**
+
+1. **Fold:** "penne," "penne pasta," and "penne noodles" should collapse into one canonical row. The words "pasta" and "noodles" here are generic category suffixes tacked onto a specific shape name, adding no distinguishing information.
+2. **Do NOT fold:** "spaghetti" and "thin spaghetti" must remain separate canonical rows. "Thin" denotes a distinct cut, not filler.
+
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up, the assigned agent MUST present the user with a candidate list of proposed folds (built from a query like the one above) and obtain shape-by-shape, modifier-by-modifier confirmation before writing any entries into `TypoAndSynonymPhraseReplacements`. The two seed examples above are starting points, not a complete dictionary. The "spaghetti" / "thin spaghetti" non-match and the false-positive traps ("pasta water," "noodle soup," etc.) demonstrate that interchangeability cannot be safely inferred from naming patterns alone. Do not invent fold rules without explicit user sign-off on each entry.
+
+**Data-application note:** As with MEP-053, applying the dictionary extension to the live database requires the full MEP-049 reset-and-re-ingest procedure (drop/recreate Postgres DB, apply migrations, run ingest, run `Dedup --dry-run`, run `Dedup` live). That destructive step is out of scope for this backlog item's acceptance criteria (code and tests only) and requires explicit user sign-off.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization -- Pasta/Noodle Shape Synonym Deduplication
+
+  Scenario: Generic suffix "pasta" folds to the bare shape name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "penne pasta" mapped to "penne"
+    When CanonicalNameNormalizer processes "penne pasta"
+    Then the fold-group key matches that of "penne"
+
+  Scenario: Generic suffix "noodles" folds to the bare shape name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "penne noodles" mapped to "penne"
+    When CanonicalNameNormalizer processes "penne noodles"
+    Then the fold-group key matches that of "penne"
+
+  Scenario: All three penne variants produce the same fold-group key
+    Given "penne," "penne pasta," and "penne noodles" are processed by CanonicalNameNormalizer
+    When the fold-group keys are compared
+    Then all three keys are identical
+
+  Scenario: Modifier "thin" preserves distinctness for spaghetti
+    Given "spaghetti" and "thin spaghetti" are both processed by CanonicalNameNormalizer
+    When the fold-group keys are compared
+    Then the keys are different
+    And "thin spaghetti" is NOT folded into "spaghetti"
+
+  Scenario: "pasta water" is not affected by pasta/noodle normalization
+    Given "pasta water" is a preparation byproduct, not a pasta shape
+    When CanonicalNameNormalizer processes "pasta water"
+    Then the fold-group key remains distinct from any pasta shape key
+    And the word "pasta" is not stripped from the name
+
+  Scenario: "pasta sauce" is not affected by pasta/noodle normalization
+    Given "pasta sauce" is a sauce, not a pasta shape
+    When CanonicalNameNormalizer processes "pasta sauce"
+    Then the fold-group key remains distinct from any pasta shape key
+    And the word "pasta" is not stripped from the name
+
+  Scenario: "noodle soup" is not affected by pasta/noodle normalization
+    Given "noodle soup" is a dish, not a noodle ingredient
+    When CanonicalNameNormalizer processes "noodle soup"
+    Then the fold-group key remains distinct from any noodle shape key
+    And the word "noodle" is not stripped from the name
+
+  Scenario: "chicken noodle soup" is not affected by pasta/noodle normalization
+    Given "chicken noodle soup" is a dish name, not a noodle ingredient
+    When CanonicalNameNormalizer processes "chicken noodle soup"
+    Then the fold-group key remains distinct from any noodle shape key
+
+  Scenario: "hot buttered noodles" is not affected by pasta/noodle normalization
+    Given "hot buttered noodles" is a dish name, not a noodle ingredient
+    When CanonicalNameNormalizer processes "hot buttered noodles"
+    Then the fold-group key remains distinct from any noodle shape key
+
+  Scenario: No dictionary entry is added without user confirmation
+    Given a candidate list of pasta/noodle fold pairs has been generated from the CanonicalIngredients table
+    When the assigned agent proposes entries for TypoAndSynonymPhraseReplacements
+    Then each proposed entry is presented to the user for individual approval
+    And no entry is written into the dictionary until the user confirms it
+    And the agent does not infer interchangeability from naming patterns alone
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all user-confirmed dictionary entries have been added
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups showing the affected pasta/noodle rows folding into their target survivors
+    And the user can review the output before running the live pass
+```
+
+---
+## [MEP-058] Canonical Ingredient Normalization: Ground Turkey Variant Deduplication
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-050 (typo/synonym phrase dictionary this story extends)
+
+### Business Problem
+The user reported that the database contains numerous entries for "ground turkey," each slightly different but meaning the same thing. A read-only query against the live `CanonicalIngredients` table confirms 46 distinct rows whose names contain both "turkey" and "ground," none of which is a bare "ground turkey" -- the closest and most-referenced entry is "ground raw turkey" (42 recipe references). These fragmented rows are the same class of silent recipe-matching failure documented in MEP-053 (mayonnaise misspellings) and MEP-057 (pasta/noodle shape synonyms): a user whose pantry lists one variant will not match against a recipe calling for a different variant of the same product.
+
+This is the same dedup/one-canonical-row problem addressed by MEP-038 (initial dedup), MEP-050 (normalization gaps), MEP-053, and MEP-057, and the fix mechanism is the same: curated phrase-replacement entries in `TypoAndSynonymPhraseReplacements` inside `src/MealsEnPlace.Tools.Dedup/CanonicalNameNormalizer.cs`. It is **not** the matching-layer substitution concept from MEP-056 (produce substitution groups), which keeps distinct rows separate but treats them as interchangeable at scoring time. Here, the rows that are genuinely the same product should collapse into one canonical row.
+
+**Scale of the problem.** All 46 rows with their `RecipeReferenceCount`:
+
+| Name | RecipeReferenceCount |
+|---|---|
+| ground raw turkey | 42 |
+| extra-lean ground turkey breast | 13 |
+| fresh lean ground turkey | 5 |
+| ground lean white turkey meat | 5 |
+| very lean ground turkey | 4 |
+| ground organic turkey | 4 |
+| freshly ground turkey | 4 |
+| frozen raw ground turkey | 3 |
+| ground smoked turkey | 3 |
+| ground raw turkey breast | 2 |
+| ground beef/turkey | 2 |
+| percent lean ground turkey | 2 |
+| freshly ground raw turkey | 2 |
+| ground skinless turkey breast | 2 |
+| ground uncooked turkey | 2 |
+| roll turkey ground meat | 1 |
+| low-fat ground turkey | 1 |
+| fresh ground lean turkey breast | 1 |
+| italian seasoned ground turkey | 1 |
+| lean uncooked ground turkey | 1 |
+| turkey ground turkey | 1 |
+| o lean ground turkey | 1 |
+| lean ground turkey i | 1 |
+| mr. turkey lean ground turkey | 1 |
+| butterball ground turkey | 1 |
+| lean ground dark meat turkey | 1 |
+| lean ground beef/turkey/chicken | 1 |
+| ground beef/turkey/chicken | 1 |
+| weight ground turkey breakfast | 1 |
+| shady brook ground turkey | 1 |
+| ground organic turkey breast meat | 1 |
+| ground white turkey breasts | 1 |
+| ground cooked turkey meat | 1 |
+| ground smoked turkey slices | 1 |
+| market ground turkey | 1 |
+| turkey grounded | 1 |
+| lean ground white meat skinless turkey | 1 |
+| lean cooked ground turkey | 1 |
+| regular ground turkey | 1 |
+| turkey store lean ground turkey | 1 |
+| fresh ground organic dark turkey meat | 1 |
+| extra lean ground turkey w | 1 |
+| ground turkey cumin | 1 |
+| fresh ground turkey meat | 1 |
+| ground chuck/turkey | 1 |
+| ground round and turkey | 1 |
+
+**Important: no bare "ground turkey" exists.** Unlike MEP-053 where "mayonnaise" (correctly spelled) already existed as the obvious survivor, no plain "ground turkey" row is present in the table. The most-referenced entry is "ground raw turkey" (42 refs). The canonical survivor name is therefore undetermined and must be chosen by the user during curation -- not assumed by the implementing agent.
+
+**Categorized risk analysis.** The 46 rows fall into several categories with very different fold-safety profiles. Not every row is a safe fold candidate; several modifier categories plausibly denote genuinely different products, by the same logic the user established in MEP-057 (where "thin spaghetti" vs. "spaghetti" was ruled a meaningful distinction):
+
+*Likely-safe phrasing/typo variants (genuine duplicates, lowest risk):*
+- Word-reordering and redundancy artifacts: "roll turkey ground meat," "turkey ground turkey," "fresh ground turkey meat," "regular ground turkey," "freshly ground turkey," "freshly ground raw turkey"
+- Verb-form/grammatical errors: "turkey grounded" (likely meant "ground turkey")
+- Minor qualifier shuffling: "ground raw turkey" / "ground uncooked turkey" (both mean uncooked ground turkey, and most ground turkey is sold raw)
+
+These are closest to the MEP-053 mayo-typo case -- same product, just re-worded or malformed text.
+
+*Fat/lean grade modifiers -- plausibly distinct, handle with caution:*
+- "lean ground turkey," "extra-lean ground turkey breast," "very lean ground turkey," "low-fat ground turkey," "percent lean ground turkey," "fresh lean ground turkey," "lean ground white meat skinless turkey"
+- Lean percentage is a real product distinction on retail packaging. Different fat content changes cooking behavior. These may NOT be safe to fold into an unqualified "ground turkey," similar to how "thin" changed spaghetti's identity in MEP-057.
+
+*Cut/part modifiers -- plausibly distinct:*
+- "ground turkey breast" / "ground white turkey breasts" / "ground skinless turkey breast" (white meat only, leaner)
+- "lean ground dark meat turkey" / "fresh ground organic dark turkey meat" (dark meat, higher fat)
+- The cut/part qualifier changes the actual product. White-meat-only ground turkey is a different product from a light/dark blend.
+
+*Doneness/state modifiers -- almost certainly distinct:*
+- Raw/uncooked: "ground raw turkey," "ground uncooked turkey," "frozen raw ground turkey," "lean uncooked ground turkey"
+- Cooked: "ground cooked turkey meat," "lean cooked ground turkey"
+- Raw vs. cooked is a substantive prep-state difference for recipe matching and should almost certainly NOT fold together.
+
+*Brand names -- likely belongs to the existing BrandPhraseReplacements mechanism:*
+- "butterball ground turkey," "shady brook ground turkey," "mr. turkey lean ground turkey," "turkey store lean ground turkey," "market ground turkey"
+- These look like brand-phrase stripping candidates using the existing `BrandPhraseReplacements` mechanism in the same normalizer file, not phrase-synonym folding in `TypoAndSynonymPhraseReplacements`. If the user agrees, these should be routed to brand-stripping rather than treated as synonyms.
+
+*Multi-ingredient/combination entries -- probably out of scope:*
+- "ground beef/turkey," "ground beef/turkey/chicken," "lean ground beef/turkey/chicken," "ground chuck/turkey," "ground round and turkey"
+- These name a meat blend, not a ground turkey variant. They likely should not fold into any single-protein canonical entry.
+
+*Garbled/ambiguous data needing eyeball review:*
+- "weight ground turkey breakfast" -- possibly a truncated "Weight Watchers ground turkey breakfast sausage"
+- "o lean ground turkey" / "lean ground turkey i" -- garbled OCR or data artifacts from the Kaggle source
+- "ground turkey cumin" -- possibly a garbled multi-ingredient string, not a single ingredient
+- "extra lean ground turkey w" -- truncated entry
+- "italian seasoned ground turkey" -- a seasoned product, arguably different from plain ground turkey
+- "ground smoked turkey" / "ground smoked turkey slices" -- smoked is a processing method that changes flavor and usage
+
+> **Implementation note -- collaborative curation is mandatory.** When this item is picked up, the assigned agent MUST present the user with the full 46-row candidate list, organized by the risk categories above, and obtain row-by-row confirmation before writing any entries into `TypoAndSynonymPhraseReplacements`. The survivor name must also be confirmed by the user, since no bare "ground turkey" row currently exists and the choice cannot be assumed. Brand-name rows should be flagged separately for potential routing to `BrandPhraseReplacements` if the user agrees that mechanism is more appropriate. The risk categorization above is a starting point for the conversation, not a finished dictionary. Do not write fold rules without explicit user sign-off on each entry.
+
+**Data-application note:** As with MEP-053 and MEP-057, applying the dictionary extension to the live database requires the full MEP-049 reset-and-re-ingest procedure (drop/recreate Postgres DB, apply migrations, run ingest, run `Dedup --dry-run`, run `Dedup` live). That destructive step is out of scope for this backlog item's acceptance criteria (code and tests only) and requires explicit user sign-off.
+
+### Acceptance Criteria
+```gherkin
+Feature: Canonical Ingredient Normalization -- Ground Turkey Variant Deduplication
+
+  Scenario: Phrasing variant "turkey grounded" folds to the chosen survivor name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "turkey grounded" mapped to the user-confirmed ground turkey survivor name
+    When CanonicalNameNormalizer processes "turkey grounded"
+    Then the fold-group key matches that of the survivor name
+
+  Scenario: Word-reordering variant folds to the chosen survivor name
+    Given the TypoAndSynonymPhraseReplacements dictionary includes "roll turkey ground meat" mapped to the user-confirmed ground turkey survivor name
+    When CanonicalNameNormalizer processes "roll turkey ground meat"
+    Then the fold-group key matches that of the survivor name
+
+  Scenario: Fat/lean grade modifier preserves distinctness when user confirms it is a different product
+    Given the user has confirmed that "lean ground turkey" and the plain ground turkey survivor are different products
+    When CanonicalNameNormalizer processes "lean ground turkey" and the survivor name
+    Then the fold-group keys are different
+    And "lean ground turkey" is NOT folded into the survivor
+
+  Scenario: Raw vs. cooked ground turkey preserves distinctness
+    Given "ground raw turkey" and "ground cooked turkey meat" denote different prep states
+    When CanonicalNameNormalizer processes both entries
+    Then the fold-group keys are different
+    And raw and cooked variants are NOT folded together
+
+  Scenario: Cut/part modifier "turkey breast" preserves distinctness when user confirms it is a different product
+    Given the user has confirmed that "ground turkey breast" and the plain ground turkey survivor are different products
+    When CanonicalNameNormalizer processes "ground turkey breast" and the survivor name
+    Then the fold-group keys are different
+    And "ground turkey breast" is NOT folded into the survivor
+
+  Scenario: Brand name is routed to brand-stripping rather than treated as a synonym
+    Given "butterball ground turkey" contains a brand name
+    When the assigned agent categorizes this entry
+    Then it is flagged for potential addition to BrandPhraseReplacements rather than TypoAndSynonymPhraseReplacements
+    And the user confirms the routing before any dictionary entry is written
+
+  Scenario: No dictionary entry is added without user confirmation
+    Given a candidate list of ground turkey fold pairs has been generated from the CanonicalIngredients table
+    When the assigned agent proposes entries for TypoAndSynonymPhraseReplacements
+    Then each proposed entry is presented to the user for individual approval
+    And no entry is written into the dictionary until the user confirms it
+    And the agent does not infer interchangeability from naming patterns alone
+
+  Scenario: Dry-run reports projected impact before live dedup
+    Given all user-confirmed dictionary entries have been added
+    And a fresh re-ingest has completed
+    When the user runs MealsEnPlace.Tools.Dedup --dry-run
+    Then the tool reports the projected fold groups showing the affected ground turkey rows folding into their target survivors
+    And the user can review the output before running the live pass
+```
+
+---
+
+## [MEP-059] Waste Alerts Endpoint Loads Entire Recipe Catalog Into Memory
+
+**Status:** Backlog
+**Priority:** High
+
+### Business Problem
+`WasteAlertService.EvaluateAlertsAsync` (in `src/MealsEnPlace.Api/Features/WasteReduction/WasteAlertService.cs`, lines 42-46) loads every fully-resolved recipe and its full `RecipeIngredients` collection into application memory on every GET request to the waste-alerts endpoint. `WasteAlertController` (line 33) calls `EvaluateAlertsAsync` -- the expensive full-rescan method -- unconditionally on every page load instead of the lighter `GetActiveAlertsAsync`.
+
+The query pulls the entire resolved recipe catalog (millions of `RecipeIngredient` rows at Kaggle bulk-ingest scale per MEP-026/MEP-049/MEP-050) into a `List<Recipe>`, then builds an in-memory `Dictionary<Guid, List<Guid>>` mapping `CanonicalIngredientId` to recipe IDs in a foreach loop, purely to match against the typically small set of expiry-imminent inventory items already filtered to `ExpiryDate <= threshold`. The match direction is backwards: it materializes the entire catalog to find recipes containing a handful of ingredients, when it should start from those ingredients and query only the recipes that reference them.
+
+This is the same full-table-scan-into-memory pattern already fixed across other endpoints in MEP-043 (recipe list pagination), MEP-044 (keyset pagination), MEP-045 (inventory ingredient pagination), and MEP-048 (server-side ingredient search). The fix follows the same direction: restructure the query to filter in SQL rather than in application memory.
+
+The targeted fix has two parts: (1) replace the unbounded recipe load with a query that starts from the expiring items' `CanonicalIngredientId` set and retrieves only matching recipes directly in SQL; (2) separate the fast path (`GetActiveAlertsAsync`, returning cached/precomputed alerts) from the full rescan (`EvaluateAlertsAsync`), so a normal page view or poll uses the fast path and the full rescan runs only when inventory changes or on an explicit trigger. The exact mechanism for the rescan trigger (background job, event-driven, or still synchronous but scoped) is an implementation decision for the Backend Engineer.
+
+### Acceptance Criteria
+```gherkin
+Feature: Waste Alerts Endpoint Performance
+
+  Scenario: Alert evaluation queries only recipes matching expiring ingredients
+    Given the recipe catalog contains over 1,600,000 fully-resolved recipes
+    And 3 inventory items are approaching expiry with distinct CanonicalIngredientIds
+    When the system evaluates waste alerts for those expiring items
+    Then the database query filters recipes by those 3 CanonicalIngredientIds in SQL
+    And the query does not load the full recipe catalog into application memory
+    And the number of recipe rows materialized is bounded by the recipes referencing those ingredients, not the total catalog size
+
+  Scenario: Normal page view uses the fast path
+    Given waste alerts have been previously evaluated
+    When I call GET /api/v1/waste-alerts as a normal page load
+    Then the endpoint returns precomputed active alerts without running a full catalog rescan
+    And the response returns well within 2 seconds
+
+  Scenario: Alert results are unchanged after optimization
+    Given the recipe catalog and inventory are in a known state
+    And 5 inventory items are approaching expiry
+    When the system evaluates waste alerts using the optimized query
+    Then the matched recipes in the resulting alerts are identical to those produced by the original implementation
+    And no alerts are lost or duplicated
+
+  Scenario: Full rescan runs when inventory changes
+    Given waste alerts were last evaluated 10 minutes ago
+    When an inventory item with an expiry date is added, updated, or removed
+    Then the system re-evaluates waste alerts incorporating the inventory change
+    And the re-evaluation uses the targeted query, not a full catalog load
+```
+
+---
+
+## [MEP-060] Expiring Soon Page Displays "NaN days" for Items Without an Expiry Date
+
+**Status:** Backlog
+**Priority:** Medium
+
+### Business Problem
+The "Expiring Soon" page (`src/MealsEnPlace.Web/src/app/features/expiration/expiration-page.component.ts`) displays "NaN days" in the Days Remaining column for inventory items that have no expiry date set.
+
+The root cause spans the API serialization layer and a filter predicate in the frontend component. The API configures `JsonIgnoreCondition.WhenWritingNull` globally (`src/MealsEnPlace.Api/Program.cs`, line 28), so when `InventoryItemResponse.ExpiryDate` (a nullable `DateOnly?`, see `src/MealsEnPlace.Api/Features/Inventory/InventoryItemResponse.cs` line 18) is null, the `expiryDate` property is omitted from the JSON response entirely rather than sent as `"expiryDate": null`. On the Angular side, the `expiryDate` field is typed `string | null` (`src/MealsEnPlace.Web/src/app/core/models/inventory.models.ts` line 43), but an omitted JSON property arrives as `undefined` at runtime, not `null`.
+
+In `expiration-page.component.ts` (lines 262-270), the filter predicate inside `loadItems()` checks `item.expiryDate !== null && item.expiryDate !== ''`, which excludes explicit `null` and empty string but does not exclude `undefined`. Items with no expiry date pass the filter, `new Date(undefined)` produces an Invalid Date, `.getTime()` returns `NaN`, and "NaN days" renders in the template (line 112).
+
+The inventory table component (`inventory-table.component.ts`) does not have this bug -- its template uses `@if (item.expiryDate)`, a truthy check that correctly treats `undefined` as falsy. Only the Expiring Soon page is affected.
+
+### Acceptance Criteria
+```gherkin
+Feature: Expiring Soon Page Excludes Items Without Expiry Dates
+
+  Scenario: Item with no expiry date is excluded from the Expiring Soon list
+    Given an inventory item "Olive Oil" exists with no expiry date set
+    And the API response for that item omits the expiryDate property entirely
+    When I open the Expiring Soon page
+    Then "Olive Oil" does not appear in the list
+    And only items with a valid expiry date are displayed
+
+  Scenario: "NaN days" never renders in the Days Remaining column
+    Given the inventory contains a mix of items with and without expiry dates
+    When I open the Expiring Soon page
+    Then the Days Remaining column shows a numeric value for every displayed item
+    And the text "NaN" does not appear anywhere on the page
+
+  Scenario: Filter predicate handles undefined expiryDate from omitted JSON property
+    Given the API serializer is configured with WhenWritingNull
+    And an inventory item has a null ExpiryDate on the server
+    When the Angular component receives the API response
+    Then the expiryDate field is undefined at runtime (not null)
+    And the filter predicate excludes the item using a check consistent with the inventory table's existing truthy-check pattern
+
+  Scenario: Regression test uses realistic API response shape
+    Given a mocked API response where the expiryDate property is omitted (not set to explicit null)
+    When the Expiring Soon component processes the response
+    Then no item with an omitted expiryDate appears in the filtered list
+    And no NaN value is computed for days remaining
+```
+
+---
+
+## [MEP-061] Recipe Matching N+1 Query Against UnitsOfMeasure
+
+**Status:** Done
+**Priority:** Critical
+
+### Business Problem
+`RecipeMatchingService.MatchRecipesAsync` (in `src/MealsEnPlace.Api/Features/Recipes/RecipeMatchingService.cs`, lines 25-64) is the core "What can I make?" pipeline (MEP-006) and is effectively unusable at full recipe-catalog scale. With no filters applied, `LoadCandidateRecipesAsync` returns every fully-resolved recipe in the catalog. For each recipe, `ScoreRecipeAsync` (lines 132-196) loops over every `RecipeIngredient` (line 140) and calls `unitOfMeasureConversionService.ConvertToBaseUnitsAsync` (line 144) -- and `BuildMissingDtoAsync` (lines 198-209) calls it again (line 203) for unmatched ingredients. Each call bottoms out in `UnitOfMeasureConversionService.FindUnitOfMeasureAsync` (lines 105-108), which issues a fresh `dbContext.UnitsOfMeasure.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id, ...)` -- one single-row DB round trip per call.
+
+`UnitsOfMeasure` is a small, effectively static reference table (a few dozen canonical units with conversion factors). Looking it up one row at a time, once per recipe ingredient, across a catalog with millions of `RecipeIngredient` rows (per Kaggle bulk-ingest scale from MEP-026/MEP-049/MEP-050) produces millions of sequential, tiny DB round trips for a single request. Each round trip is individually fast and CPU-light (the API process CPU stays flat), but the sheer sequential volume makes the endpoint take an extremely long time and floods the console with near-identical EF Core command logs. This is not an infinite loop -- it terminates -- but it is not practically usable at catalog scale. This is worse than MEP-059 since recipe matching is the primary user-facing flow, not a secondary alerts feature.
+
+The same `ConvertToBaseUnitsAsync` per-row pattern also appears in `ShoppingListService.cs`, `MealConsumptionService.cs`, and `MealPlanService.cs` (via `InventoryBaseHelper.ConvertToBaseUnitsAsync`), but those loop over small, user-owned collections (a single meal plan, shopping list, or inventory set), not the full recipe catalog, so they are not severely affected. If the fix introduces a shared caching mechanism those call sites also benefit from, that is a free bonus but not a requirement of this item.
+
+The fix direction is to load all `UnitsOfMeasure` rows into an in-memory lookup (e.g. `Dictionary<Guid, UnitOfMeasure>`) once and resolve from it instead of querying per call. This mirrors the existing per-request caching pattern already used for `DisplaySystem` in `UnitOfMeasureDisplayConverter.cs` (`_cachedDisplaySystem` field, `GetDisplaySystemAsync` method, lines 27 and 88-101). The exact caching mechanism (per-request field, `IMemoryCache`, or a singleton loaded at startup) is an implementation decision for the Backend Engineer, but the cache must not be so long-lived that a genuine `UnitsOfMeasure` data correction becomes invisible without an application restart.
+
+### Acceptance Criteria
+```gherkin
+Feature: Recipe Matching UnitsOfMeasure Query Elimination
+
+  Scenario: Match request issues a bounded number of UnitsOfMeasure queries
+    Given the recipe catalog contains over 1,600,000 fully-resolved recipes
+    And the UnitsOfMeasure table contains 30 canonical units
+    When I request "What can I make?" with no filters applied
+    Then the total number of queries against the UnitsOfMeasure table is at most equal to the number of rows in the table
+    And the system does not issue one query per recipe ingredient
+
+  Scenario: Match results are unchanged after optimization
+    Given the recipe catalog and inventory are in a known state
+    And 10 inventory items span 6 distinct CanonicalIngredientIds
+    When I request "What can I make?" using the optimized matching pipeline
+    Then the match scores, tier assignments, and matched/missing ingredient lists are identical to those produced by the original per-query implementation
+    And no recipes are gained or lost in the results
+
+  Scenario: Cache does not serve stale data after a UnitsOfMeasure update
+    Given the UnitsOfMeasure lookup has been cached for the current request or cache window
+    And an administrator updates the ConversionFactor for an existing unit
+    When a subsequent match request executes after the cache's intended lifetime expires
+    Then the updated ConversionFactor is used in base-unit conversion
+    And match scores reflect the corrected conversion
+```
