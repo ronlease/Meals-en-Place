@@ -5026,3 +5026,67 @@ Feature: Meal Plan Generation Bounded by Inventory-Relevant Recipes
       to the total catalog size
     And the generation completes without an HTTP 500 or gateway timeout
 ```
+
+---
+
+## [MEP-063] Unit of Measure Normalization: Count Fallback Fires on Unrecognized Tokens Instead of Deferring to Review Queue
+
+**Status:** Backlog
+**Priority:** Critical
+**Depends on:** MEP-026 (the story whose "Count-with-ingredient-noun defaults to 'ea'" and "Unresolved UOM tokens are queued for user review" acceptance criteria this bug violates)
+**Related to:** MEP-049, MEP-050 (prior normalization-gap cleanup passes in the same ingest pipeline -- context for the recurring nature of normalization defects in this path, and for the reset-and-re-ingest procedure this fix must reuse)
+
+### Business Problem
+`UnitOfMeasureNormalizationService.TryResolveDeterministicallyCoreAsync` (`src/MealsEnPlace.Api/Common/UnitOfMeasureNormalizationService.cs`, lines 312-330) has an inverted condition in its Step 3 ("count-with-ingredient-noun fallback") that silently coerces unrecognized unit tokens to the generic "ea" (Count) unit instead of deferring them to the `UnresolvedUnitOfMeasureToken` review queue. The condition as written:
+
+```csharp
+if (parsedQuantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
+```
+
+checks that a unit token IS present (`!string.IsNullOrWhiteSpace(unitToken)`). Per MEP-026's own acceptance criteria, this fallback is meant to fire only when a measure string has a positive quantity and NO unit token at all -- the bare "4 chicken breasts" case where the quantity is followed directly by an ingredient noun with no separate unit word. When a unit token IS present but matches no known abbreviation, name, or alias (having already failed Step 1's known-abbreviation/name lookup and Step 2's alias-table lookup), MEP-026's "Unresolved UOM tokens are queued for user review" scenario requires that the token be deferred to the `UnresolvedUnitOfMeasureToken` review queue, not silently resolved.
+
+The inverted condition causes Step 3 to intercept precisely the case that should reach the review queue: a measure string with an unrecognized unit token that already failed Steps 1 and 2. `DeferToReviewQueueAsync` (same file, lines 234-254) is effectively unreachable for any measure string that produces a non-blank unit token, because Step 3 fires first and resolves it to "ea" without deferral.
+
+**Verified impact against the live database.** Read-only queries against the `mealsenplace` Postgres container confirm the bug's severity across the ~1.64M-recipe bulk-ingested catalog:
+
+- Of all fully-resolved `RecipeIngredient` rows: **11,738,105 resolved to "ea" (Count)**, versus only **101 resolved to Weight** and **24 resolved to Volume** -- over 99.99% of the catalog's ingredient quantities collapsed to the generic Count fallback.
+- Spot-checked examples: recipes citing "tomato sauce," "tomato paste," and "spaghetti" -- ingredients that are always sold and measured by weight or volume in real life -- resolved to values like "8 ea tomato sauce" and "2 ea tomato paste" instead of realistic weight or volume quantities.
+- The `Notes` field on these rows is empty, confirming they are not resolved container references (where Notes preserves the original text per the Container Reference Resolution Flow). These are the Step 3 "ea" fallback firing on unrecognized unit tokens.
+
+**Cascading effect on recipe matching.** `RecipeMatchingService.ScoreRecipeAsync` requires an exact `UnitOfMeasureType` match between a recipe ingredient and inventory before counting it as available (`compatible = entries.Where(e => e.UnitOfMeasureType == ri.UnitOfMeasure.UnitOfMeasureType)`). Since virtually the entire catalog is typed Count while any inventory entered per the application's own domain rules (user declares net weight or volume explicitly at entry time) is typed Weight or Volume, `compatible` is always empty. Recipe matching ("What can I make?") returns zero or near-zero results for effectively any realistic inventory, regardless of how many ingredients actually overlap. This was discovered because "Find Matches" found nothing despite 5 inventory items appearing as ingredients across thousands of recipes in the catalog. The fix for the cascading match failure belongs to this normalization bug -- once ingredients carry the correct UnitOfMeasureType, the existing matching logic works as designed.
+
+**Data remediation constraint.** The original raw measure strings from the Kaggle dataset are not preserved in the current schema. `RecipeIngredient.Notes` is only populated when a container reference has been declared (per the entity's docstring and confirmed by empty Notes on the affected rows). No other column or table stores the unparsed measure text. This means an in-place migration that re-parses the 11.7M affected rows is not feasible -- there is nothing to re-parse. The fix must follow the established reset-and-re-ingest procedure used by MEP-049 and MEP-050: drop/recreate the Postgres database (or recreate the Docker volume), apply all EF Core migrations so seed data lands, then re-run the ingest tool and dedup tool with the corrected normalization logic in place. This wipes inventory items, user-created ingredients, and meal plans -- the same consequence documented in MEP-049 and MEP-050.
+
+### Acceptance Criteria
+```gherkin
+Feature: Unit of Measure Normalization Count Fallback Condition
+
+  Scenario: Measure string with an unrecognized unit token defers to the review queue
+    Given a measure string "2 sprigs thyme" where "sprigs" matches no known abbreviation, name, or alias
+    When UnitOfMeasureNormalizationService.TryResolveDeterministicallyCoreAsync processes the measure string
+    Then the service does not resolve the unit to "ea" (Count)
+    And the service defers the unrecognized token "sprigs" to the UnresolvedUnitOfMeasureToken review queue
+    And the deferred row captures the original measure string, the extracted unit token, and the ingredient context
+
+  Scenario: Measure string with no unit token still resolves to "ea" per MEP-026 intent
+    Given a measure string "4 chicken breasts" with a positive numeric quantity and no separate unit word
+    When UnitOfMeasureNormalizationService.TryResolveDeterministicallyCoreAsync processes the measure string
+    Then the service resolves to the "ea" UnitOfMeasure with quantity 4
+    And the returned result has WasClaudeResolved = false
+    And Confidence = High
+
+  Scenario: Post-re-ingest unit type distribution is realistic
+    Given the inverted condition in Step 3 has been corrected
+    And a full reset-and-re-ingest has been performed against the Kaggle CSV using the corrected normalization logic
+    When the RecipeIngredient table is queried for UnitOfMeasureType distribution
+    Then the proportion of RecipeIngredients resolved to Weight or Volume is materially higher than the pre-fix baseline of 0.001%
+    And the proportion resolved to Count ("ea") no longer accounts for over 99% of all resolved rows
+    And spot-checked ingredients known to be measured by weight or volume (e.g., "tomato sauce," "flour," "butter") carry Weight or Volume types, not Count
+
+  Scenario: Recipe matching produces non-zero results for a realistic inventory
+    Given the re-ingested catalog contains recipes with corrected UnitOfMeasureType assignments
+    And the user's inventory contains 5 items entered with Weight or Volume units that overlap with ingredients in at least 10 recipes in the catalog
+    When I request "What can I make?" with no filters applied
+    Then the matching pipeline returns at least one recipe in the Full Match or Near Match tier
+    And the matched recipes include ingredients whose UnitOfMeasureType aligns with the inventory entries' types
+```
