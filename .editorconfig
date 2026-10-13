@@ -1,0 +1,6 @@
+root = true
+
+# Matches .gitattributes (`* text=auto eol=lf`) so dotnet format and editors agree
+# with the repository's line endings on Windows checkouts.
+[*]
+end_of_line = lf
