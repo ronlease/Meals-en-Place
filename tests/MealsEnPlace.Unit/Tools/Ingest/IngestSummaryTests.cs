@@ -16,6 +16,7 @@
 // to confirm whether the backfill ran.
 
 using FluentAssertions;
+using MealsEnPlace.Api.Models.Entities;
 using MealsEnPlace.Tools.Ingest;
 
 namespace MealsEnPlace.Unit.Tools.Ingest;
@@ -85,6 +86,72 @@ public class IngestSummaryTests
 
         // Assert — the label must always appear regardless of whether it ran
         rendered.Should().Contain("Ref count backfilled");
+    }
+
+    // ── MEP-063: type distribution and top deferred tokens ───────────────────
+    //
+    // Scenario: Format prints the resolved unit of measure type distribution
+    //   Given an IngestSummary with resolved Count, Volume, and Weight ingredients recorded
+    //   When Format is called
+    //   Then the output lists Count, Volume, and Weight counts
+    //
+    // Scenario: Top deferred tokens are ordered by occurrence count
+    //   Given the tokens "sprigs" (3 times), "dashes" (1 time), and "bunches" (2 times) are recorded
+    //   When Format is called
+    //   Then the output lists "sprigs" before "bunches" before "dashes"
+
+    [Fact]
+    public void Format_ResolvedTypeCounts_PrintsDistribution()
+    {
+        // Arrange
+        var summary = new IngestSummary { DeterministicallyResolvedIngredients = 6 };
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Count);
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Volume);
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Volume);
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Weight);
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Weight);
+        summary.RecordResolvedUnitOfMeasureType(UnitOfMeasureType.Weight);
+        summary.StopTimer();
+
+        var options = new IngestOptions { CsvPath = "data.csv", DryRun = false };
+
+        // Act
+        var rendered = summary.Format(options, new StreamCounters());
+
+        // Assert
+        summary.ResolvedCountIngredients.Should().Be(1);
+        summary.ResolvedVolumeIngredients.Should().Be(2);
+        summary.ResolvedWeightIngredients.Should().Be(3);
+        rendered.Should().Contain("Count");
+        rendered.Should().Contain("Volume");
+        rendered.Should().Contain("Weight");
+    }
+
+    [Fact]
+    public void RecordDeferredUnitToken_MultipleOccurrences_TopTokensOrderedByCount()
+    {
+        // Arrange
+        var summary = new IngestSummary();
+        summary.RecordDeferredUnitToken("dashes");
+        summary.RecordDeferredUnitToken("sprigs");
+        summary.RecordDeferredUnitToken("bunches");
+        summary.RecordDeferredUnitToken("sprigs");
+        summary.RecordDeferredUnitToken("bunches");
+        summary.RecordDeferredUnitToken("sprigs");
+        summary.StopTimer();
+
+        var options = new IngestOptions { CsvPath = "data.csv", DryRun = false };
+
+        // Act
+        var rendered = summary.Format(options, new StreamCounters());
+
+        // Assert
+        var sprigs = rendered.IndexOf("sprigs", StringComparison.Ordinal);
+        var bunches = rendered.IndexOf("bunches", StringComparison.Ordinal);
+        var dashes = rendered.IndexOf("dashes", StringComparison.Ordinal);
+        sprigs.Should().BeGreaterThan(-1);
+        bunches.Should().BeGreaterThan(sprigs);
+        dashes.Should().BeGreaterThan(bunches);
     }
 
     // ── Format — NER token normalization counter ──────────────────────────────

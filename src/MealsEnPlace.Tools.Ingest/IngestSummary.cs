@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using MealsEnPlace.Api.Common;
+using MealsEnPlace.Api.Models.Entities;
 
 namespace MealsEnPlace.Tools.Ingest;
 
@@ -9,6 +10,7 @@ namespace MealsEnPlace.Tools.Ingest;
 /// </summary>
 internal sealed class IngestSummary
 {
+    private readonly Dictionary<string, int> _deferredUnitTokenCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
     /// <summary>
@@ -52,9 +54,28 @@ internal sealed class IngestSummary
 
     public int RecipesSkippedByMaxRows { get; set; }
 
+    public int ResolvedArbitraryIngredients { get; set; }
+
+    public int ResolvedCountIngredients { get; set; }
+
+    public int ResolvedVolumeIngredients { get; set; }
+
+    public int ResolvedWeightIngredients { get; set; }
+
     public int TotalIngredientsProcessed { get; set; }
 
     public int UnitOfMeasureDeferredToQueue { get; set; }
+
+    /// <summary>Tallies a unit token that was deferred to the review queue.</summary>
+    public void RecordDeferredUnitToken(string? unitToken)
+    {
+        if (string.IsNullOrWhiteSpace(unitToken))
+        {
+            return;
+        }
+
+        _deferredUnitTokenCounts[unitToken] = _deferredUnitTokenCounts.GetValueOrDefault(unitToken) + 1;
+    }
 
     public void RecordProseFilter(ProseFilterResult result)
     {
@@ -68,6 +89,26 @@ internal sealed class IngestSummary
         }
     }
 
+    /// <summary>Tallies a deterministically resolved ingredient by unit of measure type.</summary>
+    public void RecordResolvedUnitOfMeasureType(UnitOfMeasureType unitOfMeasureType)
+    {
+        switch (unitOfMeasureType)
+        {
+            case UnitOfMeasureType.Count:
+                ResolvedCountIngredients++;
+                break;
+            case UnitOfMeasureType.Volume:
+                ResolvedVolumeIngredients++;
+                break;
+            case UnitOfMeasureType.Weight:
+                ResolvedWeightIngredients++;
+                break;
+            default:
+                ResolvedArbitraryIngredients++;
+                break;
+        }
+    }
+
     public void StopTimer() => _stopwatch.Stop();
 
     public string Format(IngestOptions options, StreamCounters streamCounters)
@@ -78,6 +119,24 @@ internal sealed class IngestSummary
         var unitOfMeasureTotal = DeterministicallyResolvedIngredients + UnitOfMeasureDeferredToQueue;
         var detPercent = unitOfMeasureTotal == 0 ? 0.0 : DeterministicallyResolvedIngredients * 100.0 / unitOfMeasureTotal;
         var deferPercent = unitOfMeasureTotal == 0 ? 0.0 : UnitOfMeasureDeferredToQueue * 100.0 / unitOfMeasureTotal;
+
+        var resolvedTotal = DeterministicallyResolvedIngredients;
+        var countPercent = resolvedTotal == 0 ? 0.0 : ResolvedCountIngredients * 100.0 / resolvedTotal;
+        var volumePercent = resolvedTotal == 0 ? 0.0 : ResolvedVolumeIngredients * 100.0 / resolvedTotal;
+        var weightPercent = resolvedTotal == 0 ? 0.0 : ResolvedWeightIngredients * 100.0 / resolvedTotal;
+        var arbitraryPercent = resolvedTotal == 0 ? 0.0 : ResolvedArbitraryIngredients * 100.0 / resolvedTotal;
+
+        var topDeferred = string.Join(
+            Environment.NewLine,
+            _deferredUnitTokenCounts
+                .OrderByDescending(kvp => kvp.Value)
+                .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
+                .Take(25)
+                .Select(kvp => $"  {kvp.Value,10:N0}  {kvp.Key}"));
+        if (topDeferred.Length == 0)
+        {
+            topDeferred = "  (none)";
+        }
 
         var containerPercent = TotalIngredientsProcessed == 0
             ? 0.0
@@ -114,6 +173,15 @@ internal sealed class IngestSummary
               Unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
               Unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
               No NER match (unlinked):     {IngredientsWithoutNerMatch:N0}
+
+            Resolved by unit of measure type
+              Count:                       {ResolvedCountIngredients:N0} ({countPercent:0.0}%)
+              Volume:                      {ResolvedVolumeIngredients:N0} ({volumePercent:0.0}%)
+              Weight:                      {ResolvedWeightIngredients:N0} ({weightPercent:0.0}%)
+              Arbitrary:                   {ResolvedArbitraryIngredients:N0} ({arbitraryPercent:0.0}%)
+
+            Top 25 deferred unit tokens
+            {topDeferred}
 
             Instructions
               Steps retained:              {InstructionStepsRetained:N0}

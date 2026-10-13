@@ -13,8 +13,10 @@ namespace MealsEnPlace.Tools.Ingest;
 /// <para>
 /// Applies the same deterministic resolution order as the runtime
 /// <see cref="UnitOfMeasureNormalizationService"/>: abbreviation / name match, then
-/// alias match, then count-with-ingredient-noun fallback. When no step
-/// matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
+/// alias match, then count-with-ingredient-noun fallback (MEP-063: only when
+/// the parser confirms the leftover text is the ingredient noun; a leading
+/// word such as "heaping" is tried as a unit candidate rather than assumed to
+/// be a count). When no step matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
 /// row via the supplied DbContext instead of invoking Claude.
 /// </para>
 /// <para>
@@ -23,21 +25,21 @@ namespace MealsEnPlace.Tools.Ingest;
 /// </summary>
 internal sealed class InMemoryUnitOfMeasureResolver
 {
-    private readonly Dictionary<string, (Guid Id, string Abbreviation)> _aliasByText;
-    private readonly (Guid Id, string Abbreviation) _eachUnitOfMeasure;
+    private readonly Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)> _aliasByText;
+    private readonly (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType) _eachUnitOfMeasure;
     private readonly MealsEnPlaceDbContext _dbContext;
 
     // Tracks queue-row entities we've already added within this DbContext
     // scope so repeat tokens increment in-memory instead of re-inserting.
     // Cleared by the caller (via ChangeTracker.Clear) on batch flush.
     private readonly Dictionary<string, UnresolvedUnitOfMeasureToken> _pendingQueueRowByToken;
-    private readonly Dictionary<string, (Guid Id, string Abbreviation)> _unitOfMeasureByAbbreviationOrName;
+    private readonly Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)> _unitOfMeasureByAbbreviationOrName;
 
     private InMemoryUnitOfMeasureResolver(
         MealsEnPlaceDbContext dbContext,
-        Dictionary<string, (Guid Id, string Abbreviation)> unitOfMeasureByAbbreviationOrName,
-        Dictionary<string, (Guid Id, string Abbreviation)> aliasByText,
-        (Guid Id, string Abbreviation) eachUnitOfMeasure)
+        Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)> unitOfMeasureByAbbreviationOrName,
+        Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)> aliasByText,
+        (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType) eachUnitOfMeasure)
     {
         _aliasByText = aliasByText;
         _dbContext = dbContext;
@@ -61,12 +63,12 @@ internal sealed class InMemoryUnitOfMeasureResolver
 
         // Build case-insensitive lookup that accepts either Abbreviation or Name
         // (and their plural-trimmed forms), mirroring the runtime service.
-        var unitOfMeasureByToken = new Dictionary<string, (Guid Id, string Abbreviation)>(
+        var unitOfMeasureByToken = new Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)>(
             unitsOfMeasure.Count * 4, StringComparer.OrdinalIgnoreCase);
 
         foreach (var unitOfMeasure in unitsOfMeasure)
         {
-            var entry = (unitOfMeasure.Id, unitOfMeasure.Abbreviation);
+            var entry = (unitOfMeasure.Id, unitOfMeasure.Abbreviation, unitOfMeasure.UnitOfMeasureType);
             TryAdd(unitOfMeasureByToken, unitOfMeasure.Abbreviation, entry);
             TryAdd(unitOfMeasureByToken, unitOfMeasure.Abbreviation.TrimEnd('s'), entry);
             TryAdd(unitOfMeasureByToken, unitOfMeasure.Name, entry);
@@ -82,18 +84,18 @@ internal sealed class InMemoryUnitOfMeasureResolver
         // .ToLower() on both sides). Duplicate aliases differing only in
         // case are possible in this table -- first writer wins in the cache
         // and the tool does not need finer arbitration at ingest time.
-        var aliasByText = new Dictionary<string, (Guid Id, string Abbreviation)>(
+        var aliasByText = new Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)>(
             aliases.Count, StringComparer.OrdinalIgnoreCase);
 
         foreach (var alias in aliases)
         {
             var unitOfMeasure = alias.UnitOfMeasure!;
-            aliasByText.TryAdd(alias.Alias, (unitOfMeasure.Id, unitOfMeasure.Abbreviation));
+            aliasByText.TryAdd(alias.Alias, (unitOfMeasure.Id, unitOfMeasure.Abbreviation, unitOfMeasure.UnitOfMeasureType));
         }
 
         var eachUnitOfMeasure = unitsOfMeasure.First(
             u => u.Abbreviation == IngestConstants.DefaultCanonicalIngredientUnitOfMeasureAbbreviation);
-        var eachEntry = (eachUnitOfMeasure.Id, eachUnitOfMeasure.Abbreviation);
+        var eachEntry = (eachUnitOfMeasure.Id, eachUnitOfMeasure.Abbreviation, eachUnitOfMeasure.UnitOfMeasureType);
 
         return new InMemoryUnitOfMeasureResolver(dbContext, unitOfMeasureByToken, aliasByText, eachEntry);
     }
@@ -115,40 +117,59 @@ internal sealed class InMemoryUnitOfMeasureResolver
     /// </summary>
     public IngestUnitOfMeasureResolution NormalizeOrDefer(string measureString, string ingredientName)
     {
-        var (quantity, unitToken) = UnitOfMeasureTokenParser.Parse(measureString);
+        var parsed = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
 
-        // Step 1: abbreviation / name lookup. Mirror the runtime service by
-        // trying the raw token and a plural-stripped variant so "cups" matches
-        // a seeded "cup" row without requiring a dedicated alias.
-        if (!string.IsNullOrWhiteSpace(unitToken)
-            && (_unitOfMeasureByAbbreviationOrName.TryGetValue(unitToken, out var unitOfMeasureHit)
-                || _unitOfMeasureByAbbreviationOrName.TryGetValue(unitToken.TrimEnd('s'), out unitOfMeasureHit)))
+        // Step 1: abbreviation / name lookup over each candidate token. Mirror
+        // the runtime service by trying the raw token and a plural-stripped
+        // variant so "cups" matches a seeded "cup" row without an alias.
+        foreach (var candidate in parsed.UnitTokenCandidates)
         {
-            return IngestUnitOfMeasureResolution.Resolved(quantity, unitOfMeasureHit.Id, unitOfMeasureHit.Abbreviation);
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                continue;
+            }
+
+            if (_unitOfMeasureByAbbreviationOrName.TryGetValue(candidate, out var unitOfMeasureHit)
+                || _unitOfMeasureByAbbreviationOrName.TryGetValue(candidate.TrimEnd('s'), out unitOfMeasureHit))
+            {
+                return IngestUnitOfMeasureResolution.Resolved(
+                    parsed.Quantity,
+                    unitOfMeasureHit.Id,
+                    unitOfMeasureHit.Abbreviation,
+                    unitOfMeasureHit.UnitOfMeasureType);
+            }
         }
 
         // Step 2: alias lookup. Aliases are stored verbatim so "cups" would
         // only match an explicitly-seeded "cups" alias.
-        if (!string.IsNullOrWhiteSpace(unitToken)
-            && _aliasByText.TryGetValue(unitToken, out var aliasHit))
+        foreach (var candidate in parsed.UnitTokenCandidates)
         {
-            return IngestUnitOfMeasureResolution.Resolved(quantity, aliasHit.Id, aliasHit.Abbreviation);
+            if (!string.IsNullOrWhiteSpace(candidate)
+                && _aliasByText.TryGetValue(candidate, out var aliasHit))
+            {
+                return IngestUnitOfMeasureResolution.Resolved(
+                    parsed.Quantity, aliasHit.Id, aliasHit.Abbreviation, aliasHit.UnitOfMeasureType);
+            }
         }
 
-        // Step 3: count-with-ingredient-noun fallback.
-        if (quantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
+        // Step 3: count-with-ingredient-noun fallback. Only when the parser
+        // confirmed the remaining text is the ingredient noun itself.
+        if (parsed.Quantity > 0m && parsed.IsCountWithIngredientNoun)
         {
             return IngestUnitOfMeasureResolution.Resolved(
-                quantity, _eachUnitOfMeasure.Id, _eachUnitOfMeasure.Abbreviation);
+                parsed.Quantity,
+                _eachUnitOfMeasure.Id,
+                _eachUnitOfMeasure.Abbreviation,
+                _eachUnitOfMeasure.UnitOfMeasureType);
         }
 
         // Step 4: defer. Upsert the queue row.
-        if (!string.IsNullOrWhiteSpace(unitToken))
+        if (!string.IsNullOrWhiteSpace(parsed.DeferralUnitToken))
         {
-            UpsertDeferredToken(unitToken, measureString, ingredientName);
+            UpsertDeferredToken(parsed.DeferralUnitToken, measureString, ingredientName);
         }
 
-        return IngestUnitOfMeasureResolution.Deferred(quantity);
+        return IngestUnitOfMeasureResolution.Deferred(parsed.Quantity, parsed.DeferralUnitToken);
     }
 
     // ── Private helpers ─────────────────────────────────────────────────────
@@ -210,9 +231,9 @@ internal sealed class InMemoryUnitOfMeasureResolver
         value.Length <= maxLength ? value : value[..maxLength];
 
     private static void TryAdd(
-        Dictionary<string, (Guid Id, string Abbreviation)> dict,
+        Dictionary<string, (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType)> dict,
         string key,
-        (Guid Id, string Abbreviation) value)
+        (Guid Id, string Abbreviation, UnitOfMeasureType UnitOfMeasureType) value)
     {
         if (!string.IsNullOrWhiteSpace(key))
         {

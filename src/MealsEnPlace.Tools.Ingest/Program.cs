@@ -176,6 +176,7 @@ foreach (var row in streamResult.Rows)
         if (resolution.WasDeferred)
         {
             summary.UnitOfMeasureDeferredToQueue++;
+            summary.RecordDeferredUnitToken(resolution.DeferredUnitToken);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,
@@ -190,6 +191,7 @@ foreach (var row in streamResult.Rows)
         else
         {
             summary.DeterministicallyResolvedIngredients++;
+            summary.RecordResolvedUnitOfMeasureType(resolution.UnitOfMeasureType!.Value);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,

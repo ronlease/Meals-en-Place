@@ -43,6 +43,39 @@
 //   Given an unresolved unit token longer than 100 chars and a measure / ingredient context longer than 500 chars
 //   When NormalizeOrDefer is called
 //   Then the queue row is written with UnitToken truncated to 100 chars and sample columns truncated to 500 chars
+//
+// MEP-063: Count fallback must not swallow unrecognized unit tokens
+//
+// Scenario: Unrecognized unit token defers with the leading word as the token (AC1)
+//   Given measure "2 sprigs thyme" where "sprigs" matches no unit, name, or alias
+//   When NormalizeOrDefer is called
+//   Then WasDeferred is true and DeferredUnitToken is "sprigs"
+//   And the queue row UnitToken is "sprigs" with the full measure string as the sample
+//
+// Scenario: Abbreviation followed by an ingredient resolves with its type
+//   Given measure "1 c. flour"
+//   When NormalizeOrDefer is called
+//   Then the result is 1 cup of type Volume
+//
+// Scenario: Size descriptor before the ingredient noun resolves to each
+//   Given measure "2 large eggs" for ingredient "egg"
+//   When NormalizeOrDefer is called
+//   Then the result is 2 ea of type Count
+//
+// Scenario: Mixed number resolves the summed quantity
+//   Given measure "1 1/2 cups sugar"
+//   When NormalizeOrDefer is called
+//   Then the quantity is 1.5 cup
+//
+// Scenario: Resolved result carries the unit of measure type
+//   Given measures "2 lbs ground beef", "1 tbsp" and "3 eggs"
+//   When NormalizeOrDefer is called
+//   Then the types are Weight, Volume and Count respectively
+//
+// Scenario: Bare quantity resolves to each (AC2)
+//   Given measure "5" for ingredient "eggs"
+//   When NormalizeOrDefer is called
+//   Then the result is 5 ea, WasDeferred is false, and no queue row is written
 
 using FluentAssertions;
 using MealsEnPlace.Api.Infrastructure.Data;
@@ -85,20 +118,54 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
             },
             new UnitOfMeasure
             {
+                Abbreviation = "g",
+                ConversionFactor = 1.0m,
+                Id = UnitOfMeasureConfiguration.GramId,
+                Name = "Gram",
+                UnitOfMeasureType = UnitOfMeasureType.Weight
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "lb",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.GramId,
+                ConversionFactor = 453.592m,
+                Id = UnitOfMeasureConfiguration.LbId,
+                Name = "Pound",
+                UnitOfMeasureType = UnitOfMeasureType.Weight
+            },
+            new UnitOfMeasure
+            {
                 Abbreviation = "ml",
                 ConversionFactor = 1.0m,
                 Id = UnitOfMeasureConfiguration.MlId,
                 Name = "Milliliter",
                 UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "tbsp",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 14.787m,
+                Id = UnitOfMeasureConfiguration.TbspId,
+                Name = "Tablespoon",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
             });
 
-        _dbContext.UnitOfMeasureAliases.Add(new UnitOfMeasureAlias
-        {
-            Alias = "c.",
-            CreatedAt = DateTime.UtcNow,
-            Id = Guid.NewGuid(),
-            UnitOfMeasureId = UnitOfMeasureConfiguration.CupId
-        });
+        _dbContext.UnitOfMeasureAliases.AddRange(
+            new UnitOfMeasureAlias
+            {
+                Alias = "c.",
+                CreatedAt = DateTime.UtcNow,
+                Id = Guid.NewGuid(),
+                UnitOfMeasureId = UnitOfMeasureConfiguration.CupId
+            },
+            new UnitOfMeasureAlias
+            {
+                Alias = "lbs",
+                CreatedAt = DateTime.UtcNow,
+                Id = Guid.NewGuid(),
+                UnitOfMeasureId = UnitOfMeasureConfiguration.LbId
+            });
 
         _dbContext.SaveChanges();
     }
@@ -180,14 +247,88 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
     }
 
     [Fact]
-    public async Task NormalizeOrDefer_EmptyUnitToken_DoesNotWriteQueueRow()
+    public async Task NormalizeOrDefer_BareQuantity_ResolvesToEach()
     {
         var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
 
         var result = resolver.NormalizeOrDefer("5", "eggs");
 
-        result.WasDeferred.Should().BeTrue();
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be(5m);
+        result.UnitOfMeasureAbbreviation.Should().Be("ea");
         _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_UnrecognizedUnitToken_DefersWithLeadingWordToken()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("2 sprigs thyme", "thyme");
+
+        result.WasDeferred.Should().BeTrue();
+        result.UnitOfMeasureId.Should().BeNull();
+        result.DeferredUnitToken.Should().Be("sprigs");
+
+        var queueRow = _dbContext.UnresolvedUnitOfMeasureTokens.Local.Single();
+        queueRow.UnitToken.Should().Be("sprigs");
+        queueRow.SampleMeasureString.Should().Be("2 sprigs thyme");
+        queueRow.SampleIngredientContext.Should().Be("thyme");
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_AbbreviationFollowedByIngredient_ResolvesWithType()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("1 c. flour", "flour");
+
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be(1m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_SizeDescriptor_ResolvesToEach()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("2 large eggs", "egg");
+
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Count);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_MixedNumber_ResolvesQuantity()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("1 1/2 cups sugar", "sugar");
+
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be(1.5m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
+    }
+
+    [Theory]
+    [InlineData("2 lbs ground beef", "ground beef", UnitOfMeasureType.Weight)]
+    [InlineData("1 tbsp", "butter", UnitOfMeasureType.Volume)]
+    [InlineData("3 eggs", "egg", UnitOfMeasureType.Count)]
+    public async Task NormalizeOrDefer_ResolvedResult_CarriesUnitOfMeasureType(
+        string measureString,
+        string ingredientName,
+        UnitOfMeasureType expectedType)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureType.Should().Be(expectedType);
     }
 
     [Fact]

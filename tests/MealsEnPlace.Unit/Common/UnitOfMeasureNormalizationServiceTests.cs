@@ -100,6 +100,63 @@
 //   Given a colloquial measure string
 //   When NormalizeAsync is called once
 //   Then ResolveUnitOfMeasureAsync is called exactly once on the mock
+//
+// MEP-063: Count fallback must not swallow unrecognized unit tokens
+//
+// Scenario: Measure string with an unrecognized unit token defers to the review queue (AC1)
+//   Given a measure string "2 sprigs thyme" where "sprigs" matches no known abbreviation, name, or alias
+//   When NormalizeOrDeferAsync processes the measure string
+//   Then the service does not resolve the unit to "ea" (Count)
+//   And the service defers the unrecognized token "sprigs" to the UnresolvedUnitOfMeasureToken review queue
+//   And the deferred row captures the original measure string, the extracted unit token, and the ingredient context
+//   And Claude is never called
+//
+// Scenario: Measure string with no unit token still resolves to "ea" per MEP-026 intent (AC2)
+//   Given a measure string "3 eggs" with a positive numeric quantity and no separate unit word
+//   When NormalizeAsync processes the measure string
+//   Then the service resolves to the "ea" UnitOfMeasure with quantity 3
+//   And WasClaudeResolved = false
+//   And Confidence = High
+//
+// Scenario: Unrecognized unit token without a Claude key queues the leading word
+//   Given no Claude API key and the measure string "2 sprigs thyme"
+//   When NormalizeAsync is called
+//   Then the queue row UnitToken is "sprigs"
+//
+// Scenario: Unrecognized unit token with Claude configured sends the full measure string
+//   Given a Claude API key and the measure string "2 sprigs thyme"
+//   When NormalizeAsync is called
+//   Then ResolveUnitOfMeasureAsync receives "2 sprigs thyme" and "thyme"
+//
+// Scenario: Abbreviation followed by an ingredient resolves to volume
+//   Given the measure string "1 c. flour"
+//   When NormalizeOrDeferAsync is called
+//   Then the result is 1 cup (Volume) and nothing is queued
+//
+// Scenario: Weight line with an ingredient resolves to weight
+//   Given the measure string "2 lbs ground beef"
+//   When NormalizeOrDeferAsync is called
+//   Then the result is 2 lb (Weight) and nothing is queued
+//
+// Scenario: Mixed number resolves the summed quantity
+//   Given the measure string "1 1/2 cups sugar"
+//   When NormalizeOrDeferAsync is called
+//   Then the result is 1.5 cup
+//
+// Scenario: Bare quantity resolves to each
+//   Given the measure string "5" for "eggs"
+//   When NormalizeOrDeferAsync is called
+//   Then the result is 5 ea and nothing is queued
+//
+// Scenario: TryResolveDeterministicallyAsync returns null for an unrecognized unit token
+//   Given the measure string "2 sprigs thyme"
+//   When TryResolveDeterministicallyAsync is called
+//   Then the result is null
+//
+// Scenario: TryResolveDeterministicallyAsync returns each for a count noun
+//   Given the measure string "4 chicken breasts" for "chicken"
+//   When TryResolveDeterministicallyAsync is called
+//   Then the result is 4 ea
 
 using FluentAssertions;
 using MealsEnPlace.Api.Common;
@@ -871,7 +928,11 @@ public class UnitOfMeasureNormalizationServiceTests
         // Act
         var result = await service.NormalizeOrDeferAsync("5", "eggs");
 
-        // Assert — no token to queue
+        // Assert — no token to queue; MEP-063: a bare quantity resolves to "ea"
+        result.WasDeferredToQueue.Should().BeFalse();
+        result.Quantity.Should().Be(5m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UnitOfMeasureAbbreviation.Should().Be("ea");
         var queueCount = await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync();
         queueCount.Should().Be(0);
     }
@@ -962,5 +1023,196 @@ public class UnitOfMeasureNormalizationServiceTests
         // Assert — one row, count=2, because truncated lookup key matches
         var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
         queued.Count.Should().Be(2);
+    }
+
+    // ── MEP-063: Count fallback must not swallow unrecognized unit tokens ─────
+
+    [Fact]
+    public async Task NormalizeAsync_NoSeparateUnitWord_ResolvesToEachHighConfidence()
+    {
+        // Arrange — "eggs" is the ingredient noun, not a unit word
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_NoSeparateUnitWord_ResolvesToEachHighConfidence));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("3 eggs", "egg");
+
+        // Assert
+        result.Quantity.Should().Be(3m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UnitOfMeasureAbbreviation.Should().Be("ea");
+        result.WasClaudeResolved.Should().BeFalse();
+        result.Confidence.Should().Be(ClaudeConfidence.High);
+    }
+
+    [Fact]
+    public async Task NormalizeAsync_UnrecognizedUnitTokenWithClaude_InvokesClaudeWithFullMeasureString()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_UnrecognizedUnitTokenWithClaude_InvokesClaudeWithFullMeasureString));
+        var claudeMock = new Mock<IClaudeService>(MockBehavior.Strict);
+        claudeMock
+            .Setup(c => c.ResolveUnitOfMeasureAsync("2 sprigs thyme", "thyme"))
+            .ReturnsAsync(new UnitOfMeasureResolutionResult
+            {
+                Confidence = ClaudeConfidence.Medium,
+                Notes = string.Empty,
+                ResolvedQuantity = 2m,
+                ResolvedUnitOfMeasure = "g"
+            });
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("2 sprigs thyme", "thyme");
+
+        // Assert
+        result.WasClaudeResolved.Should().BeTrue();
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.GramId);
+        claudeMock.Verify(c => c.ResolveUnitOfMeasureAsync("2 sprigs thyme", "thyme"), Times.Once);
+    }
+
+    [Fact]
+    public async Task NormalizeAsync_UnrecognizedUnitTokenWithoutClaudeKey_QueuesLeadingWordToken()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeAsync_UnrecognizedUnitTokenWithoutClaudeKey_QueuesLeadingWordToken));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object, claudeConfigured: false);
+
+        // Act
+        var result = await service.NormalizeAsync("2 sprigs thyme", "thyme");
+
+        // Assert
+        result.WasDeferredToQueue.Should().BeTrue();
+        var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
+        queued.UnitToken.Should().Be("sprigs");
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_AbbreviationFollowedByIngredient_ResolvesToVolume()
+    {
+        // Arrange — "c." is a seeded alias for Cup; "flour" trails the unit
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_AbbreviationFollowedByIngredient_ResolvesToVolume));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("1 c. flour", "flour");
+
+        // Assert
+        result.Quantity.Should().Be(1m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_BareQuantity_ResolvesToEach()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_BareQuantity_ResolvesToEach));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("5", "eggs");
+
+        // Assert
+        result.Quantity.Should().Be(5m);
+        result.UnitOfMeasureAbbreviation.Should().Be("ea");
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_MixedNumber_ResolvesQuantity()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_MixedNumber_ResolvesQuantity));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("1 1/2 cups sugar", "sugar");
+
+        // Assert
+        result.Quantity.Should().Be(1.5m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.CupId);
+        result.WasDeferredToQueue.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_UnrecognizedUnitToken_DefersToReviewQueueNotEach()
+    {
+        // Arrange — MEP-063 AC1: "sprigs" matches no abbreviation, name, or alias
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_UnrecognizedUnitToken_DefersToReviewQueueNotEach));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 sprigs thyme", "thyme");
+
+        // Assert
+        result.UnitOfMeasureAbbreviation.Should().NotBe("ea");
+        result.UnitOfMeasureId.Should().Be(Guid.Empty);
+        result.WasDeferredToQueue.Should().BeTrue();
+
+        var queued = await dbContext.UnresolvedUnitOfMeasureTokens.SingleAsync();
+        queued.UnitToken.Should().Be("sprigs");
+        queued.SampleMeasureString.Should().Be("2 sprigs thyme");
+        queued.SampleIngredientContext.Should().Be("thyme");
+        // Strict mock fails the test if Claude was invoked
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_WeightLineWithIngredient_ResolvesToWeight()
+    {
+        // Arrange — "lbs" is a seeded alias for Pound
+        await using var dbContext = CreateSeededDbContext(nameof(NormalizeOrDeferAsync_WeightLineWithIngredient_ResolvesToWeight));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 lbs ground beef", "ground beef");
+
+        // Assert
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.LbId);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task TryResolveDeterministicallyAsync_CountNoun_ReturnsEach()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(TryResolveDeterministicallyAsync_CountNoun_ReturnsEach));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.TryResolveDeterministicallyAsync("4 chicken breasts", "chicken");
+
+        // Assert
+        result.Should().NotBeNull();
+        result!.Quantity.Should().Be(4m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.WasClaudeResolved.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task TryResolveDeterministicallyAsync_UnrecognizedUnitToken_ReturnsNull()
+    {
+        // Arrange
+        await using var dbContext = CreateSeededDbContext(nameof(TryResolveDeterministicallyAsync_UnrecognizedUnitToken_ReturnsNull));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.TryResolveDeterministicallyAsync("2 sprigs thyme", "thyme");
+
+        // Assert
+        result.Should().BeNull();
     }
 }

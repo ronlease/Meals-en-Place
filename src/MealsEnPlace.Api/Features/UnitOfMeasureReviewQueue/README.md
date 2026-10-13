@@ -6,6 +6,8 @@ Surfaces unresolved unit tokens from the MEP-026 bulk recipe ingest pipeline so 
 
 When the ingest tool's `InMemoryUnitOfMeasureResolver` (or the service's `NormalizeOrDeferAsync`) is called and no deterministic step matches — neither direct abbreviation / name lookup, nor `UnitOfMeasureAlias`, nor the count-with-ingredient-noun fallback — the resolver writes or increments an `UnresolvedUnitOfMeasureToken` row rather than invoking Claude.
 
+The token is the **leading word** of the text after the quantity (a leading parenthetical such as "(8 oz.)" is skipped and trailing `,;:` trimmed), not the whole remainder, so "2 sprigs fresh thyme" queues `sprigs`. The first two words and the first word are each tried against units and aliases before queueing. The count-with-ingredient-noun fallback (resolving to `ea`) applies only when the remainder is empty or begins with the ingredient noun (after skipping size descriptors such as "large" or "boneless"), e.g. "4 chicken breasts" for "chicken breast". Strings with no leading quantity ("a smidge") queue the whole string.
+
 `NormalizeAsync` (the non-ingest, real-time path) still falls back to Claude as before. Only the ingest path is queue-aware.
 
 ## Actions
