@@ -5536,6 +5536,8 @@ Feature: Ingest Unit Token Coverage
     And the result and the new count of distinct queued tokens are recorded in this backlog item
 ```
 
+**Follow-up:** MEP-069 addresses the container-flagged ingredient blockers that remain after this story's unit-token coverage work, including recipe-stated size parsing and a standard-size default table.
+
 ---
 
 ## [MEP-068] Chore: Audit Constants for Enum Candidates and Convert Where Appropriate
@@ -5635,4 +5637,141 @@ Feature: Constants-to-Enum Audit and Conversion
     Then every previously passing test still passes
     And affected READMEs reflect the new types
     And the solution builds with zero errors on both dotnet build and ng build
+```
+
+---
+
+## [MEP-069] Standard Container Size Defaults and Recipe-Stated Container Sizes
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-067 (unit-token coverage must land first; container-flagged ingredients are the dominant remaining blocker)
+**Related to:** MEP-003 (container reference resolution), MEP-026 (bulk recipe ingest)
+
+### Business Problem
+After MEP-067, only about 33-34% of recipes are fully resolved against the 60% target. The dominant remaining blocker is container-flagged ingredient rows (can, pkg, box, jar, bag, bottle, carton, envelope, container, and similar). Measured on a 100k-row sample of the 1,643,098-recipe catalog:
+
+- ~35% of recipes are blocked only by container-flagged ingredients.
+- ~16% are blocked only by deferred tokens.
+- ~17% are blocked by both container-flagged ingredients and deferred tokens.
+
+I need most of these container-blocked recipes to enter the matching pool. Two observations make that feasible without declaring every size by hand:
+
+1. **Recipe-stated sizes.** 36.2% of container-flagged rows already state their own size in the text (for example, "1 (8 oz.) pkg. cream cheese" or "1 14.5-oz. can diced tomatoes"). Treating those as declared would lift the fully-resolved share from ~33% to ~43%.
+2. **Standard sizes.** Common grocery items have well-known standard sizes: 1 package cream cheese is 8 oz, 1 can condensed cream of chicken soup is 10.5 oz, 1 can diced tomatoes is 14.5 oz. The correct size depends on the container word and the ingredient together, not the container word alone (a "can" of soup, tomatoes, and tuna are three different sizes). An editable lookup table keyed by container word + canonical ingredient, seeded for the highest-volume pairs, would resolve bare lines like "1 can cream of chicken soup" automatically.
+
+The current project rule in CLAUDE.md ("Container Reference Resolution Flow" and the Shrinkflation note) states that container sizes are always user-declared and never assumed from a lookup table. This story deliberately amends that rule with a scoped exception: a standard-size table whose entries are flagged as assumed, visible in the UI, user-overridable, and backed by a last-reviewed date for shrinkflation auditing. The original text is always preserved in Notes, and a recipe-stated or user-declared size always wins over a table default.
+
+### Implementation Notes
+- **Recipe-stated size parsing.** When a container-flagged ingredient row contains a size declaration in the text, parse it and treat it as declared. Patterns to handle:
+  - Parenthetical before the container word: "1 (8 oz.) can tomatoes"
+  - Parenthetical after the noun: "1 can tomatoes (14.5 oz.)"
+  - Hyphenated: "1 8-oz. pkg. cream cheese"
+  - Ranges: use the lower bound (e.g., "1 (14-15 oz.) can" resolves to 14 oz)
+  - The existing `ContainerStatedSizeDetector` in the Ingest tool is a starting point but misses approximately 1,300 trailing-size rows per 100k (sizes stated after the noun phrase). Extend it to cover trailing patterns.
+  - **Package size vs. amount used:** When the text says "1 (8 oz.) pkg. cream cheese, softened" the 8 oz is the package size and the full package is used. When the text says "4 oz. cream cheese" with no container word, that is already a resolved quantity and is not affected by this story. Container-stated sizes record the container's net weight/volume and the container count as the quantity.
+- **Standard-size table.**
+  - Data model: an editable database entity (not code constants) keyed by `ContainerWord` + `CanonicalIngredientId`, with fields for `Quantity`, `UnitOfMeasureId`, and `LastReviewedDate`.
+  - Seeded via EF Core migration for the highest-volume container+ingredient pairs, determined by a frequency query against the ingested data (e.g., cream cheese + pkg, condensed soup + can, diced tomatoes + can, tuna + can).
+  - Applied only when the recipe states no size and no user declaration exists.
+  - Matched ingredients are flagged as `Assumed` (distinct from `Declared` and `UserDeclared`) so the UI can badge them and the user can override.
+  - The original recipe text is always preserved in Notes.
+  - A recipe-stated size or user-declared size always takes precedence over a table default.
+  - An unlisted container+ingredient pair remains unresolved and continues to display "Awaiting Resolution".
+- **Shrinkflation mitigation.** The standard-size table is user-editable data, not compiled code. Each row carries a `LastReviewedDate`. The UI surfaces rows that have not been reviewed within a configurable interval (default: 12 months) so the user can verify current sizes.
+- **CLAUDE.md amendment.** Update the "Container Reference Resolution Flow" section and the "Shrinkflation note" in `.claude/CLAUDE.md` to reflect the new standard-size table, its constraints, and the precedence rules (recipe-stated > user-declared > table default > unresolved). The existing declaration-first principle remains; the table is a scoped supplement, not a replacement. This is an explicit task within this story.
+- **Ingest tool support.** The ingest pipeline applies recipe-stated size parsing and standard-size table lookups during import. This requires a reset and re-ingest. Batch with other ingest-altering work to avoid multiple full re-ingests. Like MEP-049, MEP-050, MEP-063, and MEP-067, the reset wipes inventory items, user-created ingredients, and meal plans.
+- **Envelope and container keyword review.** MEP-067 added `envelope` and `container` as container keywords. Measured at ingest, `envelope` rows state their own size only 5.5% of the time. Review whether these keywords over-flag and reclassify or add special handling if so.
+- **Measurement and recording.** After the re-ingest, measure the new fully-resolved share using the MEP-067 success query and record the result in this backlog item, along with the remaining blocker breakdown (container-only, deferred-only, both).
+
+### Out of Scope
+- Bulk UI for declaring container sizes beyond the existing single-item edit flow.
+- Unit-token alias work (covered by MEP-067).
+- Automatic population of the standard-size table from external data sources (e.g., Open Food Facts container sizes).
+- Changes to the recipe matching algorithm itself (scoring, substitution logic).
+
+### Acceptance Criteria
+```gherkin
+Feature: Standard Container Size Defaults and Recipe-Stated Container Sizes
+
+  Scenario: A recipe-stated size is treated as declared
+    Given a recipe ingredient row "1 (14.5 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14.5 and UnitOfMeasure = oz
+    And the original text "1 (14.5 oz.) can diced tomatoes" is preserved in Notes
+    And the ingredient is not flagged as unresolved
+    And the owning recipe does not display "Awaiting Resolution" for this ingredient
+
+  Scenario: A trailing recipe-stated size is parsed
+    Given a recipe ingredient row "1 can diced tomatoes (14.5 oz.)"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14.5 and UnitOfMeasure = oz
+    And the original text is preserved in Notes
+    And the ingredient is not flagged as unresolved
+
+  Scenario: A hyphenated recipe-stated size is parsed
+    Given a recipe ingredient row "1 8-oz. pkg. cream cheese"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 8 and UnitOfMeasure = oz
+    And the original text is preserved in Notes
+
+  Scenario: A range in a recipe-stated size uses the lower bound
+    Given a recipe ingredient row "1 (14-15 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14 and UnitOfMeasure = oz
+
+  Scenario: A standard-size default is applied and flagged as assumed
+    Given the standard-size table contains an entry for container word "can" and canonical ingredient "condensed cream of chicken soup" with size 10.5 oz
+    And a recipe ingredient row "1 can cream of chicken soup" states no size
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 10.5 and UnitOfMeasure = oz
+    And the ingredient is flagged as Assumed
+    And the original text "1 can cream of chicken soup" is preserved in Notes
+    And the UI displays an indicator that the size is assumed
+
+  Scenario: A recipe-stated size takes precedence over a standard-size default
+    Given the standard-size table contains an entry for "can" and "diced tomatoes" with size 14.5 oz
+    And a recipe ingredient row "1 (28 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 28 and UnitOfMeasure = oz
+    And the ingredient is not flagged as Assumed
+
+  Scenario: A user-declared size takes precedence over a standard-size default
+    Given a recipe ingredient was resolved via the standard-size table as 10.5 oz with flag Assumed
+    When the user edits the ingredient and declares 12 oz
+    Then the ingredient stores Quantity = 12 and UnitOfMeasure = oz
+    And the ingredient is flagged as UserDeclared
+    And the Assumed flag is removed
+
+  Scenario: A user-declared size persists across re-ingests
+    Given a recipe ingredient has been declared by the user as 12 oz with flag UserDeclared
+    When a reset and re-ingest is performed
+    Then the user-declared size is not overwritten by the standard-size table
+    And the ingredient retains Quantity = 12, UnitOfMeasure = oz, and flag UserDeclared
+
+  Scenario: No default exists for an unlisted container+ingredient pair
+    Given the standard-size table has no entry for container word "can" and canonical ingredient "artichoke hearts"
+    And a recipe ingredient row "1 can artichoke hearts" states no size
+    When the row is processed during ingest
+    Then the ingredient remains flagged as an unresolved ContainerReference
+    And the owning recipe displays "Awaiting Resolution"
+
+  Scenario: CLAUDE.md container reference rules are amended
+    Given the current CLAUDE.md states container sizes are always user-declared and never assumed from a lookup table
+    When this story is implemented
+    Then the "Container Reference Resolution Flow" section documents the standard-size table, the Assumed flag, and the precedence order (recipe-stated > user-declared > table default > unresolved)
+    And the "Shrinkflation note" references the table's LastReviewedDate field and user-editable nature
+    And the declaration-first principle is preserved as the primary rule
+
+  Scenario: Over-flagging container keywords are reviewed
+    Given MEP-067 added "envelope" and "container" as container keywords
+    And "envelope" rows state their own size only 5.5% of the time
+    When the keyword list is reviewed
+    Then a decision is recorded for each keyword on whether it should remain, be removed, or receive special handling
+
+  Scenario: Fully-resolved recipe share is measured and recorded after re-ingest
+    Given a full reset and re-ingest has been performed with this story's changes
+    When the fully-resolved SQL query from MEP-067 is run against the database
+    Then the fully-resolved share is recorded in this backlog item
+    And the remaining blocker breakdown by category is recorded
 ```
