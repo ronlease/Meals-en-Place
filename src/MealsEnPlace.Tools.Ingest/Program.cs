@@ -139,6 +139,8 @@ foreach (var row in streamResult.Rows)
     };
 
     // ── RecipeIngredients per raw ingredient ──────────────────────────────
+    var recipeContainerKeywords = new List<string>();
+    var recipeDeferredCount = 0;
     foreach (var rawIngredient in row.Ingredients)
     {
         summary.TotalIngredientsProcessed++;
@@ -159,6 +161,7 @@ foreach (var row in streamResult.Rows)
         if (container.IsContainerReference)
         {
             summary.ContainerFlaggedIngredients++;
+            recipeContainerKeywords.Add(container.DetectedKeyword!);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,
@@ -200,6 +203,7 @@ foreach (var row in streamResult.Rows)
         if (resolution.WasDeferred)
         {
             summary.UnitOfMeasureDeferredToQueue++;
+            recipeDeferredCount++;
             summary.RecordDeferredUnitToken(resolution.DeferredUnitToken);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -229,7 +233,7 @@ foreach (var row in streamResult.Rows)
         }
     }
 
-    summary.RecordRecipeResolution(recipe.RecipeIngredients.All(i => i.UnitOfMeasureId is not null));
+    summary.RecordRecipeResolution(recipeContainerKeywords, recipeDeferredCount);
 
     if (!options.DryRun)
     {

@@ -212,10 +212,10 @@ public class IngestSummaryTests
             RecipesIngested = 4,
             ToTasteIngredients = 9
         };
-        summary.RecordRecipeResolution(true);
-        summary.RecordRecipeResolution(true);
-        summary.RecordRecipeResolution(true);
-        summary.RecordRecipeResolution(false);
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution(["can"], 0);
         summary.StopTimer();
 
         var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
@@ -224,6 +224,93 @@ public class IngestSummaryTests
         rendered.Should().Contain("Junk lines dropped:          7");
         rendered.Should().Contain("To-taste (qty 0, ea):        9");
         rendered.Should().Contain("Fully resolved:              3 of 4 (75.0%)");
+    }
+
+    // ── Recipe blocker breakdown ──────────────────────────────────────────────
+
+    [Fact]
+    public void RecordRecipeResolution_MixedRecipes_BucketsAreMutuallyExclusiveAndSumToTotal()
+    {
+        // Given recipes covering every bucket
+        var summary = new IngestSummary();
+
+        // When each recipe is recorded
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution(["can"], 0);
+        summary.RecordRecipeResolution(["jar", "jar"], 0);
+        summary.RecordRecipeResolution([], 3);
+        summary.RecordRecipeResolution(["bag"], 1);
+        summary.RecipesIngested = 5;
+
+        // Then each recipe lands in exactly one bucket
+        summary.RecipesFullyResolved.Should().Be(1);
+        summary.RecipesBlockedOnlyByContainer.Should().Be(2);
+        summary.RecipesBlockedOnlyByDeferred.Should().Be(1);
+        summary.RecipesBlockedByBoth.Should().Be(1);
+        (summary.RecipesFullyResolved + summary.RecipesBlockedOnlyByContainer
+            + summary.RecipesBlockedOnlyByDeferred + summary.RecipesBlockedByBoth)
+            .Should().Be(summary.RecipesIngested);
+    }
+
+    [Fact]
+    public void Format_ContainerBlockedRecipes_PrintsBucketPercentagesAndKeywordTables()
+    {
+        // Given recipes blocked by containers, with a repeated keyword in one recipe
+        var summary = new IngestSummary { RecipesIngested = 4 };
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution(["can", "can", "jar"], 0);
+        summary.RecordRecipeResolution(["can"], 0);
+        summary.RecordRecipeResolution(["bag"], 2);
+        summary.StopTimer();
+
+        // When the summary is formatted
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        // Then buckets, percentages and both keyword tables are present
+        rendered.Should().Contain("Fully resolved:              1 of 4 (25.0%)");
+        rendered.Should().Contain("Blocked only by container:   2 (50.0%)");
+        rendered.Should().Contain("Blocked only by deferred:    0 (0.0%)");
+        rendered.Should().Contain("Blocked by both:             1 (25.0%)");
+
+        var byRecipe = rendered.Split("recipes blocked only by container, one count per recipe")[1]
+            .Split("all container-flagged ingredient rows")[0];
+        byRecipe.Should().Contain("2  can");
+        byRecipe.Should().Contain("1  jar");
+        byRecipe.Should().NotContain("bag");
+
+        var byRow = rendered.Split("all container-flagged ingredient rows")[1];
+        byRow.Should().Contain("3  can");
+        byRow.Should().Contain("1  jar");
+        byRow.Should().Contain("1  bag");
+    }
+
+    [Fact]
+    public void Format_NoContainerFlags_PrintsNoneForKeywordTables()
+    {
+        var summary = new IngestSummary();
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        rendered.Should().Contain("Blocked only by container:   0 (0.0%)");
+        rendered.Should().Contain("(none)");
+    }
+
+    [Fact]
+    public void Format_ManyKeywords_LimitsTablesToTopFifteen()
+    {
+        var summary = new IngestSummary();
+        for (var index = 0; index < 20; index++)
+        {
+            summary.RecordRecipeResolution([$"keyword{index:D2}"], 0);
+        }
+
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        rendered.Should().Contain("keyword14");
+        rendered.Should().NotContain("keyword15");
     }
 
     // ── Format — NER token normalization counter ──────────────────────────────

@@ -43,6 +43,12 @@ internal static class IngestConstants
     public const string GramUnitOfMeasureAbbreviation = "g";
 
     /// <summary>
+    /// Number of top container keywords printed in each container breakdown
+    /// table of the summary.
+    /// </summary>
+    public const int TopContainerKeywordCount = 15;
+
+    /// <summary>
     /// Number of top deferred unit tokens printed in the summary and checked
     /// by the re-ingest gate.
     /// </summary>

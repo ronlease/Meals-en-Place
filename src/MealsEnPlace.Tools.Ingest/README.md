@@ -66,7 +66,7 @@ Reasons to reset and re-ingest include a change to the ingest pipeline that alte
 
 **Dry-run gate:** always run step 3 first and review the "Resolved by unit of measure type" and "Top 25 deferred unit tokens" blocks. Count should no longer dominate, and common units (cup, tbsp, tsp, oz, lb, g) should appear under Volume / Weight. Do not run the live ingest until the dry-run distribution looks right.
 
-**Success query (MEP-067):** after the live re-ingest, measure the fully-resolved recipe share. A recipe is fully resolved when none of its ingredient rows has a NULL `UnitOfMeasureId` (deferred or container-flagged). The target is at least 60 percent. The dry-run summary prints the same estimate under "Recipes".
+**Success query (MEP-067):** after the live re-ingest, measure the fully-resolved recipe share. A recipe is fully resolved when none of its ingredient rows has a NULL `UnitOfMeasureId` (deferred or container-flagged). The target is at least 60 percent. The dry-run summary prints the same estimate under "Recipes", together with a blocker breakdown: the recipes that are not fully resolved are split into mutually exclusive buckets (blocked only by container-flagged ingredients, only by deferred ingredients, or by both; the four buckets sum to the ingested total), followed by the top 15 container keywords, counted once per recipe for recipes blocked only by containers and once per ingredient row across all container-flagged rows.
 
 ```sql
 SELECT

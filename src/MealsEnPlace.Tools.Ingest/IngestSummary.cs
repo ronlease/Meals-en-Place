@@ -10,6 +10,8 @@ namespace MealsEnPlace.Tools.Ingest;
 /// </summary>
 internal sealed class IngestSummary
 {
+    private readonly Dictionary<string, int> _containerKeywordRecipeCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _containerKeywordRowCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _deferredUnitTokenCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
@@ -52,6 +54,15 @@ internal sealed class IngestSummary
     public int NerTokensRejected { get; set; }
 
     public bool RecipeReferenceCountBackfilled { get; set; }
+
+    /// <summary>Recipes blocked by at least one container-flagged and at least one deferred ingredient.</summary>
+    public int RecipesBlockedByBoth { get; private set; }
+
+    /// <summary>Recipes blocked only by container-flagged ingredients (no deferred ingredient).</summary>
+    public int RecipesBlockedOnlyByContainer { get; private set; }
+
+    /// <summary>Recipes blocked only by deferred, non-container ingredients (no container-flagged ingredient).</summary>
+    public int RecipesBlockedOnlyByDeferred { get; private set; }
 
     /// <summary>
     /// Recipes with no deferred and no container-flagged ingredient: the dry-run
@@ -102,14 +113,47 @@ internal sealed class IngestSummary
     }
 
     /// <summary>
-    /// Tallies one recipe toward the fully-resolved share. Pass true when the
-    /// recipe has no deferred and no container-flagged ingredient.
+    /// Tallies one recipe into exactly one of four mutually exclusive buckets:
+    /// fully resolved, blocked only by container-flagged ingredients, blocked
+    /// only by deferred ingredients, or blocked by both. A container-flagged
+    /// row and a deferred row both have a null unit of measure and an
+    /// unresolved container flag, so the ingest loop must tell them apart.
     /// </summary>
-    public void RecordRecipeResolution(bool fullyResolved)
+    /// <param name="containerKeywords">
+    /// One matched container keyword per container-flagged ingredient row of the recipe.
+    /// </param>
+    /// <param name="deferredIngredientCount">
+    /// Count of non-container ingredient rows of the recipe whose unit of measure was deferred.
+    /// </param>
+    public void RecordRecipeResolution(IReadOnlyCollection<string> containerKeywords, int deferredIngredientCount)
     {
-        if (fullyResolved)
+        var hasContainer = containerKeywords.Count > 0;
+        var hasDeferred = deferredIngredientCount > 0;
+
+        foreach (var keyword in containerKeywords)
+        {
+            _containerKeywordRowCounts[keyword] = _containerKeywordRowCounts.GetValueOrDefault(keyword) + 1;
+        }
+
+        if (!hasContainer && !hasDeferred)
         {
             RecipesFullyResolved++;
+        }
+        else if (hasContainer && hasDeferred)
+        {
+            RecipesBlockedByBoth++;
+        }
+        else if (hasContainer)
+        {
+            RecipesBlockedOnlyByContainer++;
+            foreach (var keyword in containerKeywords.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                _containerKeywordRecipeCounts[keyword] = _containerKeywordRecipeCounts.GetValueOrDefault(keyword) + 1;
+            }
+        }
+        else
+        {
+            RecipesBlockedOnlyByDeferred++;
         }
     }
 
@@ -188,6 +232,17 @@ internal sealed class IngestSummary
             ? 0.0
             : RecipesFullyResolved * 100.0 / RecipesIngested;
 
+        string Percent(int count) => RecipesIngested == 0 ? "0.0" : $"{count * 100.0 / RecipesIngested:0.0}";
+
+        static string FormatTable(IEnumerable<KeyValuePair<string, int>> entries)
+        {
+            var lines = entries.Select(kvp => $"  {kvp.Value,10:N0}  {kvp.Key}").ToList();
+            return lines.Count == 0 ? "  (none)" : string.Join(Environment.NewLine, lines);
+        }
+
+        var topContainerByRecipe = FormatTable(GetTopContainerKeywords(_containerKeywordRecipeCounts));
+        var topContainerByRow = FormatTable(GetTopContainerKeywords(_containerKeywordRowCounts));
+
         var capNote = StreamTerminatedByMaxRowsCap
             ? " (stream terminated early by --max-rows cap)"
             : string.Empty;
@@ -208,9 +263,18 @@ internal sealed class IngestSummary
             Recipes
               Ingested:                    {RecipesIngested:N0}
               Fully resolved:              {RecipesFullyResolved:N0} of {RecipesIngested:N0} ({recipesResolvedPercent:0.0}%)
+              Blocked only by container:   {RecipesBlockedOnlyByContainer:N0} ({Percent(RecipesBlockedOnlyByContainer)}%)
+              Blocked only by deferred:    {RecipesBlockedOnlyByDeferred:N0} ({Percent(RecipesBlockedOnlyByDeferred)}%)
+              Blocked by both:             {RecipesBlockedByBoth:N0} ({Percent(RecipesBlockedByBoth)}%)
               Batches flushed:             {BatchesFlushed:N0}
               CanonicalIngredients created:{CanonicalIngredientsCreated:N0}
               Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run)")}
+
+            Top {IngestConstants.TopContainerKeywordCount} container keywords (recipes blocked only by container, one count per recipe)
+            {topContainerByRecipe}
+
+            Top {IngestConstants.TopContainerKeywordCount} container keywords (all container-flagged ingredient rows)
+            {topContainerByRow}
 
             Ingredients
               NER tokens normalized:       {NerTokensNormalized:N0}
@@ -244,6 +308,12 @@ internal sealed class IngestSummary
 
             """;
     }
+
+    private static IEnumerable<KeyValuePair<string, int>> GetTopContainerKeywords(Dictionary<string, int> counts) =>
+        counts
+            .OrderByDescending(kvp => kvp.Value)
+            .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
+            .Take(IngestConstants.TopContainerKeywordCount);
 
     private IEnumerable<KeyValuePair<string, int>> GetTopDeferredUnitTokens() =>
         _deferredUnitTokenCounts
