@@ -78,6 +78,7 @@ public sealed class NormalizationResult
 ///   <item><description>Parse a numeric quantity from the measure string and derive candidate unit tokens from the leading words of the remainder (mixed numbers such as "1 1/2 cups" and "1-1/2 cups" are summed, ranges such as "2-3 tbsp" keep the lower bound, and junk words and size descriptors are skipped).</description></item>
 ///   <item><description>Junk lines ("None", "-", "to", "or") are returned as <see cref="NormalizationResult.IsJunkLine"/>: never queued, Claude never invoked. To-taste lines ("salt", "salt and pepper", "salt to taste") resolve to quantity 0 in "ea" flagged <see cref="NormalizationResult.IsToTaste"/>.</description></item>
 ///   <item><description>Butter or margarine sticks ("2 sticks butter") resolve to grams at 113 g per stick before unit and alias lookup.</description></item>
+///   <item><description>A pinch or dash with no number ("pinch of salt", "a dash of pepper") resolves to quantity 1 of the "pinch" unit, or the "dash" unit when the ingredient is pepper, before unit and alias lookup. Lines with an explicit quantity ("1 pinch salt") are unaffected.</description></item>
 ///   <item><description>Look up each candidate unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
 ///   <item><description>If not found, look up against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> to catch dataset variants (e.g., "c.", "Tbsp.", "lbs").</description></item>
 ///   <item><description>If still not found, a positive quantity parsed, and the remainder is empty, starts with the ingredient noun, or started with a size descriptor, default to "each" (e.g. "4 chicken breasts" for "chicken breast", "1 large yellow onion"). Unrecognized tokens such as "sprigs" are not treated as counts.</description></item>
@@ -332,6 +333,28 @@ public class UnitOfMeasureNormalizationService(
                     Quantity = parsed.Quantity * gramsPerUnit,
                     UnitOfMeasureAbbreviation = gramUnitOfMeasure.Abbreviation,
                     UnitOfMeasureId = gramUnitOfMeasure.Id,
+                    WasClaudeResolved = false
+                };
+            }
+        }
+
+        // Step 0d: a pinch or dash with no number ("pinch of salt", "dash of pepper") is a
+        // quantity of 1 in the seeded pinch or dash unit; never queued.
+        if (parsed.ImplicitQuantity is { } implicitQuantity
+            && parsed.PreferredUnitOfMeasureAbbreviation is { } preferredAbbreviation)
+        {
+            var preferredUnitOfMeasure = await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Abbreviation == preferredAbbreviation, cancellationToken);
+
+            if (preferredUnitOfMeasure is not null)
+            {
+                return new NormalizationResult
+                {
+                    Confidence = ClaudeConfidence.High,
+                    Quantity = implicitQuantity,
+                    UnitOfMeasureAbbreviation = preferredUnitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = preferredUnitOfMeasure.Id,
                     WasClaudeResolved = false
                 };
             }

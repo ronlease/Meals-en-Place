@@ -194,7 +194,19 @@ public class UnitOfMeasureAliasConfiguration : IEntityTypeConfiguration<UnitOfMe
 
             // Dash
             NewAlias("a2000000-0000-0000-0000-000000000141", "dashes",
-                UnitOfMeasureConfiguration.DashId, seededAt)
+                UnitOfMeasureConfiguration.DashId, seededAt),
+
+            // Gallon
+            NewAlias("a2000000-0000-0000-0000-000000000150", "gal.",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000151", "gals",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000152", "gals.",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000153", "gallon",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000154", "gallons",
+                UnitOfMeasureConfiguration.GallonId, seededAt)
         );
     }
 

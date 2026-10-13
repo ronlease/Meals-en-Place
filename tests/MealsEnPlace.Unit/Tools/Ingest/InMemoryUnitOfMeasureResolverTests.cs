@@ -90,6 +90,14 @@
 //   When NormalizeOrDefer("1 pinch salt" / "2 dashes hot sauce") is called
 //   Then the result resolves to pinch / dash without queueing
 //
+// Scenario: Pinch or dash without a number resolves to quantity 1
+//   Given "pinch of salt", "dash of salt", "dash of pepper", "pinch of red pepper", "dash of cayenne"
+//   Then salt and cayenne are 1 pinch, pepper is 1 dash, and nothing is queued
+//
+// Scenario: Gallon forms resolve to the gallon unit
+//   Given "1/2 gal. vanilla ice cream", "1 gal. water", "2 gallons milk"
+//   Then each resolves to gal without queueing
+//
 // Scenario: Butter sticks resolve to grams
 //   Given "2 sticks butter"
 //   Then the result is 226 g; and "1 stick cinnamon" is 1 ea
@@ -186,6 +194,15 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
             },
             new UnitOfMeasure
             {
+                Abbreviation = "gal",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 3785.41m,
+                Id = UnitOfMeasureConfiguration.GallonId,
+                Name = "Gallon",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
                 Abbreviation = "tbsp",
                 BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 14.787m,
@@ -212,6 +229,8 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
             NewAlias("sticks", UnitOfMeasureConfiguration.EachId),
             NewAlias("pinches", UnitOfMeasureConfiguration.PinchId),
             NewAlias("dashes", UnitOfMeasureConfiguration.DashId),
+            NewAlias("gal.", UnitOfMeasureConfiguration.GallonId),
+            NewAlias("gallons", UnitOfMeasureConfiguration.GallonId),
             new UnitOfMeasureAlias
             {
                 Alias = "lbs",
@@ -471,6 +490,61 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
         result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
         result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
         result.Quantity.Should().Be(expectedQuantity);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("pinch of salt", "salt", "pinch")]
+    [InlineData("a pinch of salt", "salt", "pinch")]
+    [InlineData("dash of salt", "salt", "pinch")]
+    [InlineData("dash of cayenne", "cayenne", "pinch")]
+    [InlineData("pinch of nutmeg", "", "pinch")]
+    [InlineData("dash of pepper", "pepper", "dash")]
+    [InlineData("dash of black pepper", "black pepper", "dash")]
+    [InlineData("pinch of red pepper", "", "dash")]
+    [InlineData("pinch of pepper", "pepper", "dash")]
+    public async Task NormalizeOrDefer_PinchOrDashWithoutNumber_ResolvesToOneOfPreferredUnit(
+        string measureString, string ingredientName, string expectedAbbreviation)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+        result.Quantity.Should().Be(1m);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_ExplicitDashQuantity_KeepsExplicitQuantity()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("2 dash hot sauce", "hot sauce");
+
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureAbbreviation.Should().Be("dash");
+    }
+
+    [Theory]
+    [InlineData("1/2 gal. vanilla ice cream", "vanilla ice cream", 0.5)]
+    [InlineData("1 gal. water", "water", 1)]
+    [InlineData("1 gal water", "water", 1)]
+    [InlineData("2 gallons milk", "milk", 2)]
+    [InlineData("2 gallon milk", "milk", 2)]
+    public async Task NormalizeOrDefer_Gallon_ResolvesToGallonUnit(
+        string measureString, string ingredientName, double expectedQuantity)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureAbbreviation.Should().Be("gal");
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+        result.Quantity.Should().Be((decimal)expectedQuantity);
         _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
     }
 

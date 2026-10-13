@@ -709,6 +709,15 @@ namespace MealsEnPlace.Api.Migrations
                         },
                         new
                         {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000016"),
+                            Abbreviation = "gal",
+                            BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
+                            ConversionFactor = 3785.41m,
+                            Name = "Gallon",
+                            UnitOfMeasureType = "Volume"
+                        },
+                        new
+                        {
                             Id = new Guid("a1000000-0000-0000-0000-000000000006"),
                             Abbreviation = "L",
                             BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
@@ -1226,6 +1235,41 @@ namespace MealsEnPlace.Api.Migrations
                             Alias = "dashes",
                             CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
                             UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000015")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000150"),
+                            Alias = "gal.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000151"),
+                            Alias = "gals",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000152"),
+                            Alias = "gals.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000153"),
+                            Alias = "gallon",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000154"),
+                            Alias = "gallons",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
                         });
                 });
 

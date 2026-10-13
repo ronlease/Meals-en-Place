@@ -545,4 +545,65 @@ public class UnitOfMeasureTokenParserTests
         // Assert
         result.IngredientSpecificGramsPerUnit.Should().BeNull();
     }
+
+    // Scenario: Pinch or dash without a number implies quantity 1 of pinch (dash for pepper)
+    //   Given "pinch of salt", "dash of salt", "dash of cayenne", "dash of pepper", "pinch of red pepper"
+    //   When ParseWithIngredientContext is called
+    //   Then ImplicitQuantity is 1 and the preferred unit is pinch (dash only when pepper is a whole word)
+    //
+    // Scenario: Explicit quantities and other lines imply nothing
+    //   Given "1 pinch salt", "2 dash hot sauce", "salt", "a smidge", "pinch of salt to taste"
+    //   When ParseWithIngredientContext is called
+    //   Then ImplicitQuantity and PreferredUnitOfMeasureAbbreviation are null
+
+    [Theory]
+    [InlineData("pinch of salt", "salt", "pinch")]
+    [InlineData("pinch of salt", null, "pinch")]
+    [InlineData("a pinch of salt", "salt", "pinch")]
+    [InlineData("an pinch of salt", null, "pinch")]
+    [InlineData("pinches of nutmeg", "nutmeg", "pinch")]
+    [InlineData("dash of salt", "salt", "pinch")]
+    [InlineData("dash of salt", null, "pinch")]
+    [InlineData("dash of cayenne", "cayenne", "pinch")]
+    [InlineData("dash of garlic", null, "pinch")]
+    [InlineData("dashes of peppercorns", "peppercorns", "pinch")]
+    [InlineData("dash of pepper", "pepper", "dash")]
+    [InlineData("dash of pepper", null, "dash")]
+    [InlineData("a dash of pepper", null, "dash")]
+    [InlineData("dash of black pepper", "black pepper", "dash")]
+    [InlineData("dash of black pepper", null, "dash")]
+    [InlineData("pinch of red pepper", null, "dash")]
+    [InlineData("pinch of pepper", "Pepper", "dash")]
+    public void ParseWithIngredientContext_PinchOrDashWithoutNumber_ImpliesQuantityOneOfPreferredUnit(
+        string measureString, string? ingredientName, string expectedUnitAbbreviation)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.ImplicitQuantity.Should().Be(1m);
+        result.PreferredUnitOfMeasureAbbreviation.Should().Be(expectedUnitAbbreviation);
+        result.Quantity.Should().Be(0m);
+    }
+
+    [Theory]
+    [InlineData("1 pinch salt", "salt")]
+    [InlineData("2 dash hot sauce", "hot sauce")]
+    [InlineData("2 dashes pepper", "pepper")]
+    [InlineData("salt", "salt")]
+    [InlineData("a smidge", "salt")]
+    [InlineData("dashing hero", null)]
+    [InlineData("pinch of salt to taste", "salt")]
+    [InlineData("None", null)]
+    [InlineData("", null)]
+    public void ParseWithIngredientContext_ExplicitQuantityOrOtherLines_HaveNoImplicitQuantity(
+        string measureString, string? ingredientName)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.ImplicitQuantity.Should().BeNull();
+        result.PreferredUnitOfMeasureAbbreviation.Should().BeNull();
+    }
 }

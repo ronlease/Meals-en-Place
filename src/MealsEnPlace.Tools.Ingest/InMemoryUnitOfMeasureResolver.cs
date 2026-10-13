@@ -15,6 +15,7 @@ namespace MealsEnPlace.Tools.Ingest;
 /// <see cref="UnitOfMeasureNormalizationService"/> (MEP-067): junk lines are
 /// dropped without queueing, to-taste lines resolve to quantity 0 in "ea",
 /// an ingredient-specific weight (butter stick = 113 g) wins over unit lookup,
+/// a quantity-less pinch or dash resolves to 1 pinch (or 1 dash for pepper),
 /// then abbreviation / name match, alias match, and finally the count fallback
 /// (<see cref="MeasureStringParseResult.IsCountFallbackEligible"/>: only when the
 /// parser confirms the leftover text is the ingredient noun or a size
@@ -144,6 +145,19 @@ internal sealed class InMemoryUnitOfMeasureResolver
                 gramHit.Id,
                 gramHit.Abbreviation,
                 gramHit.UnitOfMeasureType);
+        }
+
+        // Step 0d: a pinch or dash with no number ("pinch of salt", "dash of pepper")
+        // is a quantity of 1 in the seeded pinch or dash unit; never queued.
+        if (parsed.ImplicitQuantity is { } implicitQuantity
+            && parsed.PreferredUnitOfMeasureAbbreviation is { } preferredAbbreviation
+            && _unitOfMeasureByAbbreviationOrName.TryGetValue(preferredAbbreviation, out var preferredHit))
+        {
+            return IngestUnitOfMeasureResolution.Resolved(
+                implicitQuantity,
+                preferredHit.Id,
+                preferredHit.Abbreviation,
+                preferredHit.UnitOfMeasureType);
         }
 
         // Step 1: abbreviation / name lookup over each candidate token. Mirror

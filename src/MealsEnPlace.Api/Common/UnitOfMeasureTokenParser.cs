@@ -57,6 +57,23 @@ public static partial class UnitOfMeasureTokenParser
         "whole"
     };
 
+    /// <summary>Abbreviation of the seeded dash unit.</summary>
+    public const string DashUnitOfMeasureAbbreviation = "dash";
+
+    private static readonly HashSet<string> ImplicitQuantityLeadingWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "dash",
+        "dashes",
+        "pinch",
+        "pinches"
+    };
+
+    private static readonly HashSet<string> IndefiniteArticles = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "a",
+        "an"
+    };
+
     private static readonly HashSet<string> JunkLines = new(StringComparer.OrdinalIgnoreCase)
     {
         "-",
@@ -75,6 +92,9 @@ public static partial class UnitOfMeasureTokenParser
         "or",
         "to"
     };
+
+    /// <summary>Abbreviation of the seeded pinch unit.</summary>
+    public const string PinchUnitOfMeasureAbbreviation = "pinch";
 
     private static readonly HashSet<string> SeasoningOnlyLines = new(StringComparer.Ordinal)
     {
@@ -114,6 +134,9 @@ public static partial class UnitOfMeasureTokenParser
 
     [GeneratedRegex(@"^-(\d+/\d+)(?![\d/.])")]
     private static partial Regex HyphenMixedNumberPattern();
+
+    private static bool IsPepperContext(string context) =>
+        WordPattern().Matches(context).Any(m => string.Equals(m.Value, "pepper", StringComparison.OrdinalIgnoreCase));
 
     private static bool IsSimpleFraction(string chunk)
     {
@@ -251,13 +274,16 @@ public static partial class UnitOfMeasureTokenParser
             var toTaste = !junkLine
                           && (ToTastePattern().IsMatch(normalizedLine) || SeasoningOnlyLines.Contains(normalizedLine));
             var suppressed = junkLine || toTaste;
+            var implicitUnit = suppressed ? null : ResolveImplicitUnitAbbreviation(remainder, ingredientName);
 
             return new MeasureStringParseResult
             {
                 DeferralUnitToken = suppressed ? string.Empty : remainder,
+                ImplicitQuantity = implicitUnit is null ? null : 1m,
                 IsCountWithIngredientNoun = false,
                 IsJunkLine = junkLine,
                 IsToTaste = toTaste,
+                PreferredUnitOfMeasureAbbreviation = implicitUnit,
                 Quantity = quantity,
                 UnitTokenCandidates = suppressed || string.IsNullOrWhiteSpace(remainder) ? [] : [remainder]
             };
@@ -352,6 +378,36 @@ public static partial class UnitOfMeasureTokenParser
                && !ContainsAnyWord(context, ButterContextExcludedWords)
             ? ButterStickGrams
             : null;
+    }
+
+    /// <summary>
+    /// For a quantity-less line that leads with pinch / pinches / dash / dashes (optionally
+    /// after "a" or "an"), returns the unit abbreviation to use with an implied quantity of 1:
+    /// "dash" when the ingredient context contains the whole word "pepper", otherwise "pinch".
+    /// Returns null when the line does not lead with one of those words.
+    /// </summary>
+    private static string? ResolveImplicitUnitAbbreviation(string remainder, string? ingredientName)
+    {
+        var words = remainder.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        var index = words.Length > 0 && IndefiniteArticles.Contains(words[0]) ? 1 : 0;
+        if (index >= words.Length || !ImplicitQuantityLeadingWords.Contains(words[index].TrimEnd(TrailingPunctuation)))
+        {
+            return null;
+        }
+
+        var rest = words.Skip(index + 1).ToList();
+        string context;
+        if (!string.IsNullOrWhiteSpace(ingredientName))
+        {
+            context = ingredientName;
+        }
+        else
+        {
+            var ofIndex = rest.FindIndex(w => string.Equals(w, "of", StringComparison.OrdinalIgnoreCase));
+            context = string.Join(' ', ofIndex >= 0 ? rest.Skip(ofIndex + 1) : rest);
+        }
+
+        return IsPepperContext(context) ? DashUnitOfMeasureAbbreviation : PinchUnitOfMeasureAbbreviation;
     }
 
     private static bool SingularOrPluralMatch(string left, string right)

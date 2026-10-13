@@ -15,6 +15,14 @@ public sealed class MeasureStringParseResult
     public string DeferralUnitToken { get; init; } = string.Empty;
 
     /// <summary>
+    /// The quantity implied when the line has no number but leads with pinch / pinches /
+    /// dash / dashes ("pinch of salt", "a dash of pepper"): always 1 in that case, null
+    /// otherwise. Set together with <see cref="PreferredUnitOfMeasureAbbreviation"/>; never
+    /// set for lines with an explicit quantity, junk lines or to-taste lines.
+    /// </summary>
+    public decimal? ImplicitQuantity { get; init; }
+
+    /// <summary>
     /// Grams per one parsed unit when the unit is ingredient-specific and defined
     /// (currently only a US butter or margarine stick, 113 g); null otherwise.
     /// When set, it takes precedence over unit and alias lookup.
@@ -47,6 +55,14 @@ public sealed class MeasureStringParseResult
     /// ("salt to taste", "salt and pepper", "pepper"). Never queued.
     /// </summary>
     public bool IsToTaste { get; init; }
+
+    /// <summary>
+    /// The unit abbreviation to resolve <see cref="ImplicitQuantity"/> against: "dash" when
+    /// the ingredient context contains the whole word "pepper", otherwise "pinch" (so
+    /// "dash of salt" is a pinch and "pinch of pepper" is a dash). Null when no implicit
+    /// quantity applies.
+    /// </summary>
+    public string? PreferredUnitOfMeasureAbbreviation { get; init; }
 
     /// <summary>The parsed numeric quantity; 0 when no leading number was found.</summary>
     public decimal Quantity { get; init; }

@@ -19,6 +19,7 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
     // ── Volume unit IDs ───────────────────────────────────────────────────────
     public static readonly Guid CupId = new("a1000000-0000-0000-0000-000000000004");
     public static readonly Guid FlOzId = new("a1000000-0000-0000-0000-000000000005");
+    public static readonly Guid GallonId = new("a1000000-0000-0000-0000-000000000016");
     public static readonly Guid LiterId = new("a1000000-0000-0000-0000-000000000006");
     public static readonly Guid DashId = new("a1000000-0000-0000-0000-000000000015");
     public static readonly Guid PinchId = new("a1000000-0000-0000-0000-000000000014");
@@ -120,6 +121,15 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
                 ConversionFactor = 29.574m,
                 Id = FlOzId,
                 Name = "Fluid Ounce",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "gal",
+                BaseUnitOfMeasureId = MlId,
+                ConversionFactor = 3785.41m,
+                Id = GallonId,
+                Name = "Gallon",
                 UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
