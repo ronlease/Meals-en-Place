@@ -5407,6 +5407,7 @@ Feature: Camping Trip User Interface
 ## [MEP-067] Ingest Unit Token Coverage: Seed Count and Measure Aliases, Filter Junk Tokens, and Raise the Fully-Resolved Recipe Share
 
 **Status:** In Progress
+**Status note:** Implementation complete; target not met; awaiting user decision on closing.
 **Priority:** High
 **Depends on:** MEP-063 (corrected the count fallback so unrecognized tokens defer; this story clears the resulting backlog of deferred tokens)
 **Related to:** MEP-049, MEP-050 (earlier normalization-gap cleanup passes in the same ingest pipeline; this story reuses their reset-and-re-ingest procedure)
@@ -5463,6 +5464,21 @@ Cleaning up these groups should move most recipes into the matching pool without
 - Any user-facing change to the unit-token review queue UI.
 - Assuming or looking up container sizes. Container declaration stays user-driven.
 - Long-tail tokens outside the groups listed in the Business Problem. After this story, the review queue is expected to still hold residual tokens.
+
+### Results (2026-10-13 re-ingest)
+- Full reset and live re-ingest completed on 2026-10-13 with this story's changes (MEP-067 branch, including pinch/dash-without-number handling and a seeded gallon unit). 1,643,098 recipes ingested.
+- Success query: fully_resolved 551,353 of 1,643,098 = 33.6% (up from 22%, 361,582). The target was at least 60%: NOT MET.
+- Distinct tokens in UnresolvedUnitOfMeasureToken: 271,964 (down from 293,674).
+- Deferred ingredient rows: 1,148,306 (9.4% of non-container rows; was 2,422,675 / 18.9%). Container-flagged rows: 1,201,622 (8.6% of all ingredient rows). To-taste rows stored: 237,835. Dry-run gate (top 25 deferred tokens): PASS.
+- Recipe blocker breakdown (full run):
+  - Blocked only by container-flagged ingredients: 427,089 (26.0%)
+  - Blocked only by deferred ingredients: 414,518 (25.2%)
+  - Blocked by both: 250,138 (15.2%)
+- Container rows that state their own size in the text: 561,754 of 1,201,622 (46.7%). Counting those as declared would raise the fully-resolved share to about 44.4% (hypothetical, diagnostic only). Largest container keywords: can 649,722 rows, pkg 244,720, package 79,425, box 65,113, jar 53,544.
+- Remaining top deferred tokens are mostly:
+  - Non-unit words or count words the user chose to leave deferred (no aliases by decision): head, sprigs, pieces, loaf, stalk, drops, piece, strips.
+  - Non-units: cooking spray, olive oil, paprika, butter, water, fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping.
+  - Boxes (6,617) and sq. (4,697).
 
 ### Acceptance Criteria
 ```gherkin
@@ -5535,6 +5551,8 @@ Feature: Ingest Unit Token Coverage
     Then the fully-resolved share of recipes is at least 60 percent, up from 22 percent
     And the result and the new count of distinct queued tokens are recorded in this backlog item
 ```
+
+**Note on the last scenario (2026-10-13):** The 60 percent threshold was not met (33.6% measured; see Results above). The remaining gap is carried by MEP-069 (container sizes) and by a new follow-up story, to be defined, for the deferred-token residue.
 
 **Follow-up:** MEP-069 addresses the container-flagged ingredient blockers that remain after this story's unit-token coverage work, including recipe-stated size parsing and a standard-size default table.
 
@@ -5661,6 +5679,8 @@ I need most of these container-blocked recipes to enter the matching pool. Two o
 2. **Standard sizes.** Common grocery items have well-known standard sizes: 1 package cream cheese is 8 oz, 1 can condensed cream of chicken soup is 10.5 oz, 1 can diced tomatoes is 14.5 oz. The correct size depends on the container word and the ingredient together, not the container word alone (a "can" of soup, tomatoes, and tuna are three different sizes). An editable lookup table keyed by container word + canonical ingredient, seeded for the highest-volume pairs, would resolve bare lines like "1 can cream of chicken soup" automatically.
 
 The current project rule in CLAUDE.md ("Container Reference Resolution Flow" and the Shrinkflation note) states that container sizes are always user-declared and never assumed from a lookup table. This story deliberately amends that rule with a scoped exception: a standard-size table whose entries are flagged as assumed, visible in the UI, user-overridable, and backed by a last-reviewed date for shrinkflation auditing. The original text is always preserved in Notes, and a recipe-stated or user-declared size always wins over a table default.
+
+**Correction from the MEP-067 full run (2026-10-13):** On the full run, 40.4% of recipes (25.2% blocked only by deferred ingredients plus 15.2% blocked by both) are blocked by deferred ingredients, not the roughly 33% the 100k sample suggested. Deferred-token residue (non-unit words such as prep words and ingredient names landing in the unit position) is therefore as large a lever as containers; it is suggested as a separate follow-up story candidate rather than expanding MEP-069.
 
 ### Implementation Notes
 - **Recipe-stated size parsing.** When a container-flagged ingredient row contains a size declaration in the text, parse it and treat it as declared. Patterns to handle:
