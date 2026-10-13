@@ -5535,3 +5535,104 @@ Feature: Ingest Unit Token Coverage
     Then the fully-resolved share of recipes is at least 60 percent, up from 22 percent
     And the result and the new count of distinct queued tokens are recorded in this backlog item
 ```
+
+---
+
+## [MEP-068] Chore: Audit Constants for Enum Candidates and Convert Where Appropriate
+
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** none
+
+### Business Problem
+The codebase has accumulated groups of related constants defined as loose `int`, `string`, or `static readonly` fields in `*Constants` classes and elsewhere. The most visible example is the exit-code trio (`ExitCodeSuccess = 0`, `ExitCodeInvalidArguments = 1`, `ExitCodeFatalError = 2`) duplicated identically in `IngestConstants.cs` and `DedupConstants.cs`, dating from the original MEP-026 ingest commit (7550220) with no recorded rationale. Similar patterns likely exist in other constants classes across the API, the tools projects, and as string-literal union candidates in the Angular frontend.
+
+Loose magic values are a minor maintenance hazard: duplication can drift silently, call sites give no type-level hint about valid values, and exhaustiveness checks are impossible. A systematic audit that identifies every group of related constants and converts the clear-cut candidates to enums (C#) or string-literal union types / const objects (TypeScript) would tighten the type system, make valid values discoverable, and reduce duplication -- all without changing runtime behavior.
+
+This is a tech-debt cleanup item with no user-facing behavior change.
+
+### Scope
+
+**Audit targets (not exhaustive; the implementer scans for others):**
+- `src/MealsEnPlace.Tools.Ingest/IngestConstants.cs`
+- `src/MealsEnPlace.Tools.Dedup/DedupConstants.cs`
+- Any other `*Constants.cs` or `const`/`static readonly` field groups in `src/MealsEnPlace.Api/`
+- Any other `*Constants.cs` or `const`/`static readonly` field groups in the tools projects
+- String-literal union candidates and const objects in `src/MealsEnPlace.Web/`
+
+**Known first candidate -- exit codes:**
+The `ExitCodeSuccess = 0`, `ExitCodeInvalidArguments = 1`, `ExitCodeFatalError = 2` constants in both `IngestConstants.cs` and `DedupConstants.cs` become a single shared `ToolExitCode : int` enum with members `FatalError = 2`, `InvalidArguments = 1`, `Success = 0` (alphabetical per convention). Both tools use the shared enum; casts to `int` are confined to one place per tool (a single return-point cast or a tiny helper).
+
+**For every other candidate the audit surfaces, the implementer records:**
+- The constants class and field names
+- Whether to convert (with the target type: enum, flags enum, string-literal union, const object) or leave as-is
+- A short rationale for the decision
+
+**Conversion rules:**
+- Enum member names follow CLAUDE.md conventions: alphabetical order, no abbreviations.
+- Numeric values that are persisted in the database require an EF Core migration check to confirm the stored column is compatible; document the finding.
+- Serialized values (JSON property values, shell exit codes, API contract strings) must not change their wire/runtime representation.
+- Affected tests and feature-folder READMEs are updated in the same pass.
+- The audit list (candidates, decisions, rationales) is recorded as implementation notes in this backlog item once complete.
+
+### Out of Scope
+- Inventing new constants or enums that do not already exist as loose field groups.
+- Refactoring logic around the constants beyond the type change itself.
+- Angular `environment.ts` configuration values (those are deployment-time settings, not domain enums).
+
+### Acceptance Criteria
+```gherkin
+Feature: Constants-to-Enum Audit and Conversion
+
+  Scenario: Every constants class and loose constant group is audited
+    Given the codebase contains *Constants.cs files, const/static readonly field groups in src/MealsEnPlace.Api, the tools projects, and string-literal groups in src/MealsEnPlace.Web
+    When the audit runs
+    Then every such group is reviewed
+    And a decision (convert or leave) with rationale is recorded for each
+
+  Scenario: Exit-code constants become a shared ToolExitCode enum
+    Given IngestConstants.cs defines ExitCodeSuccess = 0, ExitCodeInvalidArguments = 1, ExitCodeFatalError = 2
+    And DedupConstants.cs defines the identical three constants
+    When the conversion runs
+    Then a single shared ToolExitCode enum exists with members FatalError = 2, InvalidArguments = 1, and Success = 0 in alphabetical order
+    And both tools reference the shared enum
+    And no loose ExitCode int constant remains in either tool
+    And the int cast appears at most once per tool's Program.cs
+
+  Scenario: Shell exit codes are numerically unchanged
+    Given the ToolExitCode enum
+    When either tool exits with Success, InvalidArguments, or FatalError
+    Then the process exit code is 0, 1, or 2 respectively
+    And existing shell scripts or CI steps that check exit codes are unaffected
+
+  Scenario: Each approved candidate is converted with behavior unchanged
+    Given the audit identified a group of constants as a conversion candidate
+    When the group is converted to an enum, flags enum, string-literal union, or const object
+    Then the runtime values are identical to the original constants
+    And call sites compile without behavioral changes
+
+  Scenario: Database-persisted values are migration-checked
+    Given a constant group whose values are stored in a database column
+    When it is converted to an enum
+    Then the implementer verifies the column type is compatible
+    And documents whether a migration is needed
+    And if a migration is needed it is included with Up and Down paths
+
+  Scenario: Serialized and wire-format values do not change
+    Given constants that appear in JSON responses, shell exit codes, or API contracts
+    When those constants are converted to enums or union types
+    Then the serialized representation is identical to the prior string or integer value
+
+  Scenario: TypeScript union candidates in Angular are converted where appropriate
+    Given string-literal groups or repeated magic strings in src/MealsEnPlace.Web
+    When the audit identifies them as union-type candidates
+    Then each approved candidate is converted to a string-literal union type or const object
+    And ng build succeeds with zero errors
+
+  Scenario: Tests and READMEs are updated
+    Given tests and feature-folder READMEs that reference the converted constants
+    When the conversion is complete
+    Then every previously passing test still passes
+    And affected READMEs reflect the new types
+    And the solution builds with zero errors on both dotnet build and ng build
+```
