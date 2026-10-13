@@ -154,6 +154,78 @@ public class IngestSummaryTests
         dashes.Should().BeGreaterThan(bunches);
     }
 
+    // ── MEP-067: re-ingest gate and new counters ──────────────────────────────
+
+    [Fact]
+    public void Format_NoBlockedTokensInTopDeferred_PrintsGatePass()
+    {
+        var summary = new IngestSummary();
+        summary.RecordDeferredUnitToken("sprigs");
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        summary.GetReingestGateViolations().Should().BeEmpty();
+        rendered.Should().Contain("Re-ingest gate (MEP-067): PASS");
+    }
+
+    [Fact]
+    public void Format_BlockedTokensInTopDeferred_PrintsGateFailListingThem()
+    {
+        var summary = new IngestSummary();
+        summary.RecordDeferredUnitToken("sticks");
+        summary.RecordDeferredUnitToken("NONE");
+        summary.RecordDeferredUnitToken("sprigs");
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        summary.GetReingestGateViolations().Should().BeEquivalentTo("sticks", "NONE");
+        rendered.Should().Contain("Re-ingest gate (MEP-067): FAIL:");
+        rendered.Should().Contain("sticks");
+        rendered.Should().Contain("NONE");
+    }
+
+    [Fact]
+    public void GetReingestGateViolations_BlockedTokenRankedBeyondTopTwentyFive_DoesNotFail()
+    {
+        var summary = new IngestSummary();
+        for (var index = 0; index < IngestConstants.TopDeferredUnitTokenCount; index++)
+        {
+            for (var repeat = 0; repeat < 10; repeat++)
+            {
+                summary.RecordDeferredUnitToken($"filler{index:D2}");
+            }
+        }
+
+        summary.RecordDeferredUnitToken("sticks");
+
+        summary.GetReingestGateViolations().Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Format_NewCounters_PrintsJunkToTasteAndRecipeResolvedPercentage()
+    {
+        var summary = new IngestSummary
+        {
+            JunkIngredientLinesDropped = 7,
+            RecipesIngested = 4,
+            ToTasteIngredients = 9
+        };
+        summary.RecordRecipeResolution(true);
+        summary.RecordRecipeResolution(true);
+        summary.RecordRecipeResolution(true);
+        summary.RecordRecipeResolution(false);
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        summary.RecipesFullyResolved.Should().Be(3);
+        rendered.Should().Contain("Junk lines dropped:          7");
+        rendered.Should().Contain("To-taste (qty 0, ea):        9");
+        rendered.Should().Contain("Fully resolved:              3 of 4 (75.0%)");
+    }
+
     // ── Format — NER token normalization counter ──────────────────────────────
 
     [Fact]

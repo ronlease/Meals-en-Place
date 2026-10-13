@@ -173,6 +173,30 @@ foreach (var row in streamResult.Rows)
         }
 
         var resolution = unitOfMeasureResolver.NormalizeOrDefer(rawIngredient, bestNer);
+        if (resolution.IsJunkLine)
+        {
+            // MEP-067: junk lines ("None", "-", "to", "or") carry no ingredient; drop them.
+            summary.JunkIngredientLinesDropped++;
+            continue;
+        }
+
+        if (resolution.IsToTaste)
+        {
+            // MEP-067: to-taste seasoning is stored resolved with quantity 0 in "ea".
+            summary.ToTasteIngredients++;
+            recipe.RecipeIngredients.Add(new RecipeIngredient
+            {
+                CanonicalIngredientId = canonicalId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Notes = Truncate(rawIngredient, IngestConstants.RecipeIngredientNotesMaxLength),
+                Quantity = 0m,
+                RecipeId = recipe.Id,
+                UnitOfMeasureId = resolution.UnitOfMeasureId
+            });
+            continue;
+        }
+
         if (resolution.WasDeferred)
         {
             summary.UnitOfMeasureDeferredToQueue++;
@@ -204,6 +228,8 @@ foreach (var row in streamResult.Rows)
             });
         }
     }
+
+    summary.RecordRecipeResolution(recipe.RecipeIngredients.All(i => i.UnitOfMeasureId is not null));
 
     if (!options.DryRun)
     {

@@ -36,6 +36,9 @@ internal sealed class IngestSummary
 
     public int InstructionStepsRetained { get; set; }
 
+    /// <summary>Count of junk ingredient lines ("None", "-", "to", "or") dropped without a RecipeIngredient row.</summary>
+    public int JunkIngredientLinesDropped { get; set; }
+
     /// <summary>
     /// Count of NER tokens whose normalized value differed from the original
     /// token string. Informational: shows how much Kaggle noise was cleaned up.
@@ -50,6 +53,12 @@ internal sealed class IngestSummary
 
     public bool RecipeReferenceCountBackfilled { get; set; }
 
+    /// <summary>
+    /// Recipes with no deferred and no container-flagged ingredient: the dry-run
+    /// estimate of the MEP-067 fully-resolved share.
+    /// </summary>
+    public int RecipesFullyResolved { get; private set; }
+
     public int RecipesIngested { get; set; }
 
     public int RecipesSkippedByMaxRows { get; set; }
@@ -63,6 +72,9 @@ internal sealed class IngestSummary
     public int ResolvedWeightIngredients { get; set; }
 
     public int TotalIngredientsProcessed { get; set; }
+
+    /// <summary>Count of to-taste seasoning lines stored as quantity 0 in "ea".</summary>
+    public int ToTasteIngredients { get; set; }
 
     public int UnitOfMeasureDeferredToQueue { get; set; }
 
@@ -89,6 +101,18 @@ internal sealed class IngestSummary
         }
     }
 
+    /// <summary>
+    /// Tallies one recipe toward the fully-resolved share. Pass true when the
+    /// recipe has no deferred and no container-flagged ingredient.
+    /// </summary>
+    public void RecordRecipeResolution(bool fullyResolved)
+    {
+        if (fullyResolved)
+        {
+            RecipesFullyResolved++;
+        }
+    }
+
     /// <summary>Tallies a deterministically resolved ingredient by unit of measure type.</summary>
     public void RecordResolvedUnitOfMeasureType(UnitOfMeasureType unitOfMeasureType)
     {
@@ -107,6 +131,22 @@ internal sealed class IngestSummary
                 ResolvedArbitraryIngredients++;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Returns the MEP-067 re-ingest gate blocked tokens that appear in the top
+    /// <see cref="IngestConstants.TopDeferredUnitTokenCount"/> deferred unit tokens
+    /// (case-insensitive). Empty means the gate passes.
+    /// </summary>
+    public IReadOnlyList<string> GetReingestGateViolations()
+    {
+        var blocked = new HashSet<string>(
+            IngestConstants.ReingestGateBlockedUnitTokens, StringComparer.OrdinalIgnoreCase);
+
+        return GetTopDeferredUnitTokens()
+            .Where(kvp => blocked.Contains(kvp.Key))
+            .Select(kvp => kvp.Key)
+            .ToList();
     }
 
     public void StopTimer() => _stopwatch.Stop();
@@ -128,10 +168,7 @@ internal sealed class IngestSummary
 
         var topDeferred = string.Join(
             Environment.NewLine,
-            _deferredUnitTokenCounts
-                .OrderByDescending(kvp => kvp.Value)
-                .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
-                .Take(25)
+            GetTopDeferredUnitTokens()
                 .Select(kvp => $"  {kvp.Value,10:N0}  {kvp.Key}"));
         if (topDeferred.Length == 0)
         {
@@ -141,6 +178,15 @@ internal sealed class IngestSummary
         var containerPercent = TotalIngredientsProcessed == 0
             ? 0.0
             : ContainerFlaggedIngredients * 100.0 / TotalIngredientsProcessed;
+
+        var violations = GetReingestGateViolations();
+        var gateLine = violations.Count == 0
+            ? "PASS"
+            : $"FAIL: {string.Join(", ", violations)}";
+
+        var recipesResolvedPercent = RecipesIngested == 0
+            ? 0.0
+            : RecipesFullyResolved * 100.0 / RecipesIngested;
 
         var capNote = StreamTerminatedByMaxRowsCap
             ? " (stream terminated early by --max-rows cap)"
@@ -161,6 +207,7 @@ internal sealed class IngestSummary
 
             Recipes
               Ingested:                    {RecipesIngested:N0}
+              Fully resolved:              {RecipesFullyResolved:N0} of {RecipesIngested:N0} ({recipesResolvedPercent:0.0}%)
               Batches flushed:             {BatchesFlushed:N0}
               CanonicalIngredients created:{CanonicalIngredientsCreated:N0}
               Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run)")}
@@ -169,6 +216,8 @@ internal sealed class IngestSummary
               NER tokens normalized:       {NerTokensNormalized:N0}
               NER tokens rejected:         {NerTokensRejected:N0}
               Total processed:             {TotalIngredientsProcessed:N0}
+              Junk lines dropped:          {JunkIngredientLinesDropped:N0}
+              To-taste (qty 0, ea):        {ToTasteIngredients:N0}
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
               Unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
               Unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
@@ -180,8 +229,10 @@ internal sealed class IngestSummary
               Weight:                      {ResolvedWeightIngredients:N0} ({weightPercent:0.0}%)
               Arbitrary:                   {ResolvedArbitraryIngredients:N0} ({arbitraryPercent:0.0}%)
 
-            Top 25 deferred unit tokens
+            Top {IngestConstants.TopDeferredUnitTokenCount} deferred unit tokens
             {topDeferred}
+
+            Re-ingest gate (MEP-067): {gateLine}
 
             Instructions
               Steps retained:              {InstructionStepsRetained:N0}
@@ -193,4 +244,10 @@ internal sealed class IngestSummary
 
             """;
     }
+
+    private IEnumerable<KeyValuePair<string, int>> GetTopDeferredUnitTokens() =>
+        _deferredUnitTokenCounts
+            .OrderByDescending(kvp => kvp.Value)
+            .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
+            .Take(IngestConstants.TopDeferredUnitTokenCount);
 }

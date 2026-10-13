@@ -5406,7 +5406,7 @@ Feature: Camping Trip User Interface
 
 ## [MEP-067] Ingest Unit Token Coverage: Seed Count and Measure Aliases, Filter Junk Tokens, and Raise the Fully-Resolved Recipe Share
 
-**Status:** Backlog
+**Status:** In Progress
 **Priority:** High
 **Depends on:** MEP-063 (corrected the count fallback so unrecognized tokens defer; this story clears the resulting backlog of deferred tokens)
 **Related to:** MEP-049, MEP-050 (earlier normalization-gap cleanup passes in the same ingest pipeline; this story reuses their reset-and-re-ingest procedure)

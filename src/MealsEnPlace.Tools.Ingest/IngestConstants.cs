@@ -37,6 +37,27 @@ internal static class IngestConstants
     /// </summary>
     public const int UnresolvedTokenDedupCacheInitialCapacity = 5_000;
 
+    // ── Unit of measure resolution and re-ingest gate (MEP-067) ───────────
+
+    /// <summary>Abbreviation of the gram unit used for ingredient-specific weights such as butter sticks.</summary>
+    public const string GramUnitOfMeasureAbbreviation = "g";
+
+    /// <summary>
+    /// Number of top deferred unit tokens printed in the summary and checked
+    /// by the re-ingest gate.
+    /// </summary>
+    public const int TopDeferredUnitTokenCount = 25;
+
+    /// <summary>
+    /// Tokens that must not appear in the top deferred unit tokens of a dry
+    /// run before the full re-ingest starts (MEP-067). Compared case-insensitively.
+    /// </summary>
+    public static readonly IReadOnlyList<string> ReingestGateBlockedUnitTokens =
+    [
+        "stick", "sticks", "slices", "cloves", "pinch", "bunch", "dash",
+        "to", "or", "None", "-", "-1/2", "-2", "-3", "large", "small", "medium"
+    ];
+
     // ── Exit codes ─────────────────────────────────────────────────────────
 
     /// <summary>Ingest completed successfully; summary printed.</summary>
