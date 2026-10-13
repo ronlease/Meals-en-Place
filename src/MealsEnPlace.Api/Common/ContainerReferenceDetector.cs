@@ -23,8 +23,13 @@ public static class ContainerReferenceDetector
         "box",
         "can",
         "carton",
+        "container",
+        "envelope",
         "jar",
+        "package",
         "packet",
+        "pkg",
+        "pouch",
         "tube"
     };
 
