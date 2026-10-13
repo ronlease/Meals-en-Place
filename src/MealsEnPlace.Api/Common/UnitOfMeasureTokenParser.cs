@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 namespace MealsEnPlace.Api.Common;
 
 /// <summary>
@@ -6,12 +8,41 @@ namespace MealsEnPlace.Api.Common;
 /// <see cref="ParseWithIngredientContext"/> additionally derives ordered unit token
 /// candidates and decides whether the remainder is a count followed by the ingredient
 /// noun (e.g. "4 chicken breasts") rather than a unit.
+/// <para>
+/// MEP-067: also drops range upper bounds and sums hyphenated mixed numbers
+/// ("1-1/2", "2-3"), skips junk words and size descriptors before unit detection,
+/// flags junk and to-taste lines, and detects butter sticks.
+/// </para>
 /// Pure function with no dependencies; shared between the runtime service
 /// (<see cref="UnitOfMeasureNormalizationService"/>) and the offline ingest tool so
 /// both paths see identical parse semantics.
 /// </summary>
-public static class UnitOfMeasureTokenParser
+public static partial class UnitOfMeasureTokenParser
 {
+    private static readonly HashSet<string> ButterContextExcludedWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "almond",
+        "apple",
+        "cashew",
+        "cocoa",
+        "nut",
+        "peanut",
+        "shea",
+        "sunflower"
+    };
+
+    private static readonly HashSet<string> ButterContextRequiredWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "butter",
+        "margarine"
+    };
+
+    /// <summary>
+    /// Grams in one US standard stick of butter or margarine (a quarter pound). A defined
+    /// size, not a product-size assumption.
+    /// </summary>
+    public const decimal ButterStickGrams = 113m;
+
     private static readonly HashSet<string> CountNounLeadingDescriptors = new(StringComparer.OrdinalIgnoreCase)
     {
         "boneless",
@@ -26,7 +57,63 @@ public static class UnitOfMeasureTokenParser
         "whole"
     };
 
+    private static readonly HashSet<string> JunkLines = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "-",
+        "–",
+        "none",
+        "or",
+        "to"
+    };
+
+    private static readonly HashSet<string> JunkWords = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "-",
+        "–",
+        "more",
+        "none",
+        "or",
+        "to"
+    };
+
+    private static readonly HashSet<string> SeasoningOnlyLines = new(StringComparer.Ordinal)
+    {
+        "black pepper",
+        "freshly ground black pepper",
+        "ground black pepper",
+        "kosher salt",
+        "pepper",
+        "pepper and salt",
+        "salt",
+        "salt & pepper",
+        "salt and black pepper",
+        "salt and freshly ground black pepper",
+        "salt and pepper",
+        "sea salt"
+    };
+
+    private static readonly HashSet<string> SizeDescriptors = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "extra-large",
+        "jumbo",
+        "large",
+        "lg",
+        "lg.",
+        "med",
+        "med.",
+        "medium",
+        "small",
+        "sm",
+        "sm."
+    };
+
     private static readonly char[] TrailingPunctuation = [',', ';', ':'];
+
+    private static bool ContainsAnyWord(string text, HashSet<string> words) =>
+        WordPattern().Matches(text).Any(m => words.Contains(m.Value));
+
+    [GeneratedRegex(@"^-(\d+/\d+)(?![\d/.])")]
+    private static partial Regex HyphenMixedNumberPattern();
 
     private static bool IsSimpleFraction(string chunk)
     {
@@ -39,11 +126,20 @@ public static class UnitOfMeasureTokenParser
         return chunk[..slash].All(char.IsAsciiDigit) && chunk[(slash + 1)..].All(char.IsAsciiDigit);
     }
 
+    private static string NormalizeLine(string line)
+    {
+        var lowered = line.Replace("(", " ").Replace(")", " ").ToLowerInvariant();
+        var collapsed = string.Join(' ', lowered.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        return collapsed.TrimEnd('.').Trim();
+    }
+
     /// <summary>
     /// Splits <paramref name="measureString"/> into a numeric quantity and
     /// the remainder as a unit token. Returns <c>(0, wholeString)</c> when
     /// no leading number is found so the caller can route to Claude or the
-    /// review queue. Supports mixed numbers such as "1 1/2 cups".
+    /// review queue. Supports mixed numbers such as "1 1/2 cups" and "1-1/2 cups"
+    /// (summed), and ranges such as "2-3 tbsp", "2 - 3 tsp" or "1 to 1 1/4 c."
+    /// (lower bound kept, upper bound dropped).
     /// </summary>
     public static (decimal Quantity, string UnitToken) Parse(string measureString)
     {
@@ -67,11 +163,28 @@ public static class UnitOfMeasureTokenParser
         var remainder = trimmed[numericEnd..].Trim();
 
         var quantity = ParseFractionOrDecimal(numericPart);
+        var wasMixed = false;
+
+        // Hyphen mixed number: "1-1/2 cups" => 1.5 with remainder "cups".
+        if (quantity > 0m && numericPart.All(char.IsAsciiDigit))
+        {
+            var hyphenMatch = HyphenMixedNumberPattern().Match(remainder);
+            if (hyphenMatch.Success)
+            {
+                var fraction = ParseFractionOrDecimal(hyphenMatch.Groups[1].Value);
+                if (fraction > 0m)
+                {
+                    quantity += fraction;
+                    remainder = remainder[hyphenMatch.Length..].Trim();
+                    wasMixed = true;
+                }
+            }
+        }
 
         // Mixed number: "1 1/2 cups" => 1.5 with remainder "cups".
-        if (!numericPart.Contains('/') && quantity > 0m)
+        if (!wasMixed && !numericPart.Contains('/') && quantity > 0m)
         {
-            var chunkEnd = remainder.IndexOfAny([' ', '\t']);
+            var chunkEnd = remainder.IndexOfAny([' ', '\t', '-', '–']);
             var chunk = chunkEnd < 0 ? remainder : remainder[..chunkEnd];
             if (IsSimpleFraction(chunk))
             {
@@ -81,6 +194,16 @@ public static class UnitOfMeasureTokenParser
                     quantity += fraction;
                     remainder = chunkEnd < 0 ? string.Empty : remainder[chunkEnd..].Trim();
                 }
+            }
+        }
+
+        // Range: "2-3 tbsp", "2 - 3 tsp", "1 to 1 1/4 c." => keep the lower bound only.
+        if (quantity > 0m)
+        {
+            var rangeMatch = RangeUpperBoundPattern().Match(remainder);
+            if (rangeMatch.Success)
+            {
+                remainder = remainder[rangeMatch.Length..].Trim();
             }
         }
 
@@ -111,8 +234,9 @@ public static class UnitOfMeasureTokenParser
 
     /// <summary>
     /// Parses <paramref name="measureString"/> and derives the ordered unit token
-    /// candidates, the review-queue deferral token, and whether the remainder is a
-    /// count followed by <paramref name="ingredientName"/>.
+    /// candidates, the review-queue deferral token, junk / to-taste flags, butter-stick
+    /// weight, and whether the remainder is a count followed by <paramref name="ingredientName"/>.
+    /// Junk words and size descriptors are skipped before candidate detection.
     /// </summary>
     public static MeasureStringParseResult ParseWithIngredientContext(
         string measureString,
@@ -122,12 +246,20 @@ public static class UnitOfMeasureTokenParser
 
         if (quantity <= 0m)
         {
+            var junkLine = JunkLines.Contains(remainder.Trim().TrimEnd('.'));
+            var normalizedLine = NormalizeLine(remainder);
+            var toTaste = !junkLine
+                          && (ToTastePattern().IsMatch(normalizedLine) || SeasoningOnlyLines.Contains(normalizedLine));
+            var suppressed = junkLine || toTaste;
+
             return new MeasureStringParseResult
             {
-                DeferralUnitToken = remainder,
+                DeferralUnitToken = suppressed ? string.Empty : remainder,
                 IsCountWithIngredientNoun = false,
+                IsJunkLine = junkLine,
+                IsToTaste = toTaste,
                 Quantity = quantity,
-                UnitTokenCandidates = string.IsNullOrWhiteSpace(remainder) ? [] : [remainder]
+                UnitTokenCandidates = suppressed || string.IsNullOrWhiteSpace(remainder) ? [] : [remainder]
             };
         }
 
@@ -142,9 +274,40 @@ public static class UnitOfMeasureTokenParser
             };
         }
 
-        var words = StripLeadingParenthetical(remainder)
+        var allWords = StripLeadingParenthetical(remainder)
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        var firstWord = words.Length > 0 ? words[0] : string.Empty;
+
+        var startsWithSizeDescriptor = false;
+        var skipped = 0;
+        while (skipped < allWords.Length)
+        {
+            var word = allWords[skipped].TrimEnd(TrailingPunctuation);
+            if (SizeDescriptors.Contains(word))
+            {
+                startsWithSizeDescriptor = true;
+            }
+            else if (!JunkWords.Contains(word))
+            {
+                break;
+            }
+
+            skipped++;
+        }
+
+        var words = allWords[skipped..];
+        if (words.Length == 0)
+        {
+            return new MeasureStringParseResult
+            {
+                DeferralUnitToken = string.Empty,
+                IsCountWithIngredientNoun = true,
+                Quantity = quantity,
+                StartsWithSizeDescriptor = startsWithSizeDescriptor,
+                UnitTokenCandidates = []
+            };
+        }
+
+        var firstWord = words[0];
         var firstWordTrimmed = firstWord.TrimEnd(TrailingPunctuation);
 
         var candidates = new List<string>();
@@ -159,13 +322,36 @@ public static class UnitOfMeasureTokenParser
         return new MeasureStringParseResult
         {
             DeferralUnitToken = firstWordTrimmed,
+            IngredientSpecificGramsPerUnit = ResolveButterStickGrams(words, ingredientName),
             IsCountWithIngredientNoun = StartsWithIngredientNoun(remainder, ingredientName),
             Quantity = quantity,
+            StartsWithSizeDescriptor = startsWithSizeDescriptor,
             UnitTokenCandidates = candidates
                 .Where(c => !string.IsNullOrWhiteSpace(c))
                 .Distinct()
                 .ToList()
         };
+    }
+
+    [GeneratedRegex(@"^(?:[-–]|(?:to|or)(?=\s))\s*(?:\d+\.\d+|\.\d+|\d+/\d+|\d+)(?:\s+\d+/\d+)?", RegexOptions.IgnoreCase)]
+    private static partial Regex RangeUpperBoundPattern();
+
+    private static decimal? ResolveButterStickGrams(string[] words, string? ingredientName)
+    {
+        var unitWord = words[0].TrimEnd('.', ',', ';', ':').ToLowerInvariant();
+        if (unitWord is not ("stick" or "sticks"))
+        {
+            return null;
+        }
+
+        var context = string.IsNullOrWhiteSpace(ingredientName)
+            ? string.Join(' ', words.Skip(1))
+            : ingredientName;
+
+        return ContainsAnyWord(context, ButterContextRequiredWords)
+               && !ContainsAnyWord(context, ButterContextExcludedWords)
+            ? ButterStickGrams
+            : null;
     }
 
     private static bool SingularOrPluralMatch(string left, string right)
@@ -200,7 +386,9 @@ public static class UnitOfMeasureTokenParser
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
 
         var index = 0;
-        while (index < words.Length && CountNounLeadingDescriptors.Contains(words[index].TrimEnd(TrailingPunctuation)))
+        while (index < words.Length
+               && (CountNounLeadingDescriptors.Contains(words[index].TrimEnd(TrailingPunctuation))
+                   || JunkWords.Contains(words[index].TrimEnd(TrailingPunctuation))))
         {
             index++;
         }
@@ -224,4 +412,10 @@ public static class UnitOfMeasureTokenParser
         var close = trimmed.IndexOf(')');
         return close < 0 ? trimmed : trimmed[(close + 1)..].TrimStart();
     }
+
+    [GeneratedRegex(@"\bto taste\b")]
+    private static partial Regex ToTastePattern();
+
+    [GeneratedRegex(@"[a-z]+", RegexOptions.IgnoreCase)]
+    private static partial Regex WordPattern();
 }

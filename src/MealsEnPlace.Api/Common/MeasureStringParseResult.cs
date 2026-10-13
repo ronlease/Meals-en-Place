@@ -8,10 +8,26 @@ public sealed class MeasureStringParseResult
 {
     /// <summary>
     /// The token to record on the review queue when deterministic resolution fails.
-    /// For a positive quantity this is the leading word of the remainder; for a
-    /// zero quantity it is the whole string.
+    /// For a positive quantity this is the leading word of the remainder (after skipping
+    /// junk words and size descriptors); for a zero quantity it is the whole string.
+    /// Empty for junk and to-taste lines, which never queue.
     /// </summary>
     public string DeferralUnitToken { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Grams per one parsed unit when the unit is ingredient-specific and defined
+    /// (currently only a US butter or margarine stick, 113 g); null otherwise.
+    /// When set, it takes precedence over unit and alias lookup.
+    /// </summary>
+    public decimal? IngredientSpecificGramsPerUnit { get; init; }
+
+    /// <summary>
+    /// True when the quantity is positive and an unrecognized unit word may be treated as a
+    /// count of "each": the remainder is a count of the ingredient noun, or it started with
+    /// a size descriptor (e.g. "1 large yellow onion"). Computed.
+    /// </summary>
+    public bool IsCountFallbackEligible =>
+        Quantity > 0m && (IsCountWithIngredientNoun || StartsWithSizeDescriptor);
 
     /// <summary>
     /// True when the measure string is a bare count or a count followed by the
@@ -20,8 +36,26 @@ public sealed class MeasureStringParseResult
     /// </summary>
     public bool IsCountWithIngredientNoun { get; init; }
 
+    /// <summary>
+    /// True when there is no quantity and the whole line is a junk token such as
+    /// "None", "-", "to" or "or". Never a unit; never queued.
+    /// </summary>
+    public bool IsJunkLine { get; init; }
+
+    /// <summary>
+    /// True when there is no quantity and the line is a to-taste seasoning
+    /// ("salt to taste", "salt and pepper", "pepper"). Never queued.
+    /// </summary>
+    public bool IsToTaste { get; init; }
+
     /// <summary>The parsed numeric quantity; 0 when no leading number was found.</summary>
     public decimal Quantity { get; init; }
+
+    /// <summary>
+    /// True when a size descriptor (large, small, medium, ...) was skipped before the
+    /// first unit word.
+    /// </summary>
+    public bool StartsWithSizeDescriptor { get; init; }
 
     /// <summary>
     /// Candidate unit tokens, in priority order, to look up against the unit of

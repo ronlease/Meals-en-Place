@@ -23,8 +23,9 @@ public class RecipeIngredient
 
     /// <summary>
     /// Preserves the original recipe measure string when a container reference was
-    /// declared (e.g., "1 can chopped tomatoes"). Null when no container reference
-    /// was involved.
+    /// declared (e.g., "1 can chopped tomatoes"). Also preserves the original line for
+    /// to-taste seasonings ("salt and pepper (to taste)"), which are stored with
+    /// Quantity 0 in "ea" and <see cref="IsContainerResolved"/> true. Null otherwise.
     /// </summary>
     public string? Notes { get; set; }
 
