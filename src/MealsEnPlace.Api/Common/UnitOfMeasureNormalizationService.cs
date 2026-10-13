@@ -61,10 +61,10 @@ public sealed class NormalizationResult
 /// <para>
 /// Resolution order:
 /// <list type="number">
-///   <item><description>Parse a numeric quantity and unit token from the measure string.</description></item>
-///   <item><description>Look up the unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
+///   <item><description>Parse a numeric quantity from the measure string and derive candidate unit tokens from the leading words of the remainder (mixed numbers such as "1 1/2 cups" are supported).</description></item>
+///   <item><description>Look up each candidate unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
 ///   <item><description>If not found, look up against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> to catch dataset variants (e.g., "c.", "Tbsp.", "lbs").</description></item>
-///   <item><description>If still not found and a positive quantity parsed, default to "each" (count-with-ingredient-noun pattern, e.g. "4 chicken breasts").</description></item>
+///   <item><description>If still not found, a positive quantity parsed, and the remainder is empty or starts with the ingredient noun, default to "each" (count-with-ingredient-noun pattern, e.g. "4 chicken breasts" for "chicken breast"). Unrecognized tokens such as "sprigs" are not treated as counts.</description></item>
 ///   <item><description>If still not found, fall back to Claude via <see cref="IClaudeService.ResolveUnitOfMeasureAsync"/>.</description></item>
 /// </list>
 /// </para>
@@ -99,7 +99,7 @@ public interface IUnitOfMeasureNormalizationService
 
     /// <summary>
     /// Ingest-mode normalization. Attempts the same deterministic resolution order
-    /// as <see cref="NormalizeAsync"/> (abbreviation / name / alias / count-noun
+    /// as <see cref="NormalizeAsync"/> (abbreviation / name / alias / count-with-ingredient-noun
     /// fallback), but when no deterministic match is found it writes an
     /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUnitOfMeasureToken"/> row to
     /// the review queue instead of invoking Claude. This preserves Claude quota
@@ -128,6 +128,10 @@ public interface IUnitOfMeasureNormalizationService
     /// to a full ingest.
     /// </summary>
     /// <param name="measureString">The raw measure string to preview.</param>
+    /// <param name="ingredientName">
+    /// The ingredient name, used to recognize a count followed by the ingredient noun
+    /// (e.g. "4 chicken breasts"). May be null.
+    /// </param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>
     /// A <see cref="NormalizationResult"/> on a deterministic match; null
@@ -135,6 +139,7 @@ public interface IUnitOfMeasureNormalizationService
     /// </returns>
     Task<NormalizationResult?> TryResolveDeterministicallyAsync(
         string measureString,
+        string? ingredientName,
         CancellationToken cancellationToken = default);
 }
 
@@ -152,10 +157,9 @@ public class UnitOfMeasureNormalizationService(
         string ingredientName,
         CancellationToken cancellationToken = default)
     {
-        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
+        var parsed = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
 
-        var deterministic = await TryResolveDeterministicallyCoreAsync(
-            parsedQuantity, unitToken, cancellationToken);
+        var deterministic = await TryResolveDeterministicallyCoreAsync(parsed, cancellationToken);
 
         if (deterministic is not null)
         {
@@ -167,7 +171,7 @@ public class UnitOfMeasureNormalizationService(
         if (!await claudeAvailability.IsConfiguredAsync(cancellationToken))
         {
             return await DeferToReviewQueueAsync(
-                parsedQuantity, unitToken, measureString, ingredientName, cancellationToken);
+                parsed.Quantity, parsed.DeferralUnitToken, measureString, ingredientName, cancellationToken);
         }
 
         // Claude fallback for colloquial or unmapped units.
@@ -199,10 +203,9 @@ public class UnitOfMeasureNormalizationService(
         string ingredientName,
         CancellationToken cancellationToken = default)
     {
-        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
+        var parsed = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
 
-        var deterministic = await TryResolveDeterministicallyCoreAsync(
-            parsedQuantity, unitToken, cancellationToken);
+        var deterministic = await TryResolveDeterministicallyCoreAsync(parsed, cancellationToken);
 
         if (deterministic is not null)
         {
@@ -210,17 +213,17 @@ public class UnitOfMeasureNormalizationService(
         }
 
         return await DeferToReviewQueueAsync(
-            parsedQuantity, unitToken, measureString, ingredientName, cancellationToken);
+            parsed.Quantity, parsed.DeferralUnitToken, measureString, ingredientName, cancellationToken);
     }
 
     /// <inheritdoc />
     public async Task<NormalizationResult?> TryResolveDeterministicallyAsync(
         string measureString,
+        string? ingredientName,
         CancellationToken cancellationToken = default)
     {
-        var (parsedQuantity, unitToken) = ParseMeasureString(measureString);
-        return await TryResolveDeterministicallyCoreAsync(
-            parsedQuantity, unitToken, cancellationToken);
+        var parsed = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+        return await TryResolveDeterministicallyCoreAsync(parsed, cancellationToken);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────
@@ -260,20 +263,20 @@ public class UnitOfMeasureNormalizationService(
     /// and <see cref="NormalizeOrDeferAsync"/> so both expose identical determinism.
     /// </summary>
     private async Task<NormalizationResult?> TryResolveDeterministicallyCoreAsync(
-        decimal parsedQuantity,
-        string unitToken,
+        MeasureStringParseResult parsed,
         CancellationToken cancellationToken)
     {
-        // Step 1: deterministic lookup by abbreviation / name (with plural stripping).
-        if (!string.IsNullOrWhiteSpace(unitToken))
+        foreach (var unitToken in parsed.UnitTokenCandidates)
         {
-            var normalizedToken = unitToken.ToLower().TrimEnd('s');
+            // Step 1: deterministic lookup by abbreviation / name (with plural stripping).
+            var lowerToken = unitToken.ToLower();
+            var normalizedToken = lowerToken.TrimEnd('s');
             var unitOfMeasure = await dbContext.UnitsOfMeasure
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    u => u.Abbreviation.ToLower() == unitToken.ToLower()
+                    u => u.Abbreviation.ToLower() == lowerToken
                          || u.Abbreviation.ToLower() == normalizedToken
-                         || u.Name.ToLower() == unitToken.ToLower()
+                         || u.Name.ToLower() == lowerToken
                          || u.Name.ToLower() == normalizedToken,
                     cancellationToken);
 
@@ -282,7 +285,7 @@ public class UnitOfMeasureNormalizationService(
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
-                    Quantity = parsedQuantity,
+                    Quantity = parsed.Quantity,
                     UnitOfMeasureAbbreviation = unitOfMeasure.Abbreviation,
                     UnitOfMeasureId = unitOfMeasure.Id,
                     WasClaudeResolved = false
@@ -292,7 +295,7 @@ public class UnitOfMeasureNormalizationService(
             // Step 2: alias-table lookup for dataset variants (e.g. "c.", "Tbsp.", "lbs").
             var aliasedUnitOfMeasure = await dbContext.UnitOfMeasureAliases
                 .AsNoTracking()
-                .Where(a => a.Alias.ToLower() == unitToken.ToLower())
+                .Where(a => a.Alias.ToLower() == lowerToken)
                 .Select(a => a.UnitOfMeasure!)
                 .FirstOrDefaultAsync(cancellationToken);
 
@@ -301,7 +304,7 @@ public class UnitOfMeasureNormalizationService(
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
-                    Quantity = parsedQuantity,
+                    Quantity = parsed.Quantity,
                     UnitOfMeasureAbbreviation = aliasedUnitOfMeasure.Abbreviation,
                     UnitOfMeasureId = aliasedUnitOfMeasure.Id,
                     WasClaudeResolved = false
@@ -310,7 +313,7 @@ public class UnitOfMeasureNormalizationService(
         }
 
         // Step 3: count-with-ingredient-noun fallback.
-        if (parsedQuantity > 0m && !string.IsNullOrWhiteSpace(unitToken))
+        if (parsed.Quantity > 0m && parsed.IsCountWithIngredientNoun)
         {
             var eachUnitOfMeasure = await dbContext.UnitsOfMeasure
                 .AsNoTracking()
@@ -321,7 +324,7 @@ public class UnitOfMeasureNormalizationService(
                 return new NormalizationResult
                 {
                     Confidence = ClaudeConfidence.High,
-                    Quantity = parsedQuantity,
+                    Quantity = parsed.Quantity,
                     UnitOfMeasureAbbreviation = eachUnitOfMeasure.Abbreviation,
                     UnitOfMeasureId = eachUnitOfMeasure.Id,
                     WasClaudeResolved = false
@@ -394,11 +397,4 @@ public class UnitOfMeasureNormalizationService(
 
     private static string Truncate(string value, int maxLength) =>
         value.Length <= maxLength ? value : value[..maxLength];
-
-    /// <summary>
-    /// Back-compat delegate to <see cref="UnitOfMeasureTokenParser.Parse"/> so existing
-    /// call sites in this class do not need refactoring.
-    /// </summary>
-    private static (decimal Quantity, string UnitToken) ParseMeasureString(string measureString) =>
-        UnitOfMeasureTokenParser.Parse(measureString);
 }

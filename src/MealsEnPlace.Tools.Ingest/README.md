@@ -31,6 +31,9 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 - **Parses ingredient / directions / NER arrays** as JSON. Malformed rows are counted and skipped, not fatal.
 - **Detects container references** (can, jar, box, etc.) via `ContainerReferenceDetector` and persists them as unresolved `RecipeIngredient` rows with the original text in `Notes`.
 - **Resolves units of measure deterministically** through `InMemoryUnitOfMeasureResolver` — the tool preloads `UnitOfMeasure` and `UnitOfMeasureAlias` into memory so per-ingredient resolution is O(1). Unresolved tokens go to the `UnresolvedUnitOfMeasureToken` review queue instead of invoking Claude, preserving quota.
+- **Extracts the unit from the leading word(s) of the measure remainder** (MEP-063) via `UnitOfMeasureTokenParser.ParseWithIngredientContext`. The parser yields ordered unit-token candidates (e.g. "heaping tablespoons sugar" tries "heaping tablespoons", then "tablespoons") that are looked up against units and aliases; the whole rest of the line is no longer treated as the unit.
+- **Applies the count-noun rule**: a quantity falls back to `ea` only when the remaining text is the ingredient noun itself (e.g. "2 eggs" for ingredient "egg"). Anything else with no unit match is deferred to the review queue under the parser's deferral token rather than silently stored as a count.
+- **Reports resolution detail in the summary**: a "Resolved by unit of measure type" block (Count / Volume / Weight, with percentages; Arbitrary is shown too) and a "Top 25 deferred unit tokens" list ranked by count. Both tallies are computed in `--dry-run` as well, so the distribution can be checked before any database write.
 - **Normalizes NER tokens** via `NerTokenNormalizer` before any canonical lookup or creation. Rules (applied in order): trim; strip leading/trailing non-[letter/digit/apostrophe] characters; collapse internal whitespace; repeatedly strip trailing stopwords (a, an, the, and, or, of, for, with, to, add, plus); reject if empty; reject if no letter; reject if all words are stopwords. Tokens that differ from their original after normalization are counted as "NER tokens normalized"; tokens rejected by any rule are counted as "NER tokens rejected" and produce no `CanonicalIngredient` row.
 - **Upserts canonical ingredients** from the NER column via `CanonicalIngredientRegistry`. Each unique NER token becomes a `CanonicalIngredient` row; raw ingredient strings link to the longest NER token they contain.
 - **Truncates over-length strings** at the EF-configured column caps before writing (recipe title, source URL, ingredient notes, unresolved-token sample columns). Over-length source URLs are dropped to null rather than truncated, since a truncated URL is worse than none.
@@ -48,6 +51,10 @@ The tool automatically skips rows whose `source` column equals `Recipes1M`, per 
 > does not detect previously imported recipes: running it twice duplicates every recipe in the
 > catalog and doubles every ingredient reference count. Canonical ingredients themselves are
 > deduplicated by name, so the duplicates are invisible until you notice every recipe twice.
+
+Reasons to reset and re-ingest include a change to the ingest pipeline that alters stored rows. MEP-063 (unit-of-measure parsing fix: the old resolver stored `ea` for any leftover text, producing wrong units such as "2 tablespoons" as count) is one: rows ingested before it carry incorrect `UnitOfMeasureId` values and must be rebuilt.
+
+**Dry-run gate:** always run step 3 first and review the "Resolved by unit of measure type" and "Top 25 deferred unit tokens" blocks. Count should no longer dominate, and common units (cup, tbsp, tsp, oz, lb, g) should appear under Volume / Weight. Do not run the live ingest until the dry-run distribution looks right.
 
 Run the following commands from the repository root:
 
@@ -73,6 +80,18 @@ dotnet run --project src/MealsEnPlace.Tools.Ingest -- --csv src/MealsEnPlace.Too
 dotnet run --project src/MealsEnPlace.Tools.Dedup -- --dry-run
 dotnet run --project src/MealsEnPlace.Tools.Dedup
 ```
+
+After the live ingest, verify the distribution in the database:
+
+```sql
+SELECT u."UnitOfMeasureType", COUNT(*) AS ingredient_count
+FROM "RecipeIngredients" ri
+LEFT JOIN "UnitsOfMeasure" u ON u."Id" = ri."UnitOfMeasureId"
+GROUP BY u."UnitOfMeasureType"
+ORDER BY ingredient_count DESC;
+```
+
+`NULL` rows are container-flagged or deferred ingredients awaiting resolution.
 
 `dotnet ef database update` applies all migrations so seed data (units of measure, seasonality
 windows, etc.) lands before the ingest begins. The ingest tool is only run **once** per clean

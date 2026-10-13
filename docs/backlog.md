@@ -5031,10 +5031,40 @@ Feature: Meal Plan Generation Bounded by Inventory-Relevant Recipes
 
 ## [MEP-063] Unit of Measure Normalization: Count Fallback Fires on Unrecognized Tokens Instead of Deferring to Review Queue
 
-**Status:** Backlog
+**Status:** Done
 **Priority:** Critical
 **Depends on:** MEP-026 (the story whose "Count-with-ingredient-noun defaults to 'ea'" and "Unresolved UOM tokens are queued for user review" acceptance criteria this bug violates)
 **Related to:** MEP-049, MEP-050 (prior normalization-gap cleanup passes in the same ingest pipeline -- context for the recurring nature of normalization defects in this path, and for the reset-and-re-ingest procedure this fix must reuse)
+
+### Implementation Notes
+Shipped on branch `fix/mep-063-unit-of-measure-count-fallback`. No schema change and no migration.
+
+**Corrected root cause.** The Business Problem below attributes the defect solely to an inverted Step 3 condition. Investigation showed three compounding causes:
+
+- (a) `UnitOfMeasureTokenParser.Parse` returned the whole rest of the line as the unit token, ingredient name included (e.g., "sprigs thyme" rather than "sprigs").
+- (b) The Step 3 "ea" fallback required a token to be present, in BOTH `UnitOfMeasureNormalizationService` and the ingest tool's `InMemoryUnitOfMeasureResolver`. The ingest resolver is what actually wrote the bad rows; the API service has no production caller.
+- (c) Nothing distinguished a unit word from an ingredient noun.
+
+**Fix.**
+
+- New `UnitOfMeasureTokenParser.ParseWithIngredientContext` and `MeasureStringParseResult`. It produces leading-word candidates, handles mixed numbers, skips a leading "(8 oz.)", and treats a count noun as "ea" only when the leading word (after skipping size descriptors) matches the ingredient name, or when there is no unit word.
+- Both resolvers (`UnitOfMeasureNormalizationService` and `InMemoryUnitOfMeasureResolver`) now use it.
+- The ingest summary now prints a unit-type distribution and the top 25 deferred tokens.
+- Tests: 898 unit and 18 integration pass.
+
+**Verification after reset and re-ingest (2026-10-12).**
+
+- Resolved by type: Volume 7,975,573 (77.0%), Count 1,570,704 (15.2%), Weight 816,656 (7.9%), versus ~99.99% Count before.
+- 3,270,351 rows are NULL (container-flagged or deferred).
+- 2,422,675 ingredient rows (18.9% of non-container) were deferred; 293,674 distinct tokens are in the review queue.
+- Dedup folded 25,619 canonicals.
+- Only 361,582 of 1,643,098 recipes (22%) are fully resolved and eligible for matching, because the rest contain a deferred or container-flagged ingredient.
+- Top deferred tokens: pkg. (202k), to, stick, slices, package, cloves, "-1/2", "salt and pepper", pinch, None, large, small, bunch.
+
+**Not done / follow-ups.**
+
+- The "What can I make?" UI check (AC4) has not yet been performed.
+- Count-word alias seeding (pkg., stick, slices, cloves, package, pinch, bunch, dash) and junk-token filtering (to, -1/2, -, or, None, "salt and pepper to taste", ranges like 2-3, Unicode fractions) are out of scope here. Propose them as a follow-up story, given that only 22% of the catalog is currently in the matching pool.
 
 ### Business Problem
 `UnitOfMeasureNormalizationService.TryResolveDeterministicallyCoreAsync` (`src/MealsEnPlace.Api/Common/UnitOfMeasureNormalizationService.cs`, lines 312-330) has an inverted condition in its Step 3 ("count-with-ingredient-noun fallback") that silently coerces unrecognized unit tokens to the generic "ea" (Count) unit instead of deferring them to the `UnresolvedUnitOfMeasureToken` review queue. The condition as written:
@@ -5089,4 +5119,419 @@ Feature: Unit of Measure Normalization Count Fallback Condition
     When I request "What can I make?" with no filters applied
     Then the matching pipeline returns at least one recipe in the Full Match or Near Match tier
     And the matched recipes include ingredients whose UnitOfMeasureType aligns with the inventory entries' types
+```
+
+---
+
+## [MEP-064] Equipment Catalog and Recipe Equipment Extraction via Claude
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-006 (recipe matching pipeline must exist for recipes to be added to trips)
+
+### Business Problem
+When planning a camping trip, I need to know what cooking equipment each recipe requires so
+the app can later optimize the packing list. Today, recipes have no equipment metadata at
+all -- there is no way to know whether a recipe needs a skillet, a spatula, or a Dutch oven
+without reading every step manually. This story adds an Equipment entity catalog
+(name, category -- Cookware/Utensil/Prep/Serving -- and optional BulkWeightGrams for
+weight-based optimization), an EquipmentSubstitution table (e.g., a skillet can stand in for
+a pot), and a RecipeEquipment join that records which equipment a recipe needs, whether the
+equipment is required or optional, and whether it is used in the AtHome or AtCamp phase of
+preparation.
+
+Equipment tagging is Claude-inferred, not manual. An ExtractEquipment method on
+IClaudeService analyzes a recipe's instructions and returns equipment items with a confidence
+level (High, Medium, Low). Low-confidence extractions are surfaced to the user for review and
+are never silently applied -- consistent with the existing convention for Claude-derived
+classifications (see dietary tag classification in MEP-005). Extraction runs lazily when a
+recipe is added to a camping trip, not across the entire recipe catalog.
+
+Each recipe's steps are also split into AtHome and AtCamp preparation phases during
+extraction. Each phase step includes a storage requirement (Cooler, Ambient, or Frozen) and a
+hold-time advisory note (e.g., "sauce made at home and bagged keeps 3 days in a cooler;
+pre-cooked pasta goes mushy so cook at camp"). These phase annotations drive the prep
+checklist and cooler-load list in MEP-065. Food-safety notes produced by Claude are advisory
+only and carry a disclaimer.
+
+User correction endpoints allow overriding Claude's equipment and phase assignments after
+extraction, ensuring the user has final authority over what equipment is tagged and which
+steps are AtHome vs. AtCamp.
+
+### Acceptance Criteria
+```gherkin
+Feature: Equipment Catalog and Recipe Equipment Extraction
+
+  Scenario: Equipment entity stores name, category, and bulk weight
+    Given I am managing the equipment catalog
+    When I create an equipment item with name "Cast Iron Skillet", category "Cookware", and BulkWeightGrams 3600
+    Then the equipment item is persisted with the provided name, category, and weight
+    And the equipment item is available for recipe equipment associations
+
+  Scenario: Equipment substitution defines interchangeable items
+    Given equipment items "Cast Iron Skillet" and "Stainless Steel Pot" exist in the catalog
+    When I create an EquipmentSubstitution record indicating "Cast Iron Skillet" can substitute for "Stainless Steel Pot"
+    Then the substitution relationship is persisted
+    And the optimizer can consider the skillet in place of the pot when minimizing equipment
+
+  Scenario: Claude extracts equipment from a recipe with confidence levels
+    Given a recipe "Campfire Chili" with instructions mentioning a Dutch oven, a wooden spoon, and a ladle
+    When the recipe is added to a camping trip and equipment extraction runs
+    Then IClaudeService.ExtractEquipment returns equipment items with confidence levels
+    And each returned item includes whether it is required or optional
+    And each returned item includes the preparation phase (AtHome or AtCamp)
+
+  Scenario: Low-confidence equipment extractions are surfaced for user review
+    Given Claude extracts equipment "heat-proof gloves" from a recipe with confidence Low
+    When the extraction results are returned
+    Then the low-confidence item is flagged for user review
+    And the item is not silently applied to the recipe's equipment list
+    And the user is presented with an option to confirm or reject the extraction
+
+  Scenario: User corrects Claude's equipment extraction
+    Given a recipe has Claude-extracted equipment including "Spatula" tagged as AtCamp
+    When the user edits the equipment assignment to change the phase to AtHome
+    Then the RecipeEquipment record reflects the user's correction
+    And the corrected phase is used in all downstream calculations
+
+  Scenario: Recipe steps are split into AtHome and AtCamp phases
+    Given a recipe "Foil Packet Salmon" with steps for marinating (doable at home) and grilling (must happen at camp)
+    When equipment extraction runs for this recipe
+    Then the marinating step is classified as AtHome with storage requirement "Cooler" and a hold-time note
+    And the grilling step is classified as AtCamp
+    And food-safety notes carry an advisory disclaimer
+
+  Scenario: Equipment extraction runs lazily on trip addition, not catalog-wide
+    Given the recipe catalog contains over 1,600,000 recipes
+    When no camping trip references a given recipe
+    Then no equipment extraction runs for that recipe
+    And extraction is triggered only when the recipe is added to a camping trip
+
+  Scenario: Recipes requiring an oven or baking are flagged as incompatible
+    Given a recipe "Baked Ziti" has instructions that require an oven
+    When the recipe is evaluated for a camping trip with cooking method "Campfire"
+    Then the recipe is excluded from the trip
+    And the exclusion reason "Requires oven -- not compatible with Campfire cooking" is surfaced to the user
+```
+
+---
+
+## [MEP-065] Camping Trip Entity, Minimal-Equipment Optimizer, and Trip Endpoints
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-064 (equipment catalog, recipe equipment extraction, and phase annotations must exist before the optimizer can run)
+
+### Business Problem
+Once recipes have equipment metadata (MEP-064), I need the system to answer: "Given these
+recipes for my camping trip, what is the absolute minimum set of cooking equipment I need to
+bring?" Packing for a camping trip is constrained by vehicle space and weight, so bringing
+redundant equipment is wasteful. The optimizer should also tell me what food prep I can do at
+home before leaving (the "Before You Leave" checklist), what needs to go in the cooler with
+storage requirements, and what cooking happens at camp.
+
+A CampingTrip entity references an existing MealPlan and records the user's chosen cooking
+method (Campfire, CampStove, or Grill) and optimization objective. The optimization objective
+defaults to "fewest items" but is implemented behind a strategy interface
+(IEquipmentObjective) so additional objectives can be added later. Launch includes three
+objectives: fewest items, least bulk (using BulkWeightGrams on Equipment), and fewest
+cookware pieces (minimizing items in the Cookware category specifically).
+
+The core algorithm is a deterministic set-cover over required AtCamp equipment across all
+trip recipes, consulting the EquipmentSubstitution table so the optimizer can report when a
+substitution was used (e.g., "Bringing a skillet instead of a separate pot -- it covers both
+Chili and Stir Fry"). No AI is involved in the optimizer itself.
+
+Endpoints live under /api/v1/camping/ in the new Features/Camping/ feature folder. The
+feature folder includes a README.md per project convention.
+
+### Acceptance Criteria
+```gherkin
+Feature: Camping Trip and Minimal-Equipment Optimizer
+
+  Scenario: Create a camping trip from an existing meal plan
+    Given a meal plan exists for the week of 2026-10-19
+    When I create a camping trip referencing that meal plan with cooking method "CampStove" and objective "FewestItems"
+    Then a CampingTrip entity is persisted with the meal plan reference, cooking method, and objective
+    And the trip is accessible at GET /api/v1/camping/{tripId}
+
+  Scenario: Recipes requiring an oven are excluded from the trip
+    Given the referenced meal plan contains recipes "Campfire Chili," "Grilled Corn," and "Baked Ziti"
+    And "Baked Ziti" requires an oven
+    When the camping trip is created with cooking method "Campfire"
+    Then "Baked Ziti" is excluded from the trip's recipe set
+    And the response includes an exclusion entry for "Baked Ziti" with reason "Requires oven"
+    And "Campfire Chili" and "Grilled Corn" remain in the trip
+
+  Scenario: Optimizer returns the minimal equipment set using the FewestItems objective
+    Given a camping trip includes three recipes requiring a total of 8 distinct equipment items across their AtCamp phases
+    And EquipmentSubstitution records indicate a cast iron skillet can substitute for a pot
+    When the optimizer runs with objective "FewestItems"
+    Then the result contains fewer items than the union of all recipes' AtCamp equipment
+    And any substitution used is reported with the original and substitute item names
+    And each equipment item lists which recipes require it
+
+  Scenario: Optimizer returns the least-bulk equipment set using the LeastBulk objective
+    Given a camping trip includes recipes whose AtCamp equipment has varying BulkWeightGrams values
+    When the optimizer runs with objective "LeastBulk"
+    Then the result minimizes total BulkWeightGrams while still covering all required equipment
+    And the total weight in grams is included in the response
+
+  Scenario: Optimizer returns the fewest-cookware equipment set using the FewestCookware objective
+    Given a camping trip includes recipes requiring both Cookware and Utensil category equipment
+    When the optimizer runs with objective "FewestCookware"
+    Then the result minimizes the count of Cookware-category items specifically
+    And Utensil, Prep, and Serving category items are included as needed without minimization
+
+  Scenario: Optimizer produces a "Before You Leave" prep checklist
+    Given a camping trip has recipes with AtHome phase steps
+    When the optimizer results are retrieved
+    Then the response includes a prep checklist listing each AtHome step grouped by recipe
+    And each step includes its storage requirement (Cooler, Ambient, or Frozen) and hold-time note
+    And food-safety notes carry an advisory disclaimer
+
+  Scenario: Optimizer produces a cooler-load list
+    Given a camping trip has recipes with AtHome steps requiring Cooler or Frozen storage
+    When the optimizer results are retrieved
+    Then the response includes a cooler-load list of all items that must be kept cold
+    And each item shows the originating recipe and the storage temperature category
+
+  Scenario: Optimizer counts only AtCamp equipment
+    Given a recipe has equipment tagged for both AtHome and AtCamp phases
+    When the optimizer computes the minimal equipment set
+    Then only equipment tagged as AtCamp is included in the packing list
+    And AtHome-only equipment is excluded from the optimizer's set-cover computation
+
+  Scenario: Strategy interface supports future objectives
+    Given the optimizer uses an IEquipmentObjective strategy interface
+    When a new objective implementation is registered
+    Then the optimizer can run with the new objective without modifying the core algorithm
+    And the CampingTrip entity accepts the new objective value
+
+  Scenario: Camping endpoints are versioned under /api/v1/camping/
+    Given the API follows the /api/v1/ versioning convention
+    When I call POST /api/v1/camping/ to create a trip
+    And I call GET /api/v1/camping/{tripId} to retrieve a trip
+    And I call GET /api/v1/camping/{tripId}/optimize to retrieve the optimized equipment set
+    Then all endpoints respond with appropriate HTTP status codes and JSON payloads
+```
+
+---
+
+## [MEP-066] Camping Trip User Interface
+
+**Status:** Proposed
+**Priority:** Medium
+**Depends on:** MEP-065 (camping trip entity, optimizer endpoints, prep checklist, and cooler-load list must exist before the UI can consume them)
+
+### Business Problem
+The equipment optimizer and prep planning from MEP-064 and MEP-065 are only useful if I can
+interact with them through the application's UI. I need a camping trip builder that lets me
+pick an existing meal plan, choose my cooking method and optimization objective, see the
+optimized "bring these N items" packing list with per-recipe attribution and any substitutions
+used, review the "Before You Leave" prep checklist, see the cooler-load list, and correct any
+equipment extractions Claude got wrong. Without this UI, the camping feature is API-only and
+inaccessible to the user (my wife) who actually plans the trips.
+
+The UI lives in a new features/camping/ folder in the Angular frontend, following the
+standalone-component convention. The feature folder includes a README.md per project
+convention.
+
+### Acceptance Criteria
+```gherkin
+Feature: Camping Trip User Interface
+
+  Scenario: Create a camping trip from a meal plan
+    Given I am on the camping trip builder page
+    And at least one meal plan exists
+    When I select a meal plan, choose cooking method "CampStove", and choose objective "Fewest Items"
+    And I click "Create Trip"
+    Then a camping trip is created
+    And I am navigated to the trip results view
+
+  Scenario: Excluded recipes are displayed with reasons
+    Given a camping trip was created and some recipes were excluded for requiring an oven
+    When I view the trip results
+    Then excluded recipes are listed in a separate section
+    And each excluded recipe shows the reason it was excluded (e.g., "Requires oven -- not compatible with CampStove cooking")
+
+  Scenario: Optimized equipment list shows per-recipe attribution
+    Given the optimizer returned a minimal equipment set of 5 items covering 4 recipes
+    When I view the "Bring These Items" section of the trip results
+    Then each equipment item is listed with the recipes that require it
+    And the total item count is displayed prominently
+
+  Scenario: Substitutions are displayed clearly
+    Given the optimizer used a substitution (cast iron skillet in place of a pot)
+    When I view the equipment list
+    Then the substitution is displayed with both the original and substitute item names
+    And a note explains which recipes benefit from the substitution
+
+  Scenario: Prep checklist displays AtHome steps grouped by recipe
+    Given the trip includes recipes with AtHome preparation steps
+    When I view the "Before You Leave" prep checklist
+    Then steps are grouped by recipe
+    And each step shows its storage requirement (Cooler, Ambient, or Frozen) and hold-time note
+    And a disclaimer about food-safety notes being advisory is visible
+
+  Scenario: Cooler-load list displays items requiring cold storage
+    Given the trip includes prep steps requiring Cooler or Frozen storage
+    When I view the cooler-load list
+    Then each item shows the originating recipe and temperature category
+    And items are sorted by storage temperature category (Frozen first, then Cooler)
+
+  Scenario: User can correct equipment extractions from the trip view
+    Given Claude extracted equipment for a recipe in the trip with a low-confidence item
+    When I view the equipment details for that recipe
+    Then low-confidence items are visually distinguished
+    And I can confirm, reject, or edit each equipment assignment
+    And I can change an item's phase between AtHome and AtCamp
+    And the optimizer re-runs after corrections are saved
+
+  Scenario: Changing the optimization objective re-runs the optimizer
+    Given I am viewing a trip result with objective "Fewest Items"
+    When I change the objective to "Least Bulk"
+    Then the optimizer re-runs with the new objective
+    And the equipment list updates to reflect the weight-minimized result
+    And the total weight in grams is displayed
+
+  Scenario: Changing the cooking method re-evaluates recipe compatibility
+    Given I am viewing a trip with cooking method "CampStove" and all recipes are compatible
+    When I change the cooking method to "Campfire"
+    Then recipes incompatible with campfire cooking are moved to the excluded list with reasons
+    And the optimizer re-runs with the updated recipe set
+```
+
+---
+
+## [MEP-067] Ingest Unit Token Coverage: Seed Count and Measure Aliases, Filter Junk Tokens, and Raise the Fully-Resolved Recipe Share
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-063 (corrected the count fallback so unrecognized tokens defer; this story clears the resulting backlog of deferred tokens)
+**Related to:** MEP-049, MEP-050 (earlier normalization-gap cleanup passes in the same ingest pipeline; this story reuses their reset-and-re-ingest procedure)
+
+### Business Problem
+After MEP-063 and a full reset and re-ingest on 2026-10-12, only 361,582 of 1,643,098 recipes (22%) are fully resolved and eligible for "What can I make?". The other 78% are excluded from matching because each contains at least one deferred or container-flagged ingredient. I cannot get useful matches from a catalog where four of every five recipes are invisible to the matcher.
+
+Two things drive the exclusion. 2,422,675 ingredient rows (18.9% of non-container rows) were deferred, and 293,674 distinct tokens sit in the `UnresolvedUnitOfMeasureToken` queue, which is far too large for me to review by hand. The top deferred tokens fall into four groups:
+
+- **Legitimate count or measure words with no alias:** stick (78k), sticks (26k), slices (59k), cloves (54k), pinch (36k), bunch (23k), dash (15k).
+- **Container words:** pkg. (202k), package (58k), packages (13k). Per CLAUDE.md these are ContainerReferences, not units of measure. They must be flagged for user declaration and must never be given an assumed size, because product sizes change without notice.
+- **Junk that is not a unit at all:**
+  - Stopwords and null: "to" (99k), "or" (18k), "None" (35k), "-" (19k).
+  - Range fragments from "1-1/2" and "2-3": "-1/2" (50k), "-2" (15k), "-3" (15k).
+  - To-taste lines: "salt and pepper" (38k), "salt and pepper to taste" (37k), "salt" (34k), "salt to taste" (14k), "pepper" (17k).
+- **Size descriptors that defer instead of passing through:** large (28k), small (25k), medium (14k). These should be skipped when followed by a unit or container word (e.g., "1 large can").
+
+Cleaning up these groups should move most recipes into the matching pool without any effort from me.
+
+### Implementation Notes
+- **Alias seeding.** Seed `UnitOfMeasureAlias` rows through an explicit EF Core migration (never auto-migrate on startup), so a reset and `dotnet ef database update` lands them. Proposed mappings; any conversion not listed is not applied:
+  - cloves, clove, slices, slice, bunch, bunches: Count (`ea`), quantity unchanged. No weight conversion is applied because the size varies.
+  - stick, sticks: Count (`ea`) by default. When the ingredient is butter or margarine, resolve to 113 g per stick (the US standard quarter-pound stick, a defined size and not a product-size assumption). The Backend Engineer confirms whether this context rule fits the existing resolver design; if it does not, ship the Count mapping only and record the butter rule as a follow-up.
+  - pinch, pinches: Volume, 0.31 ml (1/16 tsp).
+  - dash, dashes: Volume, 0.62 ml (1/8 tsp).
+- **Container words.** pkg., pkg, package, packages, and similar are not seeded as units. The parser classifies them as ContainerReferences, so the ingredient is flagged for user declaration, the original text is preserved in Notes, and the recipe shows "Awaiting Resolution". They must not appear in the `UnresolvedUnitOfMeasureToken` queue. If the existing container-word list does not already include them, extend it.
+- **Junk filtering in the parser or ingest path.** Handle each case explicitly instead of queueing it:
+  - Stopword and null tokens ("to", "or", "None", "-") are not unit tokens and are dropped before resolution.
+  - Range fragments from mixed numbers and ranges ("1-1/2", "2-3") are parsed as a quantity: a mixed number is summed (1-1/2 = 1.5) and a range uses its lower bound (2-3 = 2). The fragment is never emitted as a unit token.
+  - To-taste lines ("salt", "pepper", "salt and pepper", "salt to taste", "salt and pepper (to taste)") resolve to a seasoning-to-taste handling that does not defer and does not block full resolution. The Backend Engineer decides the representation (for example, a null-quantity ingredient flagged as to-taste that is excluded from quantity math). Whatever is chosen must be documented in the Recipes README.
+- **Size descriptors.** large, small, and medium are skipped when followed by a unit or container word, so "1 large can tomatoes" yields the container word "can" and "2 large cloves garlic" yields "cloves". `ParseWithIngredientContext` already skips size descriptors for the count-noun check; this extends that behavior to unit-word detection.
+- **Gate and procedure.**
+  - Before the full re-ingest, run the ingest tool in dry-run mode and review the summary's top-deferred-tokens block. Do not start the full re-ingest unless none of the tokens listed under Business Problem appears in the top 25 deferred tokens.
+  - After the full re-ingest, measure the fully-resolved share with the SQL below and record the result in this item.
+  - This story requires another reset and re-ingest. Batch it with any other pending ingest-altering stories so the 1.64M-recipe ingest runs once. Like MEP-049, MEP-050 and MEP-063, the reset wipes inventory items, user-created ingredients and meal plans.
+- **Success query.** A recipe is fully resolved when none of its ingredient rows has a NULL `UnitOfMeasureId` (deferred or container-flagged). Exact table and column names follow the schema; the intent is:
+
+  ```sql
+  SELECT
+    COUNT(*) FILTER (WHERE NOT EXISTS (
+      SELECT 1 FROM "RecipeIngredients" ri
+      WHERE ri."RecipeId" = r."Id" AND ri."UnitOfMeasureId" IS NULL)) AS fully_resolved,
+    COUNT(*) AS total,
+    ROUND(100.0 * COUNT(*) FILTER (WHERE NOT EXISTS (
+      SELECT 1 FROM "RecipeIngredients" ri
+      WHERE ri."RecipeId" = r."Id" AND ri."UnitOfMeasureId" IS NULL)) / COUNT(*), 1) AS percent_resolved
+  FROM "Recipes" r;
+  ```
+
+  If the `Recipe` entity has a stored resolution flag, the query may use it instead, provided it agrees with the ingredient-level check.
+
+### Out of Scope
+- Unicode fraction characters (for example, "½") unless the range and mixed-number parsing above covers them at no extra cost.
+- Any user-facing change to the unit-token review queue UI.
+- Assuming or looking up container sizes. Container declaration stays user-driven.
+- Long-tail tokens outside the groups listed in the Business Problem. After this story, the review queue is expected to still hold residual tokens.
+
+### Acceptance Criteria
+```gherkin
+Feature: Ingest Unit Token Coverage
+
+  Scenario: Count words resolve to Count without deferral
+    Given the alias migration has been applied
+    When the measure strings "3 cloves garlic", "2 slices bacon" and "1 bunch cilantro" are normalized
+    Then each resolves to the "ea" UnitOfMeasure with the stated quantity
+    And no row is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Pinch and dash resolve to stated volumes
+    Given the alias migration has been applied
+    When the measure strings "1 pinch salt" and "2 dash hot sauce" are normalized
+    Then "1 pinch" resolves to 0.31 ml
+    And "2 dash" resolves to 1.24 ml
+    And no row is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Butter sticks resolve to a stated weight and other sticks resolve to Count
+    Given the alias migration has been applied
+    When the measure strings "2 sticks butter" and "1 stick cinnamon" are normalized
+    Then "2 sticks butter" resolves to 226 g
+    And "1 stick cinnamon" resolves to 1 "ea"
+
+  Scenario: Container words are flagged, never given a size
+    Given the measure strings "1 pkg. cream cheese" and "2 packages frozen spinach"
+    When they are normalized during ingest
+    Then each ingredient is flagged as an unresolved ContainerReference with the original text preserved in Notes
+    And no assumed weight or volume is stored
+    And the token is not added to the UnresolvedUnitOfMeasureToken queue
+    And the owning recipe displays "Awaiting Resolution"
+
+  Scenario: Junk tokens are dropped, not queued
+    Given measure strings whose extracted token is "to", "or", "None" or "-"
+    When they are normalized during ingest
+    Then no unit token is emitted for them
+    And none of those tokens is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Mixed numbers and ranges are parsed as quantities
+    Given the measure strings "1-1/2 cups flour" and "2-3 tbsp oil"
+    When they are normalized during ingest
+    Then "1-1/2 cups" resolves to 1.5 cup
+    And "2-3 tbsp" resolves to 2 tbsp
+    And no token such as "-1/2", "-2" or "-3" is emitted or queued
+
+  Scenario: To-taste seasoning lines do not block full resolution
+    Given a recipe whose only unresolved-looking ingredients are "salt", "salt to taste" and "salt and pepper (to taste)"
+    And every other ingredient is resolved
+    When the recipe is ingested
+    Then the to-taste ingredients are stored without queueing a unit token
+    And the recipe is marked fully resolved and enters the matching pool
+
+  Scenario: Size descriptors are skipped before a unit or container word
+    Given the measure strings "1 large can tomatoes" and "2 large cloves garlic"
+    When they are normalized during ingest
+    Then "1 large can tomatoes" is flagged as a ContainerReference for "can"
+    And "2 large cloves garlic" resolves to 2 "ea"
+    And "large" is not added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Dry-run gate blocks the full re-ingest while target tokens remain
+    Given the alias migration and parser changes are in place
+    When the ingest tool is run in dry-run mode
+    Then the summary prints the top deferred tokens
+    And none of stick, sticks, slices, cloves, pinch, bunch, dash, to, or, None, "-", "-1/2", "-2", "-3", large, small, medium appears in the top 25
+    And the full re-ingest is not started otherwise
+
+  Scenario: Fully-resolved recipe share meets the target after re-ingest
+    Given a full reset and re-ingest has been performed with this story's changes
+    When the documented fully-resolved SQL query is run against the database
+    Then the fully-resolved share of recipes is at least 60 percent, up from 22 percent
+    And the result and the new count of distinct queued tokens are recorded in this backlog item
 ```
