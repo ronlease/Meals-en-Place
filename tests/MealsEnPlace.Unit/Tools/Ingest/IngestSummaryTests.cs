@@ -352,4 +352,72 @@ public class IngestSummaryTests
         rendered.Should().Contain("NER tokens rejected");
         rendered.Should().Contain("13");
     }
+
+    // ── Stated-size diagnostic (hypothetical) ─────────────────────────────────
+
+    [Fact]
+    public void RecordRecipeResolution_StatedSizeFlags_CountsRowsAndHypotheticalRecipes()
+    {
+        // Given recipes: fully resolved; all container rows stated; one row unstated;
+        // all stated but also deferred; no flags supplied
+        var summary = new IngestSummary();
+
+        // When recorded
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution(["can", "jar"], 0, [true, true]);
+        summary.RecordRecipeResolution(["can", "can"], 0, [true, false]);
+        summary.RecordRecipeResolution(["bag"], 2, [true]);
+        summary.RecordRecipeResolution(["box"], 0);
+
+        // Then rows and the hypothetical bucket are counted
+        summary.ContainerRowsWithStatedSize.Should().Be(4);
+        summary.ContainerRowsWithoutStatedSize.Should().Be(2);
+        summary.RecipesBlockedOnlyByContainerAllStatedSize.Should().Be(1);
+        summary.RecipesBlockedOnlyByContainer.Should().Be(3);
+    }
+
+    [Fact]
+    public void RecordRecipeResolution_MisalignedStatedSizeFlags_Throws()
+    {
+        var summary = new IngestSummary();
+
+        var act = () => summary.RecordRecipeResolution(["can"], 0, [true, false]);
+
+        act.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Format_StatedSizeDiagnostic_PrintsRowAndRecipeBucketsAndHypotheticalShare()
+    {
+        // Given 4 recipes: 1 resolved, 1 container-only all stated, 1 container-only partial, 1 both
+        var summary = new IngestSummary { RecipesIngested = 4 };
+        summary.RecordRecipeResolution([], 0);
+        summary.RecordRecipeResolution(["can", "jar"], 0, [true, true]);
+        summary.RecordRecipeResolution(["can", "can"], 0, [true, false]);
+        summary.RecordRecipeResolution(["bag"], 1, [false]);
+        summary.StopTimer();
+
+        // When formatted
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        // Then 3 of 5 rows state a size, 1 recipe (25.0%) would flip, hypothetical share is 2 of 4
+        rendered.Should().Contain("Container rows, stated size:     3 of 5 (60.0%)");
+        rendered.Should().Contain("Container rows, no stated size:  2 of 5 (40.0%)");
+        rendered.Should().Contain("1 (25.0% of all recipes)");
+        rendered.Should().Contain("2 of 4 (50.0%)");
+        rendered.Should().MatchRegex(@"2 /\s+3\s+\(\s*66\.7%\)\s+can");
+        rendered.Should().MatchRegex(@"1 /\s+1\s+\(\s*100\.0%\)\s+jar");
+        rendered.Should().Contain("DIAGNOSTIC (hypothetical");
+    }
+
+    [Fact]
+    public void Format_NoContainerRows_PrintsZeroStatedSizeDiagnostic()
+    {
+        var summary = new IngestSummary();
+        summary.StopTimer();
+
+        var rendered = summary.Format(new IngestOptions { CsvPath = "data.csv" }, new StreamCounters());
+
+        rendered.Should().Contain("Container rows, stated size:     0 of 0 (0.0%)");
+    }
 }

@@ -140,6 +140,7 @@ foreach (var row in streamResult.Rows)
 
     // ── RecipeIngredients per raw ingredient ──────────────────────────────
     var recipeContainerKeywords = new List<string>();
+    var recipeContainerStatedSizes = new List<bool>();
     var recipeDeferredCount = 0;
     foreach (var rawIngredient in row.Ingredients)
     {
@@ -162,6 +163,7 @@ foreach (var row in streamResult.Rows)
         {
             summary.ContainerFlaggedIngredients++;
             recipeContainerKeywords.Add(container.DetectedKeyword!);
+            recipeContainerStatedSizes.Add(ContainerStatedSizeDetector.Detect(rawIngredient).HasStatedSize);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,
@@ -233,7 +235,7 @@ foreach (var row in streamResult.Rows)
         }
     }
 
-    summary.RecordRecipeResolution(recipeContainerKeywords, recipeDeferredCount);
+    summary.RecordRecipeResolution(recipeContainerKeywords, recipeDeferredCount, recipeContainerStatedSizes);
 
     if (!options.DryRun)
     {
