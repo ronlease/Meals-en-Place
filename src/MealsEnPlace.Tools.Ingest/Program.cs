@@ -139,6 +139,9 @@ foreach (var row in streamResult.Rows)
     };
 
     // ── RecipeIngredients per raw ingredient ──────────────────────────────
+    var recipeContainerKeywords = new List<string>();
+    var recipeContainerStatedSizes = new List<bool>();
+    var recipeDeferredCount = 0;
     foreach (var rawIngredient in row.Ingredients)
     {
         summary.TotalIngredientsProcessed++;
@@ -159,6 +162,8 @@ foreach (var row in streamResult.Rows)
         if (container.IsContainerReference)
         {
             summary.ContainerFlaggedIngredients++;
+            recipeContainerKeywords.Add(container.DetectedKeyword!);
+            recipeContainerStatedSizes.Add(ContainerStatedSizeDetector.Detect(rawIngredient).HasStatedSize);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
                 CanonicalIngredientId = canonicalId,
@@ -173,9 +178,34 @@ foreach (var row in streamResult.Rows)
         }
 
         var resolution = unitOfMeasureResolver.NormalizeOrDefer(rawIngredient, bestNer);
+        if (resolution.IsJunkLine)
+        {
+            // MEP-067: junk lines ("None", "-", "to", "or") carry no ingredient; drop them.
+            summary.JunkIngredientLinesDropped++;
+            continue;
+        }
+
+        if (resolution.IsToTaste)
+        {
+            // MEP-067: to-taste seasoning is stored resolved with quantity 0 in "ea".
+            summary.ToTasteIngredients++;
+            recipe.RecipeIngredients.Add(new RecipeIngredient
+            {
+                CanonicalIngredientId = canonicalId,
+                Id = Guid.NewGuid(),
+                IsContainerResolved = true,
+                Notes = Truncate(rawIngredient, IngestConstants.RecipeIngredientNotesMaxLength),
+                Quantity = 0m,
+                RecipeId = recipe.Id,
+                UnitOfMeasureId = resolution.UnitOfMeasureId
+            });
+            continue;
+        }
+
         if (resolution.WasDeferred)
         {
             summary.UnitOfMeasureDeferredToQueue++;
+            recipeDeferredCount++;
             summary.RecordDeferredUnitToken(resolution.DeferredUnitToken);
             recipe.RecipeIngredients.Add(new RecipeIngredient
             {
@@ -204,6 +234,8 @@ foreach (var row in streamResult.Rows)
             });
         }
     }
+
+    summary.RecordRecipeResolution(recipeContainerKeywords, recipeDeferredCount, recipeContainerStatedSizes);
 
     if (!options.DryRun)
     {

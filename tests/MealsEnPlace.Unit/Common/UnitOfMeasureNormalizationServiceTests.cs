@@ -485,7 +485,7 @@ public class UnitOfMeasureNormalizationServiceTests
         var service = BuildService(dbContext, claudeMock.Object);
 
         // Act
-        var result = await service.NormalizeAsync("a pinch", "cayenne");
+        var result = await service.NormalizeAsync("a smidge", "cayenne");
 
         // Assert
         result.WasClaudeResolved.Should().BeTrue();
@@ -763,7 +763,7 @@ public class UnitOfMeasureNormalizationServiceTests
     }
 
     // Scenario: Measure string with no numeric quantity does NOT fall back to "each"
-    //   Given the measure string "a pinch of salt" (no leading number)
+    //   Given the measure string "a smidge of salt" (no leading number)
     //   When NormalizeAsync is called
     //   Then the count-fallback is NOT used
     //   And Claude is invoked as before
@@ -787,11 +787,11 @@ public class UnitOfMeasureNormalizationServiceTests
         var service = BuildService(dbContext, claudeMock.Object);
 
         // Act — no leading digit, so quantity is 0 after parsing
-        var result = await service.NormalizeAsync("a pinch", "salt");
+        var result = await service.NormalizeAsync("a smidge", "salt");
 
         // Assert — Claude path, not the count-fallback
         result.WasClaudeResolved.Should().BeTrue();
-        claudeMock.Verify(c => c.ResolveUnitOfMeasureAsync("a pinch", "salt"), Times.Once);
+        claudeMock.Verify(c => c.ResolveUnitOfMeasureAsync("a smidge", "salt"), Times.Once);
     }
 
     // ── MEP-026 Phase 2: NormalizeOrDeferAsync ───────────────────────────────
@@ -1214,5 +1214,366 @@ public class UnitOfMeasureNormalizationServiceTests
 
         // Assert
         result.Should().BeNull();
+    }
+
+    // ── MEP-067: count words, pinch/dash, butter sticks, junk, ranges, to-taste ─
+    //
+    // Scenario: Count words resolve to Count without deferral
+    //   Given the alias rows clove(s), slice(s) and bunch(es) map to "ea"
+    //   When "3 cloves garlic", "2 slices bacon" and "1 bunch cilantro" are normalized
+    //   Then each resolves to "ea" with the stated quantity and no queue row is written
+    //
+    // Scenario: Pinch and dash resolve to their own units
+    //   When "1 pinch salt" and "2 dash hot sauce" are normalized
+    //   Then they resolve to pinch 1 and dash 2 with no queue row
+    //
+    // Scenario: Butter sticks resolve to grams and other sticks to Count
+    //   When "2 sticks butter" and "1 stick cinnamon" are normalized
+    //   Then the first is 226 g and the second is 1 "ea"
+    //
+    // Scenario: Junk lines are neither queued nor sent to Claude
+    //   When "None", "-" and "to" are normalized
+    //   Then IsJunkLine is true, no queue row is written and Claude is never invoked
+    //
+    // Scenario: Mixed numbers and ranges are parsed as quantities
+    //   When "1-1/2 cups flour" and "2-3 tbsp oil" are normalized
+    //   Then they resolve to 1.5 cup and 2 tbsp and no queue row is written
+    //
+    // Scenario: To-taste lines resolve to quantity 0 in "ea" without queueing
+    //   When "salt and pepper (to taste)" is normalized
+    //   Then IsToTaste is true, Quantity is 0, the unit is "ea" and no queue row is written
+    //
+    // Scenario: Size descriptors are skipped before the unit word
+    //   When "2 large cloves garlic" is normalized
+    //   Then it resolves to 2 "ea" and "large" is not queued
+
+    private static MealsEnPlaceDbContext CreateMep067DbContext(string dbName)
+    {
+        var dbContext = CreateSeededDbContext(dbName);
+        var seededAt = new DateTime(2026, 10, 13, 0, 0, 0, DateTimeKind.Utc);
+        var gallonId = new Guid("b6700000-0000-0000-0000-000000000003");
+        var pinchId = new Guid("b6700000-0000-0000-0000-000000000001");
+        var dashId = new Guid("b6700000-0000-0000-0000-000000000002");
+
+        dbContext.UnitsOfMeasure.AddRange(
+            new UnitOfMeasure
+            {
+                Abbreviation = "pinch",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 0.31m,
+                Id = pinchId,
+                Name = "Pinch",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "dash",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 0.62m,
+                Id = dashId,
+                Name = "Dash",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "gal",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 3785.41m,
+                Id = gallonId,
+                Name = "Gallon",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            });
+
+        var aliasNumber = 0;
+        UnitOfMeasureAlias Alias(string alias, Guid unitOfMeasureId) => new()
+        {
+            Alias = alias,
+            CreatedAt = seededAt,
+            Id = new Guid($"b6700000-0000-0000-0000-1000000000{++aliasNumber:00}"),
+            UnitOfMeasureId = unitOfMeasureId
+        };
+
+        var each = UnitOfMeasureConfiguration.EachId;
+        dbContext.UnitOfMeasureAliases.AddRange(
+            Alias("clove", each),
+            Alias("cloves", each),
+            Alias("slice", each),
+            Alias("slices", each),
+            Alias("bunch", each),
+            Alias("bunches", each),
+            Alias("stick", each),
+            Alias("sticks", each),
+            Alias("pinches", pinchId),
+            Alias("dashes", dashId),
+            Alias("gal.", gallonId),
+            Alias("gals", gallonId),
+            Alias("gallons", gallonId));
+
+        dbContext.SaveChanges();
+        return dbContext;
+    }
+
+    [Theory]
+    [InlineData("3 cloves garlic", "garlic", 3)]
+    [InlineData("2 slices bacon", "bacon", 2)]
+    [InlineData("1 bunch cilantro", "cilantro", 1)]
+    public async Task NormalizeOrDeferAsync_CountWords_ResolveToEachWithoutQueueRow(
+        string measureString,
+        string ingredientName,
+        int expectedQuantity)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_CountWords_ResolveToEachWithoutQueueRow)}-{measureString}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, ingredientName);
+
+        // Assert
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.Quantity.Should().Be(expectedQuantity);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("1 pinch salt", "salt", "pinch", 1)]
+    [InlineData("2 dash hot sauce", "hot sauce", "dash", 2)]
+    public async Task NormalizeOrDeferAsync_PinchAndDash_ResolveToOwnUnitsWithoutQueueRow(
+        string measureString,
+        string ingredientName,
+        string expectedAbbreviation,
+        int expectedQuantity)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_PinchAndDash_ResolveToOwnUnitsWithoutQueueRow)}-{measureString}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, ingredientName);
+
+        // Assert
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        result.Quantity.Should().Be(expectedQuantity);
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    // Scenario: Pinch or dash without a number resolves to quantity 1
+    //   When "pinch of salt", "dash of salt", "dash of pepper", "pinch of red pepper" and
+    //        "dash of cayenne" are normalized
+    //   Then salt and cayenne resolve to 1 pinch, pepper resolves to 1 dash, nothing is queued
+    //   and Claude is never invoked
+    //
+    // Scenario: Gallon abbreviations and words resolve to the gallon unit
+    //   When "1/2 gal. vanilla ice cream", "1 gal water" and "2 gallons milk" are normalized
+    //   Then each resolves to gal with the stated quantity
+
+    [Theory]
+    [InlineData("pinch of salt", "salt", "pinch")]
+    [InlineData("a pinch of salt", "salt", "pinch")]
+    [InlineData("dash of salt", "salt", "pinch")]
+    [InlineData("dash of salt", "", "pinch")]
+    [InlineData("dash of cayenne", "cayenne", "pinch")]
+    [InlineData("dash of pepper", "pepper", "dash")]
+    [InlineData("dash of black pepper", "black pepper", "dash")]
+    [InlineData("pinch of red pepper", "red pepper", "dash")]
+    [InlineData("pinch of pepper", "", "dash")]
+    public async Task NormalizeOrDeferAsync_PinchOrDashWithoutNumber_ResolvesToOneOfPreferredUnit(
+        string measureString,
+        string ingredientName,
+        string expectedAbbreviation)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_PinchOrDashWithoutNumber_ResolvesToOneOfPreferredUnit)}-{measureString}-{ingredientName}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, ingredientName);
+
+        // Assert
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        result.Quantity.Should().Be(1m);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("1/2 gal. vanilla ice cream", "vanilla ice cream", 0.5)]
+    [InlineData("1 gal water", "water", 1)]
+    [InlineData("2 gals milk", "milk", 2)]
+    [InlineData("2 gallons milk", "milk", 2)]
+    public async Task NormalizeOrDeferAsync_Gallon_ResolvesToGallonUnit(
+        string measureString,
+        string ingredientName,
+        double expectedQuantity)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_Gallon_ResolvesToGallonUnit)}-{measureString}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, ingredientName);
+
+        // Assert
+        result.UnitOfMeasureAbbreviation.Should().Be("gal");
+        result.Quantity.Should().Be((decimal)expectedQuantity);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_ExplicitDashQuantity_KeepsExplicitQuantity()
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            nameof(NormalizeOrDeferAsync_ExplicitDashQuantity_KeepsExplicitQuantity));
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 dash hot sauce", "hot sauce");
+
+        // Assert
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureAbbreviation.Should().Be("dash");
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_SticksOfButter_ResolveToGramsAt113PerStick()
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            nameof(NormalizeOrDeferAsync_SticksOfButter_ResolveToGramsAt113PerStick));
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 sticks butter", "butter");
+
+        // Assert
+        result.Quantity.Should().Be(226m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.GramId);
+        result.UnitOfMeasureAbbreviation.Should().Be("g");
+        result.WasDeferredToQueue.Should().BeFalse();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_StickOfCinnamon_ResolvesToOneEach()
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            nameof(NormalizeOrDeferAsync_StickOfCinnamon_ResolvesToOneEach));
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("1 stick cinnamon", "cinnamon");
+
+        // Assert
+        result.Quantity.Should().Be(1m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+    }
+
+    [Theory]
+    [InlineData("None")]
+    [InlineData("-")]
+    [InlineData("to")]
+    public async Task NormalizeOrDeferAsync_JunkLine_IsNotQueuedAndClaudeIsNeverInvoked(string measureString)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_JunkLine_IsNotQueuedAndClaudeIsNeverInvoked)}-{measureString}");
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, "salt");
+
+        // Assert
+        result.IsJunkLine.Should().BeTrue();
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+        claudeMock.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task NormalizeAsync_JunkLine_ClaudeIsNeverInvoked()
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            nameof(NormalizeAsync_JunkLine_ClaudeIsNeverInvoked));
+        var claudeMock = CreateStrictClaudeMock();
+        var service = BuildService(dbContext, claudeMock.Object);
+
+        // Act
+        var result = await service.NormalizeAsync("None", "salt");
+
+        // Assert
+        result.IsJunkLine.Should().BeTrue();
+        result.WasClaudeResolved.Should().BeFalse();
+        claudeMock.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData("1-1/2 cups flour", "flour", 1.5, "cup")]
+    [InlineData("2-3 tbsp oil", "oil", 2, "tbsp")]
+    public async Task NormalizeOrDeferAsync_MixedNumberOrRange_ResolvesQuantityWithoutQueueRow(
+        string measureString,
+        string ingredientName,
+        double expectedQuantity,
+        string expectedAbbreviation)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_MixedNumberOrRange_ResolvesQuantityWithoutQueueRow)}-{measureString}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, ingredientName);
+
+        // Assert
+        result.Quantity.Should().Be((decimal)expectedQuantity);
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("salt")]
+    [InlineData("salt to taste")]
+    [InlineData("salt and pepper (to taste)")]
+    public async Task NormalizeOrDeferAsync_ToTasteLine_ResolvesToZeroEachFlaggedWithoutQueueRow(string measureString)
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            $"{nameof(NormalizeOrDeferAsync_ToTasteLine_ResolvesToZeroEachFlaggedWithoutQueueRow)}-{measureString}");
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync(measureString, "salt");
+
+        // Assert
+        result.IsToTaste.Should().BeTrue();
+        result.Quantity.Should().Be(0m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.WasDeferredToQueue.Should().BeFalse();
+        (await dbContext.UnresolvedUnitOfMeasureTokens.CountAsync()).Should().Be(0);
+    }
+
+    [Fact]
+    public async Task NormalizeOrDeferAsync_SizeDescriptorBeforeCountWord_ResolvesToEachAndDoesNotQueueDescriptor()
+    {
+        // Arrange
+        await using var dbContext = CreateMep067DbContext(
+            nameof(NormalizeOrDeferAsync_SizeDescriptorBeforeCountWord_ResolvesToEachAndDoesNotQueueDescriptor));
+        var service = BuildService(dbContext, CreateStrictClaudeMock().Object);
+
+        // Act
+        var result = await service.NormalizeOrDeferAsync("2 large cloves garlic", "garlic");
+
+        // Assert
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        (await dbContext.UnresolvedUnitOfMeasureTokens.AnyAsync(t => t.UnitToken == "large")).Should().BeFalse();
     }
 }

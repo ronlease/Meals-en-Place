@@ -168,7 +168,45 @@ public class UnitOfMeasureAliasConfiguration : IEntityTypeConfiguration<UnitOfMe
 
             // Each
             NewAlias("a2000000-0000-0000-0000-000000000120", "each",
-                UnitOfMeasureConfiguration.EachId, seededAt)
+                UnitOfMeasureConfiguration.EachId, seededAt),
+
+            // Each (count-style words: clove, slice, bunch, stick)
+            NewAlias("a2000000-0000-0000-0000-000000000130", "clove",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000131", "cloves",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000132", "slice",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000133", "slices",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000134", "bunch",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000135", "bunches",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000136", "stick",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000137", "sticks",
+                UnitOfMeasureConfiguration.EachId, seededAt),
+
+            // Pinch
+            NewAlias("a2000000-0000-0000-0000-000000000140", "pinches",
+                UnitOfMeasureConfiguration.PinchId, seededAt),
+
+            // Dash
+            NewAlias("a2000000-0000-0000-0000-000000000141", "dashes",
+                UnitOfMeasureConfiguration.DashId, seededAt),
+
+            // Gallon
+            NewAlias("a2000000-0000-0000-0000-000000000150", "gal.",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000151", "gals",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000152", "gals.",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000153", "gallon",
+                UnitOfMeasureConfiguration.GallonId, seededAt),
+            NewAlias("a2000000-0000-0000-0000-000000000154", "gallons",
+                UnitOfMeasureConfiguration.GallonId, seededAt)
         );
     }
 

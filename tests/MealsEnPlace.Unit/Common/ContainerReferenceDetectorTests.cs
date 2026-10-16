@@ -436,4 +436,29 @@ public class ContainerReferenceDetectorTests
         result.IsContainerReference.Should().BeTrue();
         result.DetectedKeyword.Should().Be("bag");
     }
+
+    // ── MEP-067: package-style keywords ───────────────────────────────────────
+
+    [Theory]
+    [InlineData("1 pkg. cream cheese")]
+    [InlineData("2 packages frozen spinach")]
+    [InlineData("1 (8 oz.) pkg. cream cheese")]
+    [InlineData("1 pkgs")]
+    [InlineData("1 envelope")]
+    [InlineData("1 pouch")]
+    [InlineData("1 container")]
+    public void Detect_PackageStyleKeyword_ReturnsContainerReference(string input)
+    {
+        var result = ContainerReferenceDetector.Detect(input);
+
+        result.IsContainerReference.Should().BeTrue();
+    }
+
+    [Fact]
+    public void Detect_PackagedIsNotWholeWordPackage_DoesNotReturnContainerReference()
+    {
+        var result = ContainerReferenceDetector.Detect("packaged");
+
+        result.IsContainerReference.Should().BeFalse();
+    }
 }

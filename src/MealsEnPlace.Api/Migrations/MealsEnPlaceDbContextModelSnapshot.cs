@@ -691,6 +691,15 @@ namespace MealsEnPlace.Api.Migrations
                         },
                         new
                         {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000015"),
+                            Abbreviation = "dash",
+                            BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
+                            ConversionFactor = 0.62m,
+                            Name = "Dash",
+                            UnitOfMeasureType = "Volume"
+                        },
+                        new
+                        {
                             Id = new Guid("a1000000-0000-0000-0000-000000000005"),
                             Abbreviation = "fl oz",
                             BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
@@ -700,11 +709,29 @@ namespace MealsEnPlace.Api.Migrations
                         },
                         new
                         {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000016"),
+                            Abbreviation = "gal",
+                            BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
+                            ConversionFactor = 3785.41m,
+                            Name = "Gallon",
+                            UnitOfMeasureType = "Volume"
+                        },
+                        new
+                        {
                             Id = new Guid("a1000000-0000-0000-0000-000000000006"),
                             Abbreviation = "L",
                             BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
                             ConversionFactor = 1000.0m,
                             Name = "Liter",
+                            UnitOfMeasureType = "Volume"
+                        },
+                        new
+                        {
+                            Id = new Guid("a1000000-0000-0000-0000-000000000014"),
+                            Abbreviation = "pinch",
+                            BaseUnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000003"),
+                            ConversionFactor = 0.31m,
+                            Name = "Pinch",
                             UnitOfMeasureType = "Volume"
                         },
                         new
@@ -1138,6 +1165,111 @@ namespace MealsEnPlace.Api.Migrations
                             Alias = "each",
                             CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
                             UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000130"),
+                            Alias = "clove",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000131"),
+                            Alias = "cloves",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000132"),
+                            Alias = "slice",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000133"),
+                            Alias = "slices",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000134"),
+                            Alias = "bunch",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000135"),
+                            Alias = "bunches",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000136"),
+                            Alias = "stick",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000137"),
+                            Alias = "sticks",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000001")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000140"),
+                            Alias = "pinches",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000014")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000141"),
+                            Alias = "dashes",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000015")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000150"),
+                            Alias = "gal.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000151"),
+                            Alias = "gals",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000152"),
+                            Alias = "gals.",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000153"),
+                            Alias = "gallon",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
+                        },
+                        new
+                        {
+                            Id = new Guid("a2000000-0000-0000-0000-000000000154"),
+                            Alias = "gallons",
+                            CreatedAt = new DateTime(2026, 4, 19, 0, 0, 0, 0, DateTimeKind.Utc),
+                            UnitOfMeasureId = new Guid("a1000000-0000-0000-0000-000000000016")
                         });
                 });
 

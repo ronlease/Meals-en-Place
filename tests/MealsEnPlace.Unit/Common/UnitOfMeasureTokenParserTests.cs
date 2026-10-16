@@ -334,4 +334,276 @@ public class UnitOfMeasureTokenParserTests
         result.DeferralUnitToken.Should().Be("sprigs");
         result.IsCountWithIngredientNoun.Should().BeFalse();
     }
+
+    // ── MEP-067: ranges, junk, to-taste, size descriptors, butter sticks ─────
+    //
+    // Scenario: Hyphenated mixed number is summed
+    //   Given "1-1/2 cups flour"
+    //   When Parse is called
+    //   Then the quantity is 1.5 and the unit token is "cups flour"
+    //
+    // Scenario: Range keeps the lower bound
+    //   Given "2-3 tbsp", "2 - 3 tsp", "1 to 1 1/4 c." and "1/2-1 tsp"
+    //   When Parse is called
+    //   Then the lower bound is the quantity and no fragment such as "-3" remains
+    //
+    // Scenario: Junk leading word is skipped
+    //   Given "2 or more bananas" and "1 - pound"
+    //   When ParseWithIngredientContext is called
+    //   Then junk is never a candidate or deferral token
+    //
+    // Scenario: Junk-only and to-taste lines are flagged
+    //   Given "None", "-", "None." and "salt and pepper (to taste)"
+    //   When ParseWithIngredientContext is called
+    //   Then IsJunkLine or IsToTaste is true and no candidates are produced
+    //
+    // Scenario: A line with a quantity is not to-taste
+    //   Given "1 tsp salt"
+    //   When ParseWithIngredientContext is called
+    //   Then IsToTaste is false
+    //
+    // Scenario: Size descriptors are skipped before a unit word
+    //   Given "2 large cloves garlic" and "1 large can tomatoes"
+    //   When ParseWithIngredientContext is called
+    //   Then the candidates start at the unit word and StartsWithSizeDescriptor is true
+    //
+    // Scenario: Butter sticks carry a defined weight
+    //   Given "2 sticks butter" and margarine, unsalted butter, or a null ingredient name
+    //   When ParseWithIngredientContext is called
+    //   Then IngredientSpecificGramsPerUnit is 113; peanut butter and cinnamon stick get none
+
+    [Fact]
+    public void Parse_HyphenatedMixedNumber_SumsWholeAndFraction()
+    {
+        // Arrange / Act
+        var (quantity, token) = UnitOfMeasureTokenParser.Parse("1-1/2 cups flour");
+
+        // Assert
+        quantity.Should().Be(1.5m);
+        token.Should().Be("cups flour");
+    }
+
+    [Theory]
+    [InlineData("2-3 tbsp", 2, "tbsp")]
+    [InlineData("2 - 3 tsp", 2, "tsp")]
+    [InlineData("1 to 1 1/4 c.", 1, "c.")]
+    [InlineData("1/2-1 tsp", 0.5, "tsp")]
+    [InlineData("1 or 2 eggs", 1, "eggs")]
+    [InlineData("2–3 cups", 2, "cups")]
+    public void Parse_Range_KeepsLowerBoundAndDropsUpperBound(string measureString, double expectedQuantity, string expectedToken)
+    {
+        // Arrange / Act
+        var (quantity, token) = UnitOfMeasureTokenParser.Parse(measureString);
+
+        // Assert
+        quantity.Should().Be((decimal)expectedQuantity);
+        token.Should().Be(expectedToken);
+    }
+
+    [Theory]
+    [InlineData("2 or more bananas", "bananas")]
+    [InlineData("1 - pound", "pound")]
+    public void ParseWithIngredientContext_JunkLeadingWord_IsSkipped(string measureString, string expectedToken)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, null);
+
+        // Assert
+        result.DeferralUnitToken.Should().Be(expectedToken);
+        result.UnitTokenCandidates.Should().Contain(expectedToken);
+        result.UnitTokenCandidates.Should().NotContain(c => c.StartsWith("or") || c.StartsWith("-") || c.StartsWith("more"));
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_OnlyJunkAfterQuantity_IsCountWithIngredientNoun()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("2 or more", "banana");
+
+        // Assert
+        result.IsCountWithIngredientNoun.Should().BeTrue();
+        result.UnitTokenCandidates.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("None")]
+    [InlineData("-")]
+    [InlineData("None.")]
+    [InlineData("to")]
+    public void ParseWithIngredientContext_JunkOnlyLine_IsJunkWithNoCandidates(string measureString)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, "salt");
+
+        // Assert
+        result.IsJunkLine.Should().BeTrue();
+        result.IsToTaste.Should().BeFalse();
+        result.UnitTokenCandidates.Should().BeEmpty();
+        result.DeferralUnitToken.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("salt")]
+    [InlineData("pepper")]
+    [InlineData("salt and pepper")]
+    [InlineData("salt to taste")]
+    [InlineData("salt and pepper (to taste)")]
+    [InlineData("Garlic powder to taste")]
+    public void ParseWithIngredientContext_ToTasteLine_IsToTasteWithNoCandidates(string measureString)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, "salt");
+
+        // Assert
+        result.IsToTaste.Should().BeTrue();
+        result.IsJunkLine.Should().BeFalse();
+        result.UnitTokenCandidates.Should().BeEmpty();
+        result.DeferralUnitToken.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_QuantityWithSalt_IsNotToTaste()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("1 tsp salt", "salt");
+
+        // Assert
+        result.IsToTaste.Should().BeFalse();
+        result.UnitTokenCandidates.Should().Contain("tsp");
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_SizeDescriptorBeforeUnitWord_SkipsDescriptor()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("2 large cloves garlic", "garlic");
+
+        // Assert
+        result.UnitTokenCandidates.Should().Equal("cloves garlic", "cloves");
+        result.DeferralUnitToken.Should().Be("cloves");
+        result.StartsWithSizeDescriptor.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_SizeDescriptorBeforeContainerWord_YieldsContainerWordFirst()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("1 large can tomatoes", "tomatoes");
+
+        // Assert
+        result.DeferralUnitToken.Should().Be("can");
+        result.UnitTokenCandidates.Should().Contain("can");
+        result.UnitTokenCandidates.Should().NotContain("large");
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_SizeDescriptorBeforeNonUnit_IsCountFallbackEligible()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("1 large yellow onion", "onion");
+
+        // Assert
+        result.StartsWithSizeDescriptor.Should().BeTrue();
+        result.IsCountFallbackEligible.Should().BeTrue();
+    }
+
+    [Fact]
+    public void ParseWithIngredientContext_NoSizeDescriptorAndNoNoun_IsNotCountFallbackEligible()
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext("2 sprigs thyme", "thyme");
+
+        // Assert
+        result.IsCountFallbackEligible.Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("2 sticks butter", "butter")]
+    [InlineData("1 stick margarine", "margarine")]
+    [InlineData("1 stick unsalted butter", "unsalted butter")]
+    [InlineData("1 stick. butter", "Butter")]
+    [InlineData("2 sticks butter", null)]
+    public void ParseWithIngredientContext_ButterOrMargarineSticks_SetsGramsPerStick(string measureString, string? ingredientName)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.IngredientSpecificGramsPerUnit.Should().Be(113m);
+    }
+
+    [Theory]
+    [InlineData("1 stick peanut butter", "peanut butter")]
+    [InlineData("1 stick cinnamon", "cinnamon")]
+    [InlineData("2 sticks celery", "celery")]
+    [InlineData("1 stick almond butter", null)]
+    public void ParseWithIngredientContext_NonButterSticks_DoNotSetGramsPerStick(string measureString, string? ingredientName)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.IngredientSpecificGramsPerUnit.Should().BeNull();
+    }
+
+    // Scenario: Pinch or dash without a number implies quantity 1 of pinch (dash for pepper)
+    //   Given "pinch of salt", "dash of salt", "dash of cayenne", "dash of pepper", "pinch of red pepper"
+    //   When ParseWithIngredientContext is called
+    //   Then ImplicitQuantity is 1 and the preferred unit is pinch (dash only when pepper is a whole word)
+    //
+    // Scenario: Explicit quantities and other lines imply nothing
+    //   Given "1 pinch salt", "2 dash hot sauce", "salt", "a smidge", "pinch of salt to taste"
+    //   When ParseWithIngredientContext is called
+    //   Then ImplicitQuantity and PreferredUnitOfMeasureAbbreviation are null
+
+    [Theory]
+    [InlineData("pinch of salt", "salt", "pinch")]
+    [InlineData("pinch of salt", null, "pinch")]
+    [InlineData("a pinch of salt", "salt", "pinch")]
+    [InlineData("an pinch of salt", null, "pinch")]
+    [InlineData("pinches of nutmeg", "nutmeg", "pinch")]
+    [InlineData("dash of salt", "salt", "pinch")]
+    [InlineData("dash of salt", null, "pinch")]
+    [InlineData("dash of cayenne", "cayenne", "pinch")]
+    [InlineData("dash of garlic", null, "pinch")]
+    [InlineData("dashes of peppercorns", "peppercorns", "pinch")]
+    [InlineData("dash of pepper", "pepper", "dash")]
+    [InlineData("dash of pepper", null, "dash")]
+    [InlineData("a dash of pepper", null, "dash")]
+    [InlineData("dash of black pepper", "black pepper", "dash")]
+    [InlineData("dash of black pepper", null, "dash")]
+    [InlineData("pinch of red pepper", null, "dash")]
+    [InlineData("pinch of pepper", "Pepper", "dash")]
+    public void ParseWithIngredientContext_PinchOrDashWithoutNumber_ImpliesQuantityOneOfPreferredUnit(
+        string measureString, string? ingredientName, string expectedUnitAbbreviation)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.ImplicitQuantity.Should().Be(1m);
+        result.PreferredUnitOfMeasureAbbreviation.Should().Be(expectedUnitAbbreviation);
+        result.Quantity.Should().Be(0m);
+    }
+
+    [Theory]
+    [InlineData("1 pinch salt", "salt")]
+    [InlineData("2 dash hot sauce", "hot sauce")]
+    [InlineData("2 dashes pepper", "pepper")]
+    [InlineData("salt", "salt")]
+    [InlineData("a smidge", "salt")]
+    [InlineData("dashing hero", null)]
+    [InlineData("pinch of salt to taste", "salt")]
+    [InlineData("None", null)]
+    [InlineData("", null)]
+    public void ParseWithIngredientContext_ExplicitQuantityOrOtherLines_HaveNoImplicitQuantity(
+        string measureString, string? ingredientName)
+    {
+        // Arrange / Act
+        var result = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
+
+        // Assert
+        result.ImplicitQuantity.Should().BeNull();
+        result.PreferredUnitOfMeasureAbbreviation.Should().BeNull();
+    }
 }

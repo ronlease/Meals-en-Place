@@ -77,6 +77,39 @@
 //   When NormalizeOrDefer is called
 //   Then the result is 5 ea, WasDeferred is false, and no queue row is written
 
+//
+// MEP-067: count/measure words, junk, ranges, to-taste, butter sticks
+//
+// Scenario: Count words resolve to each without queueing
+//   Given seeded aliases clove(s), slice(s), bunch(es), stick(s)
+//   When NormalizeOrDefer("2 cloves garlic" etc.) is called
+//   Then the result is ea and no queue row is written
+//
+// Scenario: Pinch and dash resolve to their seeded units
+//   Given seeded Pinch and Dash units with aliases pinches and dashes
+//   When NormalizeOrDefer("1 pinch salt" / "2 dashes hot sauce") is called
+//   Then the result resolves to pinch / dash without queueing
+//
+// Scenario: Pinch or dash without a number resolves to quantity 1
+//   Given "pinch of salt", "dash of salt", "dash of pepper", "pinch of red pepper", "dash of cayenne"
+//   Then salt and cayenne are 1 pinch, pepper is 1 dash, and nothing is queued
+//
+// Scenario: Gallon forms resolve to the gallon unit
+//   Given "1/2 gal. vanilla ice cream", "1 gal. water", "2 gallons milk"
+//   Then each resolves to gal without queueing
+//
+// Scenario: Butter sticks resolve to grams
+//   Given "2 sticks butter"
+//   Then the result is 226 g; and "1 stick cinnamon" is 1 ea
+//
+// Scenario: Junk lines are dropped without queueing
+//   Given "None", "-", "to" or "or"
+//   Then IsJunkLine is true, WasDeferred is false and no queue row is written
+//
+// Scenario: Ranges, to-taste lines and size descriptors never queue
+//   Given "1-1/2 cups", "2-3 tbsp", "salt and pepper to taste", "2 large cloves garlic"
+//   Then each resolves (1.5 cup, 2 tbsp, to-taste, 2 ea) with no queue row
+
 using FluentAssertions;
 using MealsEnPlace.Api.Infrastructure.Data;
 using MealsEnPlace.Api.Infrastructure.Data.Configurations;
@@ -143,6 +176,33 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
             },
             new UnitOfMeasure
             {
+                Abbreviation = "dash",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 0.616m,
+                Id = UnitOfMeasureConfiguration.DashId,
+                Name = "Dash",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "pinch",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 0.308m,
+                Id = UnitOfMeasureConfiguration.PinchId,
+                Name = "Pinch",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "gal",
+                BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
+                ConversionFactor = 3785.41m,
+                Id = UnitOfMeasureConfiguration.GallonId,
+                Name = "Gallon",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
                 Abbreviation = "tbsp",
                 BaseUnitOfMeasureId = UnitOfMeasureConfiguration.MlId,
                 ConversionFactor = 14.787m,
@@ -159,6 +219,18 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
                 Id = Guid.NewGuid(),
                 UnitOfMeasureId = UnitOfMeasureConfiguration.CupId
             },
+            NewAlias("clove", UnitOfMeasureConfiguration.EachId),
+            NewAlias("cloves", UnitOfMeasureConfiguration.EachId),
+            NewAlias("slice", UnitOfMeasureConfiguration.EachId),
+            NewAlias("slices", UnitOfMeasureConfiguration.EachId),
+            NewAlias("bunch", UnitOfMeasureConfiguration.EachId),
+            NewAlias("bunches", UnitOfMeasureConfiguration.EachId),
+            NewAlias("stick", UnitOfMeasureConfiguration.EachId),
+            NewAlias("sticks", UnitOfMeasureConfiguration.EachId),
+            NewAlias("pinches", UnitOfMeasureConfiguration.PinchId),
+            NewAlias("dashes", UnitOfMeasureConfiguration.DashId),
+            NewAlias("gal.", UnitOfMeasureConfiguration.GallonId),
+            NewAlias("gallons", UnitOfMeasureConfiguration.GallonId),
             new UnitOfMeasureAlias
             {
                 Alias = "lbs",
@@ -171,6 +243,15 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
     }
 
     public void Dispose() => _dbContext.Dispose();
+
+    private static UnitOfMeasureAlias NewAlias(string alias, Guid unitOfMeasureId) =>
+        new()
+        {
+            Alias = alias,
+            CreatedAt = DateTime.UtcNow,
+            Id = Guid.NewGuid(),
+            UnitOfMeasureId = unitOfMeasureId
+        };
 
     // ── Deterministic resolution paths ────────────────────────────────────────
 
@@ -367,6 +448,188 @@ public class InMemoryUnitOfMeasureResolverTests : IDisposable
 
         _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().HaveCount(1);
         _dbContext.UnresolvedUnitOfMeasureTokens.Local.Single().Count.Should().Be(2);
+    }
+
+    // ── MEP-067: count words, pinch/dash, sticks, junk, ranges, to-taste ──────
+
+    [Theory]
+    [InlineData("2 cloves garlic", "garlic", 2)]
+    [InlineData("1 clove garlic", "garlic", 1)]
+    [InlineData("3 slices bacon", "bacon", 3)]
+    [InlineData("1 slice bread", "bread", 1)]
+    [InlineData("2 bunches kale", "kale", 2)]
+    [InlineData("1 bunch parsley", "parsley", 1)]
+    [InlineData("2 large cloves garlic", "garlic", 2)]
+    [InlineData("1 stick cinnamon", "cinnamon", 1)]
+    public async Task NormalizeOrDefer_CountWord_ResolvesToEachWithoutQueueing(
+        string measureString, string ingredientName, int expectedQuantity)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.Quantity.Should().Be(expectedQuantity);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("1 pinch salt", "salt", 1, "pinch")]
+    [InlineData("2 pinches salt", "salt", 2, "pinch")]
+    [InlineData("1 dash hot sauce", "hot sauce", 1, "dash")]
+    [InlineData("2 dashes hot sauce", "hot sauce", 2, "dash")]
+    public async Task NormalizeOrDefer_PinchOrDash_ResolvesToSeededUnit(
+        string measureString, string ingredientName, int expectedQuantity, string expectedAbbreviation)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+        result.Quantity.Should().Be(expectedQuantity);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("pinch of salt", "salt", "pinch")]
+    [InlineData("a pinch of salt", "salt", "pinch")]
+    [InlineData("dash of salt", "salt", "pinch")]
+    [InlineData("dash of cayenne", "cayenne", "pinch")]
+    [InlineData("pinch of nutmeg", "", "pinch")]
+    [InlineData("dash of pepper", "pepper", "dash")]
+    [InlineData("dash of black pepper", "black pepper", "dash")]
+    [InlineData("pinch of red pepper", "", "dash")]
+    [InlineData("pinch of pepper", "pepper", "dash")]
+    public async Task NormalizeOrDefer_PinchOrDashWithoutNumber_ResolvesToOneOfPreferredUnit(
+        string measureString, string ingredientName, string expectedAbbreviation)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+        result.Quantity.Should().Be(1m);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task NormalizeOrDefer_ExplicitDashQuantity_KeepsExplicitQuantity()
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer("2 dash hot sauce", "hot sauce");
+
+        result.Quantity.Should().Be(2m);
+        result.UnitOfMeasureAbbreviation.Should().Be("dash");
+    }
+
+    [Theory]
+    [InlineData("1/2 gal. vanilla ice cream", "vanilla ice cream", 0.5)]
+    [InlineData("1 gal. water", "water", 1)]
+    [InlineData("1 gal water", "water", 1)]
+    [InlineData("2 gallons milk", "milk", 2)]
+    [InlineData("2 gallon milk", "milk", 2)]
+    public async Task NormalizeOrDefer_Gallon_ResolvesToGallonUnit(
+        string measureString, string ingredientName, double expectedQuantity)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureAbbreviation.Should().Be("gal");
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Volume);
+        result.Quantity.Should().Be((decimal)expectedQuantity);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("2 sticks butter", "butter", 226)]
+    [InlineData("1 stick butter", "butter", 113)]
+    [InlineData("1 stick margarine", "margarine", 113)]
+    public async Task NormalizeOrDefer_ButterStick_ResolvesToGrams(
+        string measureString, string ingredientName, int expectedGrams)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.GramId);
+        result.UnitOfMeasureAbbreviation.Should().Be("g");
+        result.UnitOfMeasureType.Should().Be(UnitOfMeasureType.Weight);
+        result.Quantity.Should().Be(expectedGrams);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("None")]
+    [InlineData("-")]
+    [InlineData("to")]
+    [InlineData("or")]
+    public async Task NormalizeOrDefer_JunkLine_ReturnsJunkLineWithoutQueueing(string measureString)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, "salt");
+
+        result.IsJunkLine.Should().BeTrue();
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureId.Should().BeNull();
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("1-1/2 cups sugar", "sugar", 1.5, "cup")]
+    [InlineData("2-3 tbsp butter", "butter", 2, "tbsp")]
+    public async Task NormalizeOrDefer_Range_ResolvesLowerBoundWithoutQueueing(
+        string measureString, string ingredientName, double expectedQuantity, string expectedAbbreviation)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be((decimal)expectedQuantity);
+        result.UnitOfMeasureAbbreviation.Should().Be(expectedAbbreviation);
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Theory]
+    [InlineData("salt to taste", "salt")]
+    [InlineData("salt and pepper", "salt")]
+    [InlineData("salt and pepper to taste", "salt")]
+    [InlineData("pepper", "pepper")]
+    public async Task NormalizeOrDefer_ToTasteLine_ResolvesToZeroEachWithoutQueueing(
+        string measureString, string ingredientName)
+    {
+        var resolver = await InMemoryUnitOfMeasureResolver.LoadAsync(_dbContext);
+
+        var result = resolver.NormalizeOrDefer(measureString, ingredientName);
+
+        result.IsToTaste.Should().BeTrue();
+        result.WasDeferred.Should().BeFalse();
+        result.Quantity.Should().Be(0m);
+        result.UnitOfMeasureId.Should().Be(UnitOfMeasureConfiguration.EachId);
+        result.UnitOfMeasureAbbreviation.Should().Be("ea");
+        _dbContext.UnresolvedUnitOfMeasureTokens.Local.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void JunkLine_Factory_HasNoUnitAndIsNotDeferred()
+    {
+        var result = IngestUnitOfMeasureResolution.JunkLine();
+
+        result.IsJunkLine.Should().BeTrue();
+        result.IsToTaste.Should().BeFalse();
+        result.WasDeferred.Should().BeFalse();
+        result.UnitOfMeasureId.Should().BeNull();
+        result.DeferredUnitToken.Should().BeNull();
     }
 
     // ── Per-batch state reset ─────────────────────────────────────────────────

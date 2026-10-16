@@ -5406,7 +5406,8 @@ Feature: Camping Trip User Interface
 
 ## [MEP-067] Ingest Unit Token Coverage: Seed Count and Measure Aliases, Filter Junk Tokens, and Raise the Fully-Resolved Recipe Share
 
-**Status:** Backlog
+**Status:** Done
+**Status note:** Closed by the user on 2026-10-16 with the 60 percent target not met (33.6 percent achieved); remaining gap carried by MEP-069 and MEP-070.
 **Priority:** High
 **Depends on:** MEP-063 (corrected the count fallback so unrecognized tokens defer; this story clears the resulting backlog of deferred tokens)
 **Related to:** MEP-049, MEP-050 (earlier normalization-gap cleanup passes in the same ingest pipeline; this story reuses their reset-and-re-ingest procedure)
@@ -5463,6 +5464,21 @@ Cleaning up these groups should move most recipes into the matching pool without
 - Any user-facing change to the unit-token review queue UI.
 - Assuming or looking up container sizes. Container declaration stays user-driven.
 - Long-tail tokens outside the groups listed in the Business Problem. After this story, the review queue is expected to still hold residual tokens.
+
+### Results (2026-10-13 re-ingest)
+- Full reset and live re-ingest completed on 2026-10-13 with this story's changes (MEP-067 branch, including pinch/dash-without-number handling and a seeded gallon unit). 1,643,098 recipes ingested.
+- Success query: fully_resolved 551,353 of 1,643,098 = 33.6% (up from 22%, 361,582). The target was at least 60%: NOT MET.
+- Distinct tokens in UnresolvedUnitOfMeasureToken: 271,964 (down from 293,674).
+- Deferred ingredient rows: 1,148,306 (9.4% of non-container rows; was 2,422,675 / 18.9%). Container-flagged rows: 1,201,622 (8.6% of all ingredient rows). To-taste rows stored: 237,835. Dry-run gate (top 25 deferred tokens): PASS.
+- Recipe blocker breakdown (full run):
+  - Blocked only by container-flagged ingredients: 427,089 (26.0%)
+  - Blocked only by deferred ingredients: 414,518 (25.2%)
+  - Blocked by both: 250,138 (15.2%)
+- Container rows that state their own size in the text: 561,754 of 1,201,622 (46.7%). Counting those as declared would raise the fully-resolved share to about 44.4% (hypothetical, diagnostic only). Largest container keywords: can 649,722 rows, pkg 244,720, package 79,425, box 65,113, jar 53,544.
+- Remaining top deferred tokens are mostly:
+  - Non-unit words or count words the user chose to leave deferred (no aliases by decision): head, sprigs, pieces, loaf, stalk, drops, piece, strips.
+  - Non-units: cooking spray, olive oil, paprika, butter, water, fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping.
+  - Boxes (6,617) and sq. (4,697).
 
 ### Acceptance Criteria
 ```gherkin
@@ -5534,4 +5550,337 @@ Feature: Ingest Unit Token Coverage
     When the documented fully-resolved SQL query is run against the database
     Then the fully-resolved share of recipes is at least 60 percent, up from 22 percent
     And the result and the new count of distinct queued tokens are recorded in this backlog item
+```
+
+**Note on the last scenario (2026-10-13):** The 60 percent threshold was not met (33.6% measured; see Results above). The remaining gap is carried by MEP-069 (container sizes) and by MEP-070 for the deferred-token residue.
+
+**Follow-up:** MEP-069 addresses the container-flagged ingredient blockers that remain after this story's unit-token coverage work, including recipe-stated size parsing and a standard-size default table. MEP-070 addresses the deferred-token residue (non-unit words and count words landing in the unit position).
+
+---
+
+## [MEP-068] Chore: Audit Constants for Enum Candidates and Convert Where Appropriate
+
+**Status:** Backlog
+**Priority:** Low
+**Depends on:** none
+
+### Business Problem
+The codebase has accumulated groups of related constants defined as loose `int`, `string`, or `static readonly` fields in `*Constants` classes and elsewhere. The most visible example is the exit-code trio (`ExitCodeSuccess = 0`, `ExitCodeInvalidArguments = 1`, `ExitCodeFatalError = 2`) duplicated identically in `IngestConstants.cs` and `DedupConstants.cs`, dating from the original MEP-026 ingest commit (7550220) with no recorded rationale. Similar patterns likely exist in other constants classes across the API, the tools projects, and as string-literal union candidates in the Angular frontend.
+
+Loose magic values are a minor maintenance hazard: duplication can drift silently, call sites give no type-level hint about valid values, and exhaustiveness checks are impossible. A systematic audit that identifies every group of related constants and converts the clear-cut candidates to enums (C#) or string-literal union types / const objects (TypeScript) would tighten the type system, make valid values discoverable, and reduce duplication -- all without changing runtime behavior.
+
+This is a tech-debt cleanup item with no user-facing behavior change.
+
+### Scope
+
+**Audit targets (not exhaustive; the implementer scans for others):**
+- `src/MealsEnPlace.Tools.Ingest/IngestConstants.cs`
+- `src/MealsEnPlace.Tools.Dedup/DedupConstants.cs`
+- Any other `*Constants.cs` or `const`/`static readonly` field groups in `src/MealsEnPlace.Api/`
+- Any other `*Constants.cs` or `const`/`static readonly` field groups in the tools projects
+- String-literal union candidates and const objects in `src/MealsEnPlace.Web/`
+
+**Known first candidate -- exit codes:**
+The `ExitCodeSuccess = 0`, `ExitCodeInvalidArguments = 1`, `ExitCodeFatalError = 2` constants in both `IngestConstants.cs` and `DedupConstants.cs` become a single shared `ToolExitCode : int` enum with members `FatalError = 2`, `InvalidArguments = 1`, `Success = 0` (alphabetical per convention). Both tools use the shared enum; casts to `int` are confined to one place per tool (a single return-point cast or a tiny helper).
+
+**For every other candidate the audit surfaces, the implementer records:**
+- The constants class and field names
+- Whether to convert (with the target type: enum, flags enum, string-literal union, const object) or leave as-is
+- A short rationale for the decision
+
+**Conversion rules:**
+- Enum member names follow CLAUDE.md conventions: alphabetical order, no abbreviations.
+- Numeric values that are persisted in the database require an EF Core migration check to confirm the stored column is compatible; document the finding.
+- Serialized values (JSON property values, shell exit codes, API contract strings) must not change their wire/runtime representation.
+- Affected tests and feature-folder READMEs are updated in the same pass.
+- The audit list (candidates, decisions, rationales) is recorded as implementation notes in this backlog item once complete.
+
+### Out of Scope
+- Inventing new constants or enums that do not already exist as loose field groups.
+- Refactoring logic around the constants beyond the type change itself.
+- Angular `environment.ts` configuration values (those are deployment-time settings, not domain enums).
+
+### Acceptance Criteria
+```gherkin
+Feature: Constants-to-Enum Audit and Conversion
+
+  Scenario: Every constants class and loose constant group is audited
+    Given the codebase contains *Constants.cs files, const/static readonly field groups in src/MealsEnPlace.Api, the tools projects, and string-literal groups in src/MealsEnPlace.Web
+    When the audit runs
+    Then every such group is reviewed
+    And a decision (convert or leave) with rationale is recorded for each
+
+  Scenario: Exit-code constants become a shared ToolExitCode enum
+    Given IngestConstants.cs defines ExitCodeSuccess = 0, ExitCodeInvalidArguments = 1, ExitCodeFatalError = 2
+    And DedupConstants.cs defines the identical three constants
+    When the conversion runs
+    Then a single shared ToolExitCode enum exists with members FatalError = 2, InvalidArguments = 1, and Success = 0 in alphabetical order
+    And both tools reference the shared enum
+    And no loose ExitCode int constant remains in either tool
+    And the int cast appears at most once per tool's Program.cs
+
+  Scenario: Shell exit codes are numerically unchanged
+    Given the ToolExitCode enum
+    When either tool exits with Success, InvalidArguments, or FatalError
+    Then the process exit code is 0, 1, or 2 respectively
+    And existing shell scripts or CI steps that check exit codes are unaffected
+
+  Scenario: Each approved candidate is converted with behavior unchanged
+    Given the audit identified a group of constants as a conversion candidate
+    When the group is converted to an enum, flags enum, string-literal union, or const object
+    Then the runtime values are identical to the original constants
+    And call sites compile without behavioral changes
+
+  Scenario: Database-persisted values are migration-checked
+    Given a constant group whose values are stored in a database column
+    When it is converted to an enum
+    Then the implementer verifies the column type is compatible
+    And documents whether a migration is needed
+    And if a migration is needed it is included with Up and Down paths
+
+  Scenario: Serialized and wire-format values do not change
+    Given constants that appear in JSON responses, shell exit codes, or API contracts
+    When those constants are converted to enums or union types
+    Then the serialized representation is identical to the prior string or integer value
+
+  Scenario: TypeScript union candidates in Angular are converted where appropriate
+    Given string-literal groups or repeated magic strings in src/MealsEnPlace.Web
+    When the audit identifies them as union-type candidates
+    Then each approved candidate is converted to a string-literal union type or const object
+    And ng build succeeds with zero errors
+
+  Scenario: Tests and READMEs are updated
+    Given tests and feature-folder READMEs that reference the converted constants
+    When the conversion is complete
+    Then every previously passing test still passes
+    And affected READMEs reflect the new types
+    And the solution builds with zero errors on both dotnet build and ng build
+```
+
+---
+
+## [MEP-069] Standard Container Size Defaults and Recipe-Stated Container Sizes
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-067 (unit-token coverage must land first; container-flagged ingredients are the dominant remaining blocker)
+**Related to:** MEP-003 (container reference resolution), MEP-026 (bulk recipe ingest)
+
+### Business Problem
+After MEP-067, only about 33-34% of recipes are fully resolved against the 60% target. The dominant remaining blocker is container-flagged ingredient rows (can, pkg, box, jar, bag, bottle, carton, envelope, container, and similar). Measured on a 100k-row sample of the 1,643,098-recipe catalog:
+
+- ~35% of recipes are blocked only by container-flagged ingredients.
+- ~16% are blocked only by deferred tokens.
+- ~17% are blocked by both container-flagged ingredients and deferred tokens.
+
+I need most of these container-blocked recipes to enter the matching pool. Two observations make that feasible without declaring every size by hand:
+
+1. **Recipe-stated sizes.** 36.2% of container-flagged rows already state their own size in the text (for example, "1 (8 oz.) pkg. cream cheese" or "1 14.5-oz. can diced tomatoes"). Treating those as declared would lift the fully-resolved share from ~33% to ~43%.
+2. **Standard sizes.** Common grocery items have well-known standard sizes: 1 package cream cheese is 8 oz, 1 can condensed cream of chicken soup is 10.5 oz, 1 can diced tomatoes is 14.5 oz. The correct size depends on the container word and the ingredient together, not the container word alone (a "can" of soup, tomatoes, and tuna are three different sizes). An editable lookup table keyed by container word + canonical ingredient, seeded for the highest-volume pairs, would resolve bare lines like "1 can cream of chicken soup" automatically.
+
+The current project rule in CLAUDE.md ("Container Reference Resolution Flow" and the Shrinkflation note) states that container sizes are always user-declared and never assumed from a lookup table. This story deliberately amends that rule with a scoped exception: a standard-size table whose entries are flagged as assumed, visible in the UI, user-overridable, and backed by a last-reviewed date for shrinkflation auditing. The original text is always preserved in Notes, and a recipe-stated or user-declared size always wins over a table default.
+
+**Correction from the MEP-067 full run (2026-10-13):** On the full run, 40.4% of recipes (25.2% blocked only by deferred ingredients plus 15.2% blocked by both) are blocked by deferred ingredients, not the roughly 33% the 100k sample suggested. Deferred-token residue (non-unit words such as prep words and ingredient names landing in the unit position) is therefore as large a lever as containers; it is suggested as a separate follow-up story candidate rather than expanding MEP-069.
+
+### Implementation Notes
+- **Recipe-stated size parsing.** When a container-flagged ingredient row contains a size declaration in the text, parse it and treat it as declared. Patterns to handle:
+  - Parenthetical before the container word: "1 (8 oz.) can tomatoes"
+  - Parenthetical after the noun: "1 can tomatoes (14.5 oz.)"
+  - Hyphenated: "1 8-oz. pkg. cream cheese"
+  - Ranges: use the lower bound (e.g., "1 (14-15 oz.) can" resolves to 14 oz)
+  - The existing `ContainerStatedSizeDetector` in the Ingest tool is a starting point but misses approximately 1,300 trailing-size rows per 100k (sizes stated after the noun phrase). Extend it to cover trailing patterns.
+  - **Package size vs. amount used:** When the text says "1 (8 oz.) pkg. cream cheese, softened" the 8 oz is the package size and the full package is used. When the text says "4 oz. cream cheese" with no container word, that is already a resolved quantity and is not affected by this story. Container-stated sizes record the container's net weight/volume and the container count as the quantity.
+- **Standard-size table.**
+  - Data model: an editable database entity (not code constants) keyed by `ContainerWord` + `CanonicalIngredientId`, with fields for `Quantity`, `UnitOfMeasureId`, and `LastReviewedDate`.
+  - Seeded via EF Core migration for the highest-volume container+ingredient pairs, determined by a frequency query against the ingested data (e.g., cream cheese + pkg, condensed soup + can, diced tomatoes + can, tuna + can).
+  - Applied only when the recipe states no size and no user declaration exists.
+  - Matched ingredients are flagged as `Assumed` (distinct from `Declared` and `UserDeclared`) so the UI can badge them and the user can override.
+  - The original recipe text is always preserved in Notes.
+  - A recipe-stated size or user-declared size always takes precedence over a table default.
+  - An unlisted container+ingredient pair remains unresolved and continues to display "Awaiting Resolution".
+- **Shrinkflation mitigation.** The standard-size table is user-editable data, not compiled code. Each row carries a `LastReviewedDate`. The UI surfaces rows that have not been reviewed within a configurable interval (default: 12 months) so the user can verify current sizes.
+- **CLAUDE.md amendment.** Update the "Container Reference Resolution Flow" section and the "Shrinkflation note" in `.claude/CLAUDE.md` to reflect the new standard-size table, its constraints, and the precedence rules (recipe-stated > user-declared > table default > unresolved). The existing declaration-first principle remains; the table is a scoped supplement, not a replacement. This is an explicit task within this story.
+- **Ingest tool support.** The ingest pipeline applies recipe-stated size parsing and standard-size table lookups during import. This requires a reset and re-ingest. Batch with other ingest-altering work to avoid multiple full re-ingests. Like MEP-049, MEP-050, MEP-063, and MEP-067, the reset wipes inventory items, user-created ingredients, and meal plans.
+- **Envelope and container keyword review.** MEP-067 added `envelope` and `container` as container keywords. Measured at ingest, `envelope` rows state their own size only 5.5% of the time. Review whether these keywords over-flag and reclassify or add special handling if so.
+- **Measurement and recording.** After the re-ingest, measure the new fully-resolved share using the MEP-067 success query and record the result in this backlog item, along with the remaining blocker breakdown (container-only, deferred-only, both).
+
+### Out of Scope
+- Bulk UI for declaring container sizes beyond the existing single-item edit flow.
+- Unit-token alias work (covered by MEP-067).
+- Automatic population of the standard-size table from external data sources (e.g., Open Food Facts container sizes).
+- Changes to the recipe matching algorithm itself (scoring, substitution logic).
+
+### Acceptance Criteria
+```gherkin
+Feature: Standard Container Size Defaults and Recipe-Stated Container Sizes
+
+  Scenario: A recipe-stated size is treated as declared
+    Given a recipe ingredient row "1 (14.5 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14.5 and UnitOfMeasure = oz
+    And the original text "1 (14.5 oz.) can diced tomatoes" is preserved in Notes
+    And the ingredient is not flagged as unresolved
+    And the owning recipe does not display "Awaiting Resolution" for this ingredient
+
+  Scenario: A trailing recipe-stated size is parsed
+    Given a recipe ingredient row "1 can diced tomatoes (14.5 oz.)"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14.5 and UnitOfMeasure = oz
+    And the original text is preserved in Notes
+    And the ingredient is not flagged as unresolved
+
+  Scenario: A hyphenated recipe-stated size is parsed
+    Given a recipe ingredient row "1 8-oz. pkg. cream cheese"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 8 and UnitOfMeasure = oz
+    And the original text is preserved in Notes
+
+  Scenario: A range in a recipe-stated size uses the lower bound
+    Given a recipe ingredient row "1 (14-15 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 14 and UnitOfMeasure = oz
+
+  Scenario: A standard-size default is applied and flagged as assumed
+    Given the standard-size table contains an entry for container word "can" and canonical ingredient "condensed cream of chicken soup" with size 10.5 oz
+    And a recipe ingredient row "1 can cream of chicken soup" states no size
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 10.5 and UnitOfMeasure = oz
+    And the ingredient is flagged as Assumed
+    And the original text "1 can cream of chicken soup" is preserved in Notes
+    And the UI displays an indicator that the size is assumed
+
+  Scenario: A recipe-stated size takes precedence over a standard-size default
+    Given the standard-size table contains an entry for "can" and "diced tomatoes" with size 14.5 oz
+    And a recipe ingredient row "1 (28 oz.) can diced tomatoes"
+    When the row is processed during ingest
+    Then the ingredient stores Quantity = 28 and UnitOfMeasure = oz
+    And the ingredient is not flagged as Assumed
+
+  Scenario: A user-declared size takes precedence over a standard-size default
+    Given a recipe ingredient was resolved via the standard-size table as 10.5 oz with flag Assumed
+    When the user edits the ingredient and declares 12 oz
+    Then the ingredient stores Quantity = 12 and UnitOfMeasure = oz
+    And the ingredient is flagged as UserDeclared
+    And the Assumed flag is removed
+
+  Scenario: A user-declared size persists across re-ingests
+    Given a recipe ingredient has been declared by the user as 12 oz with flag UserDeclared
+    When a reset and re-ingest is performed
+    Then the user-declared size is not overwritten by the standard-size table
+    And the ingredient retains Quantity = 12, UnitOfMeasure = oz, and flag UserDeclared
+
+  Scenario: No default exists for an unlisted container+ingredient pair
+    Given the standard-size table has no entry for container word "can" and canonical ingredient "artichoke hearts"
+    And a recipe ingredient row "1 can artichoke hearts" states no size
+    When the row is processed during ingest
+    Then the ingredient remains flagged as an unresolved ContainerReference
+    And the owning recipe displays "Awaiting Resolution"
+
+  Scenario: CLAUDE.md container reference rules are amended
+    Given the current CLAUDE.md states container sizes are always user-declared and never assumed from a lookup table
+    When this story is implemented
+    Then the "Container Reference Resolution Flow" section documents the standard-size table, the Assumed flag, and the precedence order (recipe-stated > user-declared > table default > unresolved)
+    And the "Shrinkflation note" references the table's LastReviewedDate field and user-editable nature
+    And the declaration-first principle is preserved as the primary rule
+
+  Scenario: Over-flagging container keywords are reviewed
+    Given MEP-067 added "envelope" and "container" as container keywords
+    And "envelope" rows state their own size only 5.5% of the time
+    When the keyword list is reviewed
+    Then a decision is recorded for each keyword on whether it should remain, be removed, or receive special handling
+
+  Scenario: Fully-resolved recipe share is measured and recorded after re-ingest
+    Given a full reset and re-ingest has been performed with this story's changes
+    When the fully-resolved SQL query from MEP-067 is run against the database
+    Then the fully-resolved share is recorded in this backlog item
+    And the remaining blocker breakdown by category is recorded
+```
+
+---
+
+## [MEP-070] Deferred Unit Token Residue: Stop Non-Unit Words Landing in the Unit Position
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-067 (unit-token coverage and the ingest dry-run and blocker-breakdown tooling must land first)
+**Related to:** MEP-069 (container sizes; the two stories together carry the gap to the 60 percent fully-resolved target; batch their re-ingest if both are ready)
+
+### Business Problem
+After the 2026-10-13 re-ingest, only 33.6% of 1,643,098 recipes are fully resolved and eligible for "What can I make?". I still cannot get useful matches from a catalog where two of every three recipes are invisible to the matcher. 414,518 recipes (25.2%) are blocked only by deferred ingredients and another 250,138 (15.2%) are blocked by both deferred and container-flagged ingredients, so 40.4% of the catalog is blocked by deferred ingredients. 1,148,306 ingredient rows (9.4% of non-container rows) are deferred, and 271,964 distinct tokens sit in `UnresolvedUnitOfMeasureToken`, far too many for me to review by hand.
+
+The top deferred tokens are mostly not units at all:
+
+- **Prep or state words in the unit position:** fresh (11,062), chopped (11,002), whole (10,834), beaten (9,615), hard-boiled (7,187), dried (4,061), unbaked (5,881), heaping (5,276).
+- **Ingredient names in the unit position:** cooking spray (12,601), olive oil (7,211), jalapeno (6,977), paprika (6,027), butter (4,842), water (4,835), Filling (4,907).
+- **Count or shape words I chose to leave without aliases in MEP-067:** head (13,055), sprigs (10,894), pieces (8,220), loaf (6,712), stalk (6,016), drops (5,819), piece (4,891), strips (4,750). I know what a stalk of celery or a head of lettuce is; these should simply count as "each" with the quantity unchanged.
+- **Missed by the existing detectors:** "boxes" (6,617), a plural container keyword the detector does not match, and "sq." (4,697).
+
+Clearing these should move a large share of the 40.4% into the matching pool without any review effort from me.
+
+### Implementation Notes
+- **Prep or state words.** When the leading word after the quantity is a prep or state word (for example fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping), skip it and keep looking for a unit or container word. If none follows, treat the line as Count (`ea`) with the quantity unchanged. Seed the stoplist as data (a table or seeded list populated by an explicit EF Core migration, never auto-migrate) rather than hard-coding where sensible.
+- **Ingredient names in the unit position.** When the leading word is an ingredient name (cooking spray, olive oil, jalapeno, paprika, butter, water, Filling), do not treat it as a unit token. Resolve the line as Count (`ea`) with the quantity unchanged, and let the word remain part of the ingredient name.
+- **Count and shape words.** The Backend Engineer decides between two approaches and records the choice: (a) seed aliases for head, sprigs, sprig, pieces, piece, loaf, stalk, stalks, drops, drop, strips, strip as Count (`ea`), or (b) a general rule that any unrecognized leading word followed by an ingredient noun is treated as a count with the quantity unchanged. Either way no weight or volume conversion is applied, because sizes vary.
+- **Plural container keywords.** Extend container keyword handling to match plurals (boxes, and any other plural not yet matched, for example jars, cans, bottles, cartons), so these rows are flagged as ContainerReferences with the original text preserved in Notes and are never given an assumed size.
+- **"sq."** Resolve as a Count (`ea`) shape word, or as a recognized abbreviation if the Backend Engineer finds a more accurate mapping; record the decision.
+- **Measurement.** Use the ingest dry-run top-deferred-tokens table and the recipe blocker breakdown to verify before and after.
+- **Procedure.** Requires a full reset and re-ingest. Batch it with MEP-069 if both are ready so the 1.64M-recipe ingest runs once. Like MEP-049, MEP-050, MEP-063 and MEP-067, the reset wipes inventory items, user-created ingredients and meal plans.
+- **Recording.** After the re-ingest, measure the new fully-resolved share with the MEP-067 success query and record it in this item, with the remaining blocker breakdown (container-only, deferred-only, both) and the new count of distinct queued tokens.
+
+### Out of Scope
+- Container size work (declared sizes, recipe-stated sizes, standard-size defaults): MEP-069.
+- UI changes to the unit-token review queue.
+- Long-tail tokens outside the groups listed above; the review queue is expected to still hold residual tokens.
+
+### Acceptance Criteria
+```gherkin
+Feature: Deferred Unit Token Residue
+
+  Scenario: Prep and state words are skipped in the unit position
+    Given the prep and state word stoplist is seeded
+    When the measure strings "1 fresh jalapeno", "2 chopped onions" and "3 beaten eggs" are normalized
+    Then "fresh", "chopped" and "beaten" are skipped and are not treated as unit tokens
+    And each line resolves to the "ea" UnitOfMeasure with the stated quantity
+    And none of those words is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: A prep word before a real unit is skipped and the unit is used
+    Given the prep and state word stoplist is seeded
+    When the measure string "1 heaping cup flour" is normalized
+    Then "heaping" is skipped
+    And the line resolves to 1 cup
+    And "heaping" is not added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: An ingredient name in the unit position resolves to Count
+    Given the measure strings "1 cooking spray", "2 olive oil" and "1 paprika"
+    When they are normalized during ingest
+    Then each resolves to the "ea" UnitOfMeasure with the stated quantity
+    And the ingredient name is preserved as the ingredient
+    And none of "cooking spray", "olive oil" or "paprika" is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Count and shape words resolve to Count with the quantity unchanged
+    When the measure strings "1 head lettuce", "3 stalks celery", "4 sprigs thyme" and "2 loaf bread" are normalized
+    Then each resolves to the "ea" UnitOfMeasure with the stated quantity
+    And no weight or volume conversion is applied
+    And no row is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Plural container keywords are flagged as containers
+    Given the measure string "2 boxes frozen spinach"
+    When it is normalized during ingest
+    Then the ingredient is flagged as an unresolved ContainerReference with the original text preserved in Notes
+    And no assumed weight or volume is stored
+    And "boxes" is not added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Dry-run gate blocks the full re-ingest while targeted tokens remain
+    Given the parser changes and seeded data are in place
+    When the ingest tool is run in dry-run mode
+    Then the summary prints the top deferred tokens
+    And none of fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping, cooking spray, olive oil, jalapeno, paprika, butter, water, Filling, head, sprigs, pieces, loaf, stalk, drops, piece, strips, boxes, "sq." appears in the top 25
+    And the full re-ingest is not started otherwise
+
+  Scenario: Fully-resolved share is measured and recorded after re-ingest
+    Given a full reset and re-ingest has been performed with this story's changes
+    When the documented fully-resolved SQL query from MEP-067 is run against the database
+    Then the new fully-resolved share is recorded in this backlog item, compared with the 33.6 percent baseline
+    And the remaining blocker breakdown (container-only, deferred-only, both) is recorded
+    And the new count of distinct tokens in UnresolvedUnitOfMeasureToken is recorded, compared with the 271,964 baseline
 ```

@@ -10,6 +10,9 @@ namespace MealsEnPlace.Tools.Ingest;
 /// </summary>
 internal sealed class IngestSummary
 {
+    private readonly Dictionary<string, int> _containerKeywordRecipeCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _containerKeywordRowCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _containerKeywordStatedSizeRowCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, int> _deferredUnitTokenCounts = new(StringComparer.OrdinalIgnoreCase);
     private readonly Stopwatch _stopwatch = Stopwatch.StartNew();
 
@@ -26,6 +29,12 @@ internal sealed class IngestSummary
 
     public int ContainerFlaggedIngredients { get; set; }
 
+    /// <summary>Diagnostic: container-flagged rows whose text does not state a size next to the container word.</summary>
+    public int ContainerRowsWithoutStatedSize { get; private set; }
+
+    /// <summary>Diagnostic: container-flagged rows whose text states a size next to the container word.</summary>
+    public int ContainerRowsWithStatedSize { get; private set; }
+
     public int DeterministicallyResolvedIngredients { get; set; }
 
     public TimeSpan Elapsed => _stopwatch.Elapsed;
@@ -35,6 +44,9 @@ internal sealed class IngestSummary
     public int InstructionStepsDropped { get; set; }
 
     public int InstructionStepsRetained { get; set; }
+
+    /// <summary>Count of junk ingredient lines ("None", "-", "to", "or") dropped without a RecipeIngredient row.</summary>
+    public int JunkIngredientLinesDropped { get; set; }
 
     /// <summary>
     /// Count of NER tokens whose normalized value differed from the original
@@ -50,6 +62,27 @@ internal sealed class IngestSummary
 
     public bool RecipeReferenceCountBackfilled { get; set; }
 
+    /// <summary>Recipes blocked by at least one container-flagged and at least one deferred ingredient.</summary>
+    public int RecipesBlockedByBoth { get; private set; }
+
+    /// <summary>Recipes blocked only by container-flagged ingredients (no deferred ingredient).</summary>
+    public int RecipesBlockedOnlyByContainer { get; private set; }
+
+    /// <summary>
+    /// Diagnostic, hypothetical: recipes blocked only by container-flagged ingredients where every
+    /// container row states its own size, so they would be fully resolved if stated sizes counted as declared.
+    /// </summary>
+    public int RecipesBlockedOnlyByContainerAllStatedSize { get; private set; }
+
+    /// <summary>Recipes blocked only by deferred, non-container ingredients (no container-flagged ingredient).</summary>
+    public int RecipesBlockedOnlyByDeferred { get; private set; }
+
+    /// <summary>
+    /// Recipes with no deferred and no container-flagged ingredient: the dry-run
+    /// estimate of the MEP-067 fully-resolved share.
+    /// </summary>
+    public int RecipesFullyResolved { get; private set; }
+
     public int RecipesIngested { get; set; }
 
     public int RecipesSkippedByMaxRows { get; set; }
@@ -63,6 +96,9 @@ internal sealed class IngestSummary
     public int ResolvedWeightIngredients { get; set; }
 
     public int TotalIngredientsProcessed { get; set; }
+
+    /// <summary>Count of to-taste seasoning lines stored as quantity 0 in "ea".</summary>
+    public int ToTasteIngredients { get; set; }
 
     public int UnitOfMeasureDeferredToQueue { get; set; }
 
@@ -89,6 +125,83 @@ internal sealed class IngestSummary
         }
     }
 
+    /// <summary>
+    /// Tallies one recipe into exactly one of four mutually exclusive buckets:
+    /// fully resolved, blocked only by container-flagged ingredients, blocked
+    /// only by deferred ingredients, or blocked by both. A container-flagged
+    /// row and a deferred row both have a null unit of measure and an
+    /// unresolved container flag, so the ingest loop must tell them apart.
+    /// </summary>
+    /// <param name="containerKeywords">
+    /// One matched container keyword per container-flagged ingredient row of the recipe.
+    /// </param>
+    /// <param name="deferredIngredientCount">
+    /// Count of non-container ingredient rows of the recipe whose unit of measure was deferred.
+    /// </param>
+    /// <param name="containerRowHasStatedSize">
+    /// Optional diagnostic flags aligned index-for-index with <paramref name="containerKeywords"/>:
+    /// true when that container row states its own size. Null means no row states a size.
+    /// </param>
+    public void RecordRecipeResolution(
+        IReadOnlyList<string> containerKeywords,
+        int deferredIngredientCount,
+        IReadOnlyList<bool>? containerRowHasStatedSize = null)
+    {
+        if (containerRowHasStatedSize is not null && containerRowHasStatedSize.Count != containerKeywords.Count)
+        {
+            throw new ArgumentException(
+                "Stated-size flags must align with container keywords.", nameof(containerRowHasStatedSize));
+        }
+
+        var hasContainer = containerKeywords.Count > 0;
+        var hasDeferred = deferredIngredientCount > 0;
+        var allRowsStateSize = hasContainer;
+
+        for (var index = 0; index < containerKeywords.Count; index++)
+        {
+            var keyword = containerKeywords[index];
+            _containerKeywordRowCounts[keyword] = _containerKeywordRowCounts.GetValueOrDefault(keyword) + 1;
+
+            if (containerRowHasStatedSize is not null && containerRowHasStatedSize[index])
+            {
+                ContainerRowsWithStatedSize++;
+                _containerKeywordStatedSizeRowCounts[keyword] =
+                    _containerKeywordStatedSizeRowCounts.GetValueOrDefault(keyword) + 1;
+            }
+            else
+            {
+                ContainerRowsWithoutStatedSize++;
+                allRowsStateSize = false;
+            }
+        }
+
+        if (!hasContainer && !hasDeferred)
+        {
+            RecipesFullyResolved++;
+        }
+        else if (hasContainer && hasDeferred)
+        {
+            RecipesBlockedByBoth++;
+        }
+        else if (hasContainer)
+        {
+            RecipesBlockedOnlyByContainer++;
+            if (allRowsStateSize)
+            {
+                RecipesBlockedOnlyByContainerAllStatedSize++;
+            }
+
+            foreach (var keyword in containerKeywords.Distinct(StringComparer.OrdinalIgnoreCase))
+            {
+                _containerKeywordRecipeCounts[keyword] = _containerKeywordRecipeCounts.GetValueOrDefault(keyword) + 1;
+            }
+        }
+        else
+        {
+            RecipesBlockedOnlyByDeferred++;
+        }
+    }
+
     /// <summary>Tallies a deterministically resolved ingredient by unit of measure type.</summary>
     public void RecordResolvedUnitOfMeasureType(UnitOfMeasureType unitOfMeasureType)
     {
@@ -107,6 +220,22 @@ internal sealed class IngestSummary
                 ResolvedArbitraryIngredients++;
                 break;
         }
+    }
+
+    /// <summary>
+    /// Returns the MEP-067 re-ingest gate blocked tokens that appear in the top
+    /// <see cref="IngestConstants.TopDeferredUnitTokenCount"/> deferred unit tokens
+    /// (case-insensitive). Empty means the gate passes.
+    /// </summary>
+    public IReadOnlyList<string> GetReingestGateViolations()
+    {
+        var blocked = new HashSet<string>(
+            IngestConstants.ReingestGateBlockedUnitTokens, StringComparer.OrdinalIgnoreCase);
+
+        return GetTopDeferredUnitTokens()
+            .Where(kvp => blocked.Contains(kvp.Key))
+            .Select(kvp => kvp.Key)
+            .ToList();
     }
 
     public void StopTimer() => _stopwatch.Stop();
@@ -128,10 +257,7 @@ internal sealed class IngestSummary
 
         var topDeferred = string.Join(
             Environment.NewLine,
-            _deferredUnitTokenCounts
-                .OrderByDescending(kvp => kvp.Value)
-                .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
-                .Take(25)
+            GetTopDeferredUnitTokens()
                 .Select(kvp => $"  {kvp.Value,10:N0}  {kvp.Key}"));
         if (topDeferred.Length == 0)
         {
@@ -141,6 +267,45 @@ internal sealed class IngestSummary
         var containerPercent = TotalIngredientsProcessed == 0
             ? 0.0
             : ContainerFlaggedIngredients * 100.0 / TotalIngredientsProcessed;
+
+        var violations = GetReingestGateViolations();
+        var gateLine = violations.Count == 0
+            ? "PASS"
+            : $"FAIL: {string.Join(", ", violations)}";
+
+        var recipesResolvedPercent = RecipesIngested == 0
+            ? 0.0
+            : RecipesFullyResolved * 100.0 / RecipesIngested;
+
+        string Percent(int count) => RecipesIngested == 0 ? "0.0" : $"{count * 100.0 / RecipesIngested:0.0}";
+
+        static string FormatTable(IEnumerable<KeyValuePair<string, int>> entries)
+        {
+            var lines = entries.Select(kvp => $"  {kvp.Value,10:N0}  {kvp.Key}").ToList();
+            return lines.Count == 0 ? "  (none)" : string.Join(Environment.NewLine, lines);
+        }
+
+        var topContainerByRecipe = FormatTable(GetTopContainerKeywords(_containerKeywordRecipeCounts));
+        var topContainerByRow = FormatTable(GetTopContainerKeywords(_containerKeywordRowCounts));
+
+        var containerRowsTotal = ContainerRowsWithStatedSize + ContainerRowsWithoutStatedSize;
+        string RowPercent(int count) => containerRowsTotal == 0 ? "0.0" : $"{count * 100.0 / containerRowsTotal:0.0}";
+
+        var statedSizeByKeyword = string.Join(
+            Environment.NewLine,
+            GetTopContainerKeywords(_containerKeywordRowCounts)
+                .Select(kvp =>
+                {
+                    var stated = _containerKeywordStatedSizeRowCounts.GetValueOrDefault(kvp.Key);
+                    var share = kvp.Value == 0 ? 0.0 : stated * 100.0 / kvp.Value;
+                    return $"  {stated,10:N0} / {kvp.Value,10:N0}  ({share,5:0.0}%)  {kvp.Key}";
+                }));
+        if (statedSizeByKeyword.Length == 0)
+        {
+            statedSizeByKeyword = "  (none)";
+        }
+
+        var hypotheticalResolved = RecipesFullyResolved + RecipesBlockedOnlyByContainerAllStatedSize;
 
         var capNote = StreamTerminatedByMaxRowsCap
             ? " (stream terminated early by --max-rows cap)"
@@ -161,14 +326,36 @@ internal sealed class IngestSummary
 
             Recipes
               Ingested:                    {RecipesIngested:N0}
+              Fully resolved:              {RecipesFullyResolved:N0} of {RecipesIngested:N0} ({recipesResolvedPercent:0.0}%)
+              Blocked only by container:   {RecipesBlockedOnlyByContainer:N0} ({Percent(RecipesBlockedOnlyByContainer)}%)
+              Blocked only by deferred:    {RecipesBlockedOnlyByDeferred:N0} ({Percent(RecipesBlockedOnlyByDeferred)}%)
+              Blocked by both:             {RecipesBlockedByBoth:N0} ({Percent(RecipesBlockedByBoth)}%)
               Batches flushed:             {BatchesFlushed:N0}
               CanonicalIngredients created:{CanonicalIngredientsCreated:N0}
               Ref count backfilled:        {(RecipeReferenceCountBackfilled ? "yes" : "skipped (dry run)")}
+
+            DIAGNOSTIC (hypothetical, changes no behavior): container rows that state their own size
+              Container rows, stated size:     {ContainerRowsWithStatedSize:N0} of {containerRowsTotal:N0} ({RowPercent(ContainerRowsWithStatedSize)}%)
+              Container rows, no stated size:  {ContainerRowsWithoutStatedSize:N0} of {containerRowsTotal:N0} ({RowPercent(ContainerRowsWithoutStatedSize)}%)
+              Rows with stated size / total rows, by keyword (top {IngestConstants.TopContainerKeywordCount})
+            {statedSizeByKeyword}
+              Recipes blocked only by container whose container rows ALL state a size:
+                                               {RecipesBlockedOnlyByContainerAllStatedSize:N0} ({Percent(RecipesBlockedOnlyByContainerAllStatedSize)}% of all recipes)
+              Hypothetical fully resolved if stated sizes counted as declared:
+                                               {hypotheticalResolved:N0} of {RecipesIngested:N0} ({Percent(hypotheticalResolved)}%)
+
+            Top {IngestConstants.TopContainerKeywordCount} container keywords (recipes blocked only by container, one count per recipe)
+            {topContainerByRecipe}
+
+            Top {IngestConstants.TopContainerKeywordCount} container keywords (all container-flagged ingredient rows)
+            {topContainerByRow}
 
             Ingredients
               NER tokens normalized:       {NerTokensNormalized:N0}
               NER tokens rejected:         {NerTokensRejected:N0}
               Total processed:             {TotalIngredientsProcessed:N0}
+              Junk lines dropped:          {JunkIngredientLinesDropped:N0}
+              To-taste (qty 0, ea):        {ToTasteIngredients:N0}
               Container-flagged:           {ContainerFlaggedIngredients:N0} ({containerPercent:0.0}%)
               Unit of measure resolved deterministic:  {DeterministicallyResolvedIngredients:N0} ({detPercent:0.0}% of non-container)
               Unit of measure deferred to review queue:{UnitOfMeasureDeferredToQueue:N0} ({deferPercent:0.0}%)
@@ -180,8 +367,10 @@ internal sealed class IngestSummary
               Weight:                      {ResolvedWeightIngredients:N0} ({weightPercent:0.0}%)
               Arbitrary:                   {ResolvedArbitraryIngredients:N0} ({arbitraryPercent:0.0}%)
 
-            Top 25 deferred unit tokens
+            Top {IngestConstants.TopDeferredUnitTokenCount} deferred unit tokens
             {topDeferred}
+
+            Re-ingest gate (MEP-067): {gateLine}
 
             Instructions
               Steps retained:              {InstructionStepsRetained:N0}
@@ -193,4 +382,16 @@ internal sealed class IngestSummary
 
             """;
     }
+
+    private static IEnumerable<KeyValuePair<string, int>> GetTopContainerKeywords(Dictionary<string, int> counts) =>
+        counts
+            .OrderByDescending(kvp => kvp.Value)
+            .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
+            .Take(IngestConstants.TopContainerKeywordCount);
+
+    private IEnumerable<KeyValuePair<string, int>> GetTopDeferredUnitTokens() =>
+        _deferredUnitTokenCounts
+            .OrderByDescending(kvp => kvp.Value)
+            .ThenBy(kvp => kvp.Key, StringComparer.Ordinal)
+            .Take(IngestConstants.TopDeferredUnitTokenCount);
 }

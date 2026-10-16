@@ -138,7 +138,7 @@ Never silently apply a Low-confidence Claude guess.
 
 ### What Is a Container Reference
 A container reference is any ingredient quantity string that names a packaging unit rather
-than a unit of measure: "can", "jar", "box", "packet", "bag", "bottle", "carton", "tube".
+than a unit of measure: "can", "jar", "box", "packet", "bag", "bottle", "carton", "tube", "container", "envelope", "package", "pkg", "pouch".
 These are never a unit of measure. They carry no fixed quantity — a 14.5 oz can and a 28 oz can are
 both "a can." Container sizes change over time without notice (shrinkflation). The system
 must never assume a container size from a lookup table or historical data.

@@ -20,6 +20,20 @@ public sealed class NormalizationResult
     public ClaudeConfidence Confidence { get; init; }
 
     /// <summary>
+    /// True when the measure string is a junk line ("None", "-", "to", "or") rather than an
+    /// ingredient quantity. Never queued and never sent to Claude; the caller should
+    /// treat the line as having no usable quantity.
+    /// </summary>
+    public bool IsJunkLine { get; init; }
+
+    /// <summary>
+    /// True when the line is a to-taste seasoning ("salt to taste", "salt and pepper").
+    /// Resolved as quantity 0 in "ea"; the caller stores it as resolved with the original
+    /// line in Notes. Never queued.
+    /// </summary>
+    public bool IsToTaste { get; init; }
+
+    /// <summary>
     /// Optional notes from a Claude resolution explaining assumptions or flagging uncertainty.
     /// Null for deterministic resolutions.
     /// </summary>
@@ -61,10 +75,13 @@ public sealed class NormalizationResult
 /// <para>
 /// Resolution order:
 /// <list type="number">
-///   <item><description>Parse a numeric quantity from the measure string and derive candidate unit tokens from the leading words of the remainder (mixed numbers such as "1 1/2 cups" are supported).</description></item>
+///   <item><description>Parse a numeric quantity from the measure string and derive candidate unit tokens from the leading words of the remainder (mixed numbers such as "1 1/2 cups" and "1-1/2 cups" are summed, ranges such as "2-3 tbsp" keep the lower bound, and junk words and size descriptors are skipped).</description></item>
+///   <item><description>Junk lines ("None", "-", "to", "or") are returned as <see cref="NormalizationResult.IsJunkLine"/>: never queued, Claude never invoked. To-taste lines ("salt", "salt and pepper", "salt to taste") resolve to quantity 0 in "ea" flagged <see cref="NormalizationResult.IsToTaste"/>.</description></item>
+///   <item><description>Butter or margarine sticks ("2 sticks butter") resolve to grams at 113 g per stick before unit and alias lookup.</description></item>
+///   <item><description>A pinch or dash with no number ("pinch of salt", "a dash of pepper") resolves to quantity 1 of the "pinch" unit, or the "dash" unit when the ingredient is pepper, before unit and alias lookup. Lines with an explicit quantity ("1 pinch salt") are unaffected.</description></item>
 ///   <item><description>Look up each candidate unit token against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Abbreviation"/> or <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasure.Name"/> (case-insensitive).</description></item>
 ///   <item><description>If not found, look up against <see cref="MealsEnPlace.Api.Models.Entities.UnitOfMeasureAlias"/> to catch dataset variants (e.g., "c.", "Tbsp.", "lbs").</description></item>
-///   <item><description>If still not found, a positive quantity parsed, and the remainder is empty or starts with the ingredient noun, default to "each" (count-with-ingredient-noun pattern, e.g. "4 chicken breasts" for "chicken breast"). Unrecognized tokens such as "sprigs" are not treated as counts.</description></item>
+///   <item><description>If still not found, a positive quantity parsed, and the remainder is empty, starts with the ingredient noun, or started with a size descriptor, default to "each" (e.g. "4 chicken breasts" for "chicken breast", "1 large yellow onion"). Unrecognized tokens such as "sprigs" are not treated as counts.</description></item>
 ///   <item><description>If still not found, fall back to Claude via <see cref="IClaudeService.ResolveUnitOfMeasureAsync"/>.</description></item>
 /// </list>
 /// </para>
@@ -104,7 +121,9 @@ public interface IUnitOfMeasureNormalizationService
     /// <see cref="MealsEnPlace.Api.Models.Entities.UnresolvedUnitOfMeasureToken"/> row to
     /// the review queue instead of invoking Claude. This preserves Claude quota
     /// during bulk ingest and lets the user decide how to map recurring tokens
-    /// in one place.
+    /// in one place. Junk lines, to-taste lines, range fragments, size descriptors and
+    /// empty tokens never queue (see <see cref="NormalizationResult.IsJunkLine"/> and
+    /// <see cref="NormalizationResult.IsToTaste"/>).
     /// </summary>
     /// <param name="measureString">The raw measure string to normalize.</param>
     /// <param name="ingredientName">The ingredient name, captured as sample context in the queue row.</param>
@@ -266,6 +285,81 @@ public class UnitOfMeasureNormalizationService(
         MeasureStringParseResult parsed,
         CancellationToken cancellationToken)
     {
+        // Step 0a: junk lines are neither units nor ingredients; never queued, never sent to Claude.
+        if (parsed.IsJunkLine)
+        {
+            return new NormalizationResult
+            {
+                Confidence = ClaudeConfidence.High,
+                IsJunkLine = true,
+                Quantity = 0m,
+                UnitOfMeasureAbbreviation = string.Empty,
+                UnitOfMeasureId = Guid.Empty,
+                WasClaudeResolved = false
+            };
+        }
+
+        // Step 0b: to-taste seasoning stores as quantity 0 in "ea" and is never queued.
+        if (parsed.IsToTaste)
+        {
+            var toTasteUnitOfMeasure = await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Abbreviation == "ea", cancellationToken);
+
+            return new NormalizationResult
+            {
+                Confidence = ClaudeConfidence.High,
+                IsToTaste = true,
+                Quantity = 0m,
+                UnitOfMeasureAbbreviation = toTasteUnitOfMeasure?.Abbreviation ?? "ea",
+                UnitOfMeasureId = toTasteUnitOfMeasure?.Id ?? Guid.Empty,
+                WasClaudeResolved = false
+            };
+        }
+
+        // Step 0c: ingredient-specific weight per unit (butter stick = 113 g) wins over
+        // unit / alias lookup, where "stick" would otherwise map to "ea".
+        if (parsed.IngredientSpecificGramsPerUnit is { } gramsPerUnit)
+        {
+            var gramUnitOfMeasure = await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Abbreviation == "g", cancellationToken);
+
+            if (gramUnitOfMeasure is not null)
+            {
+                return new NormalizationResult
+                {
+                    Confidence = ClaudeConfidence.High,
+                    Quantity = parsed.Quantity * gramsPerUnit,
+                    UnitOfMeasureAbbreviation = gramUnitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = gramUnitOfMeasure.Id,
+                    WasClaudeResolved = false
+                };
+            }
+        }
+
+        // Step 0d: a pinch or dash with no number ("pinch of salt", "dash of pepper") is a
+        // quantity of 1 in the seeded pinch or dash unit; never queued.
+        if (parsed.ImplicitQuantity is { } implicitQuantity
+            && parsed.PreferredUnitOfMeasureAbbreviation is { } preferredAbbreviation)
+        {
+            var preferredUnitOfMeasure = await dbContext.UnitsOfMeasure
+                .AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Abbreviation == preferredAbbreviation, cancellationToken);
+
+            if (preferredUnitOfMeasure is not null)
+            {
+                return new NormalizationResult
+                {
+                    Confidence = ClaudeConfidence.High,
+                    Quantity = implicitQuantity,
+                    UnitOfMeasureAbbreviation = preferredUnitOfMeasure.Abbreviation,
+                    UnitOfMeasureId = preferredUnitOfMeasure.Id,
+                    WasClaudeResolved = false
+                };
+            }
+        }
+
         foreach (var unitToken in parsed.UnitTokenCandidates)
         {
             // Step 1: deterministic lookup by abbreviation / name (with plural stripping).
@@ -312,8 +406,8 @@ public class UnitOfMeasureNormalizationService(
             }
         }
 
-        // Step 3: count-with-ingredient-noun fallback.
-        if (parsed.Quantity > 0m && parsed.IsCountWithIngredientNoun)
+        // Step 3: count fallback (ingredient noun, or a skipped size descriptor).
+        if (parsed.IsCountFallbackEligible)
         {
             var eachUnitOfMeasure = await dbContext.UnitsOfMeasure
                 .AsNoTracking()

@@ -12,11 +12,15 @@ namespace MealsEnPlace.Tools.Ingest;
 /// database round-trips across a full 1.64M-row ingest run.
 /// <para>
 /// Applies the same deterministic resolution order as the runtime
-/// <see cref="UnitOfMeasureNormalizationService"/>: abbreviation / name match, then
-/// alias match, then count-with-ingredient-noun fallback (MEP-063: only when
-/// the parser confirms the leftover text is the ingredient noun; a leading
-/// word such as "heaping" is tried as a unit candidate rather than assumed to
-/// be a count). When no step matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
+/// <see cref="UnitOfMeasureNormalizationService"/> (MEP-067): junk lines are
+/// dropped without queueing, to-taste lines resolve to quantity 0 in "ea",
+/// an ingredient-specific weight (butter stick = 113 g) wins over unit lookup,
+/// a quantity-less pinch or dash resolves to 1 pinch (or 1 dash for pepper),
+/// then abbreviation / name match, alias match, and finally the count fallback
+/// (<see cref="MeasureStringParseResult.IsCountFallbackEligible"/>: only when the
+/// parser confirms the leftover text is the ingredient noun or a size
+/// descriptor was skipped; a leading word such as "heaping" is tried as a unit
+/// candidate rather than assumed to be a count). When no step matches, writes (or upserts) an <see cref="UnresolvedUnitOfMeasureToken"/>
 /// row via the supplied DbContext instead of invoking Claude.
 /// </para>
 /// <para>
@@ -119,6 +123,43 @@ internal sealed class InMemoryUnitOfMeasureResolver
     {
         var parsed = UnitOfMeasureTokenParser.ParseWithIngredientContext(measureString, ingredientName);
 
+        // Step 0a: junk lines are neither units nor ingredients; never queued.
+        if (parsed.IsJunkLine)
+        {
+            return IngestUnitOfMeasureResolution.JunkLine();
+        }
+
+        // Step 0b: to-taste seasoning stores as quantity 0 in "ea"; never queued.
+        if (parsed.IsToTaste)
+        {
+            return IngestUnitOfMeasureResolution.ToTaste(_eachUnitOfMeasure.Id, _eachUnitOfMeasure.Abbreviation);
+        }
+
+        // Step 0c: ingredient-specific grams per unit (butter stick) win over
+        // unit / alias lookup, where "stick" would otherwise map to "ea".
+        if (parsed.IngredientSpecificGramsPerUnit is { } gramsPerUnit
+            && _unitOfMeasureByAbbreviationOrName.TryGetValue(IngestConstants.GramUnitOfMeasureAbbreviation, out var gramHit))
+        {
+            return IngestUnitOfMeasureResolution.Resolved(
+                parsed.Quantity * gramsPerUnit,
+                gramHit.Id,
+                gramHit.Abbreviation,
+                gramHit.UnitOfMeasureType);
+        }
+
+        // Step 0d: a pinch or dash with no number ("pinch of salt", "dash of pepper")
+        // is a quantity of 1 in the seeded pinch or dash unit; never queued.
+        if (parsed.ImplicitQuantity is { } implicitQuantity
+            && parsed.PreferredUnitOfMeasureAbbreviation is { } preferredAbbreviation
+            && _unitOfMeasureByAbbreviationOrName.TryGetValue(preferredAbbreviation, out var preferredHit))
+        {
+            return IngestUnitOfMeasureResolution.Resolved(
+                implicitQuantity,
+                preferredHit.Id,
+                preferredHit.Abbreviation,
+                preferredHit.UnitOfMeasureType);
+        }
+
         // Step 1: abbreviation / name lookup over each candidate token. Mirror
         // the runtime service by trying the raw token and a plural-stripped
         // variant so "cups" matches a seeded "cup" row without an alias.
@@ -152,9 +193,9 @@ internal sealed class InMemoryUnitOfMeasureResolver
             }
         }
 
-        // Step 3: count-with-ingredient-noun fallback. Only when the parser
-        // confirmed the remaining text is the ingredient noun itself.
-        if (parsed.Quantity > 0m && parsed.IsCountWithIngredientNoun)
+        // Step 3: count fallback. Only when the parser confirmed the remaining
+        // text is the ingredient noun itself or a size descriptor was skipped.
+        if (parsed.IsCountFallbackEligible)
         {
             return IngestUnitOfMeasureResolution.Resolved(
                 parsed.Quantity,

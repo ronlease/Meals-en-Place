@@ -19,7 +19,10 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
     // ── Volume unit IDs ───────────────────────────────────────────────────────
     public static readonly Guid CupId = new("a1000000-0000-0000-0000-000000000004");
     public static readonly Guid FlOzId = new("a1000000-0000-0000-0000-000000000005");
+    public static readonly Guid GallonId = new("a1000000-0000-0000-0000-000000000016");
     public static readonly Guid LiterId = new("a1000000-0000-0000-0000-000000000006");
+    public static readonly Guid DashId = new("a1000000-0000-0000-0000-000000000015");
+    public static readonly Guid PinchId = new("a1000000-0000-0000-0000-000000000014");
     public static readonly Guid PintId = new("a1000000-0000-0000-0000-000000000007");
     public static readonly Guid QuartId = new("a1000000-0000-0000-0000-000000000008");
     public static readonly Guid TbspId = new("a1000000-0000-0000-0000-000000000009");
@@ -104,6 +107,15 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             },
             new UnitOfMeasure
             {
+                Abbreviation = "dash",
+                BaseUnitOfMeasureId = MlId,
+                ConversionFactor = 0.62m,
+                Id = DashId,
+                Name = "Dash",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
                 Abbreviation = "fl oz",
                 BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 29.574m,
@@ -113,11 +125,29 @@ public class UnitOfMeasureConfiguration : IEntityTypeConfiguration<UnitOfMeasure
             },
             new UnitOfMeasure
             {
+                Abbreviation = "gal",
+                BaseUnitOfMeasureId = MlId,
+                ConversionFactor = 3785.41m,
+                Id = GallonId,
+                Name = "Gallon",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
                 Abbreviation = "L",
                 BaseUnitOfMeasureId = MlId,
                 ConversionFactor = 1000.0m,
                 Id = LiterId,
                 Name = "Liter",
+                UnitOfMeasureType = UnitOfMeasureType.Volume
+            },
+            new UnitOfMeasure
+            {
+                Abbreviation = "pinch",
+                BaseUnitOfMeasureId = MlId,
+                ConversionFactor = 0.31m,
+                Id = PinchId,
+                Name = "Pinch",
                 UnitOfMeasureType = UnitOfMeasureType.Volume
             },
             new UnitOfMeasure
