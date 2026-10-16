@@ -92,7 +92,7 @@ tests/
   MealsEnPlace.Unit/          # Unit tests (219 tests)
   MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-033)
+  backlog/                    # Product backlog: index.md, items/, archive/
   c4/                         # PlantUML C4 architecture diagrams (L1–L3)
   spikes/                     # Research artifacts for spike stories (e.g., MEP-025)
 ```
@@ -121,7 +121,7 @@ dotnet run --project src/MealsEnPlace.Tools.Ingest --configuration Release -- \
   --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv
 ```
 
-Rows whose `source` column equals `Recipes1M` are skipped automatically per the [MEP-025 spike](docs/backlog.md) decision to respect MIT's access restriction on the underlying Recipe1M+ subset. The remaining ~1.64M rows are imported.
+Rows whose `source` column equals `Recipes1M` are skipped automatically per the [MEP-025 spike](docs/backlog/archive/MEP-025.md) decision to respect MIT's access restriction on the underlying Recipe1M+ subset. The remaining ~1.64M rows are imported.
 
 See [src/MealsEnPlace.Tools.Ingest/README.md](src/MealsEnPlace.Tools.Ingest/README.md) for full tool documentation and [CITATION.cff](CITATION.cff) for dataset attribution.
 
