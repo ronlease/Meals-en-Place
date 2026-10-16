@@ -25,8 +25,13 @@ violates() {
   # stdin: file text
   local text
   text="$(cat)"
-  grep -Eq 'DropTable|DropColumn' <<<"$text" || return 1
-  grep -Eq '//[[:space:]]*DESTRUCTIVE-ACK:[[:space:]]*[^[:space:]]' <<<"$text" && return 1
+  # EF builder calls, then raw SQL (case-insensitive).
+  if ! grep -Eq 'Drop(Table|Column|Schema|Sequence)' <<<"$text" \
+    && ! grep -Eiq '(drop[[:space:]]+(table|column|schema|sequence|database)|truncate|delete[[:space:]]+from)' <<<"$text"; then
+    return 1
+  fi
+  # The acknowledgement must be a comment line of its own with a reason.
+  grep -Eq '^[[:space:]]*//[[:space:]]*DESTRUCTIVE-ACK:[[:space:]]*[^[:space:]]' <<<"$text" && return 1
   return 0
 }
 
