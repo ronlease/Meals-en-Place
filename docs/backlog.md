@@ -5406,8 +5406,8 @@ Feature: Camping Trip User Interface
 
 ## [MEP-067] Ingest Unit Token Coverage: Seed Count and Measure Aliases, Filter Junk Tokens, and Raise the Fully-Resolved Recipe Share
 
-**Status:** In Progress
-**Status note:** Implementation complete; target not met; awaiting user decision on closing.
+**Status:** Done
+**Status note:** Closed by the user on 2026-10-16 with the 60 percent target not met (33.6 percent achieved); remaining gap carried by MEP-069 and MEP-070.
 **Priority:** High
 **Depends on:** MEP-063 (corrected the count fallback so unrecognized tokens defer; this story clears the resulting backlog of deferred tokens)
 **Related to:** MEP-049, MEP-050 (earlier normalization-gap cleanup passes in the same ingest pipeline; this story reuses their reset-and-re-ingest procedure)
@@ -5552,9 +5552,9 @@ Feature: Ingest Unit Token Coverage
     And the result and the new count of distinct queued tokens are recorded in this backlog item
 ```
 
-**Note on the last scenario (2026-10-13):** The 60 percent threshold was not met (33.6% measured; see Results above). The remaining gap is carried by MEP-069 (container sizes) and by a new follow-up story, to be defined, for the deferred-token residue.
+**Note on the last scenario (2026-10-13):** The 60 percent threshold was not met (33.6% measured; see Results above). The remaining gap is carried by MEP-069 (container sizes) and by MEP-070 for the deferred-token residue.
 
-**Follow-up:** MEP-069 addresses the container-flagged ingredient blockers that remain after this story's unit-token coverage work, including recipe-stated size parsing and a standard-size default table.
+**Follow-up:** MEP-069 addresses the container-flagged ingredient blockers that remain after this story's unit-token coverage work, including recipe-stated size parsing and a standard-size default table. MEP-070 addresses the deferred-token residue (non-unit words and count words landing in the unit position).
 
 ---
 
@@ -5794,4 +5794,93 @@ Feature: Standard Container Size Defaults and Recipe-Stated Container Sizes
     When the fully-resolved SQL query from MEP-067 is run against the database
     Then the fully-resolved share is recorded in this backlog item
     And the remaining blocker breakdown by category is recorded
+```
+
+---
+
+## [MEP-070] Deferred Unit Token Residue: Stop Non-Unit Words Landing in the Unit Position
+
+**Status:** Backlog
+**Priority:** High
+**Depends on:** MEP-067 (unit-token coverage and the ingest dry-run and blocker-breakdown tooling must land first)
+**Related to:** MEP-069 (container sizes; the two stories together carry the gap to the 60 percent fully-resolved target; batch their re-ingest if both are ready)
+
+### Business Problem
+After the 2026-10-13 re-ingest, only 33.6% of 1,643,098 recipes are fully resolved and eligible for "What can I make?". I still cannot get useful matches from a catalog where two of every three recipes are invisible to the matcher. 414,518 recipes (25.2%) are blocked only by deferred ingredients and another 250,138 (15.2%) are blocked by both deferred and container-flagged ingredients, so 40.4% of the catalog is blocked by deferred ingredients. 1,148,306 ingredient rows (9.4% of non-container rows) are deferred, and 271,964 distinct tokens sit in `UnresolvedUnitOfMeasureToken`, far too many for me to review by hand.
+
+The top deferred tokens are mostly not units at all:
+
+- **Prep or state words in the unit position:** fresh (11,062), chopped (11,002), whole (10,834), beaten (9,615), hard-boiled (7,187), dried (4,061), unbaked (5,881), heaping (5,276).
+- **Ingredient names in the unit position:** cooking spray (12,601), olive oil (7,211), jalapeno (6,977), paprika (6,027), butter (4,842), water (4,835), Filling (4,907).
+- **Count or shape words I chose to leave without aliases in MEP-067:** head (13,055), sprigs (10,894), pieces (8,220), loaf (6,712), stalk (6,016), drops (5,819), piece (4,891), strips (4,750). I know what a stalk of celery or a head of lettuce is; these should simply count as "each" with the quantity unchanged.
+- **Missed by the existing detectors:** "boxes" (6,617), a plural container keyword the detector does not match, and "sq." (4,697).
+
+Clearing these should move a large share of the 40.4% into the matching pool without any review effort from me.
+
+### Implementation Notes
+- **Prep or state words.** When the leading word after the quantity is a prep or state word (for example fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping), skip it and keep looking for a unit or container word. If none follows, treat the line as Count (`ea`) with the quantity unchanged. Seed the stoplist as data (a table or seeded list populated by an explicit EF Core migration, never auto-migrate) rather than hard-coding where sensible.
+- **Ingredient names in the unit position.** When the leading word is an ingredient name (cooking spray, olive oil, jalapeno, paprika, butter, water, Filling), do not treat it as a unit token. Resolve the line as Count (`ea`) with the quantity unchanged, and let the word remain part of the ingredient name.
+- **Count and shape words.** The Backend Engineer decides between two approaches and records the choice: (a) seed aliases for head, sprigs, sprig, pieces, piece, loaf, stalk, stalks, drops, drop, strips, strip as Count (`ea`), or (b) a general rule that any unrecognized leading word followed by an ingredient noun is treated as a count with the quantity unchanged. Either way no weight or volume conversion is applied, because sizes vary.
+- **Plural container keywords.** Extend container keyword handling to match plurals (boxes, and any other plural not yet matched, for example jars, cans, bottles, cartons), so these rows are flagged as ContainerReferences with the original text preserved in Notes and are never given an assumed size.
+- **"sq."** Resolve as a Count (`ea`) shape word, or as a recognized abbreviation if the Backend Engineer finds a more accurate mapping; record the decision.
+- **Measurement.** Use the ingest dry-run top-deferred-tokens table and the recipe blocker breakdown to verify before and after.
+- **Procedure.** Requires a full reset and re-ingest. Batch it with MEP-069 if both are ready so the 1.64M-recipe ingest runs once. Like MEP-049, MEP-050, MEP-063 and MEP-067, the reset wipes inventory items, user-created ingredients and meal plans.
+- **Recording.** After the re-ingest, measure the new fully-resolved share with the MEP-067 success query and record it in this item, with the remaining blocker breakdown (container-only, deferred-only, both) and the new count of distinct queued tokens.
+
+### Out of Scope
+- Container size work (declared sizes, recipe-stated sizes, standard-size defaults): MEP-069.
+- UI changes to the unit-token review queue.
+- Long-tail tokens outside the groups listed above; the review queue is expected to still hold residual tokens.
+
+### Acceptance Criteria
+```gherkin
+Feature: Deferred Unit Token Residue
+
+  Scenario: Prep and state words are skipped in the unit position
+    Given the prep and state word stoplist is seeded
+    When the measure strings "1 fresh jalapeno", "2 chopped onions" and "3 beaten eggs" are normalized
+    Then "fresh", "chopped" and "beaten" are skipped and are not treated as unit tokens
+    And each line resolves to the "ea" UnitOfMeasure with the stated quantity
+    And none of those words is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: A prep word before a real unit is skipped and the unit is used
+    Given the prep and state word stoplist is seeded
+    When the measure string "1 heaping cup flour" is normalized
+    Then "heaping" is skipped
+    And the line resolves to 1 cup
+    And "heaping" is not added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: An ingredient name in the unit position resolves to Count
+    Given the measure strings "1 cooking spray", "2 olive oil" and "1 paprika"
+    When they are normalized during ingest
+    Then each resolves to the "ea" UnitOfMeasure with the stated quantity
+    And the ingredient name is preserved as the ingredient
+    And none of "cooking spray", "olive oil" or "paprika" is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Count and shape words resolve to Count with the quantity unchanged
+    When the measure strings "1 head lettuce", "3 stalks celery", "4 sprigs thyme" and "2 loaf bread" are normalized
+    Then each resolves to the "ea" UnitOfMeasure with the stated quantity
+    And no weight or volume conversion is applied
+    And no row is added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Plural container keywords are flagged as containers
+    Given the measure string "2 boxes frozen spinach"
+    When it is normalized during ingest
+    Then the ingredient is flagged as an unresolved ContainerReference with the original text preserved in Notes
+    And no assumed weight or volume is stored
+    And "boxes" is not added to the UnresolvedUnitOfMeasureToken queue
+
+  Scenario: Dry-run gate blocks the full re-ingest while targeted tokens remain
+    Given the parser changes and seeded data are in place
+    When the ingest tool is run in dry-run mode
+    Then the summary prints the top deferred tokens
+    And none of fresh, chopped, whole, beaten, hard-boiled, dried, unbaked, heaping, cooking spray, olive oil, jalapeno, paprika, butter, water, Filling, head, sprigs, pieces, loaf, stalk, drops, piece, strips, boxes, "sq." appears in the top 25
+    And the full re-ingest is not started otherwise
+
+  Scenario: Fully-resolved share is measured and recorded after re-ingest
+    Given a full reset and re-ingest has been performed with this story's changes
+    When the documented fully-resolved SQL query from MEP-067 is run against the database
+    Then the new fully-resolved share is recorded in this backlog item, compared with the 33.6 percent baseline
+    And the remaining blocker breakdown (container-only, deferred-only, both) is recorded
+    And the new count of distinct tokens in UnresolvedUnitOfMeasureToken is recorded, compared with the 271,964 baseline
 ```
