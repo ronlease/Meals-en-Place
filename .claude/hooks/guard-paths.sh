@@ -7,6 +7,7 @@ read_input
 file_path="$(json_get tool_input.file_path)"
 [[ -z "$file_path" ]] && exit 0
 rel="$(normalize_path "$file_path")"
+shopt -s nocasematch
 
 case "$rel" in
   */node_modules/* | node_modules/*)

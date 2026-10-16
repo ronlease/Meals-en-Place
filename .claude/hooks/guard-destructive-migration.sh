@@ -13,6 +13,8 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 is_migration_file() {
+  # Case-insensitive so a differently cased path cannot dodge the check.
+  shopt -s nocasematch
   case "$1" in
     */Migrations/*.Designer.cs | */Migrations/*ModelSnapshot.cs) return 1 ;;
     */Migrations/*.cs) return 0 ;;
@@ -64,10 +66,18 @@ tool_name="$(json_get tool_name)"
 if [[ "$tool_name" == "Write" ]]; then
   new_text="$(json_get tool_input.content)"
 else
-  # Edit: judge the file as it will look after the edit (existing text plus the replacement).
+  # Edit: rebuild the file as it will look after the edit, then judge that.
   existing=""
   [[ -f "$PROJECT_DIR/$rel" ]] && existing="$(cat "$PROJECT_DIR/$rel")"
-  new_text="${existing}"$'\n'"$(json_get tool_input.new_string)"
+  old_string="$(json_get tool_input.old_string)"
+  new_string="$(json_get tool_input.new_string)"
+  if [[ -z "$old_string" ]]; then
+    new_text="${existing}"$'\n'"${new_string}"
+  elif [[ "$(json_get tool_input.replace_all)" == "true" ]]; then
+    new_text="${existing//"$old_string"/"$new_string"}"
+  else
+    new_text="${existing/"$old_string"/"$new_string"}"
+  fi
 fi
 
 if violates <<<"$new_text"; then
