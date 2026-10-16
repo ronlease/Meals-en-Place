@@ -25,7 +25,8 @@ readonly PROTECTED_REF='(^|[[:space:]:/])(main|master)([[:space:]]|$)'
 # that come after it. Quotes are stripped so `git push origin "main"` reads as main.
 # Splitting on ; & | keeps `rm -rf x && git commit` from looking like a force-push.
 while IFS= read -r segment; do
-  segment="$(tr -d "\"'" <<<"$segment" | sed -E 's/^[[:space:]]+//')"
+  raw_segment="$segment"
+  segment="$(tr -d "\"'\134" <<<"$segment" | sed -E 's/^[[:space:]]+//')"
 
   # Track the effective branch. Creating a branch leaves main. Switching to main or master returns to it.
   # Other checkouts (file restores, unknown refs) leave the state alone, which fails closed.
@@ -42,8 +43,15 @@ while IFS= read -r segment; do
   fi
 
   if grep -Eq "^${GIT}[[:space:]]+push${END}" <<<"$segment"; then
+    # Fail closed on shell expansion, which the checks below cannot see through.
+    if grep -Eq '[$`{}*?]|\\' <<<"$raw_segment"; then
+      block "git push with shell expansion or escapes ($, backtick, braces, *, ?, backslash) is not allowed. Spell out the branch."
+    fi
     if grep -Eq "$FORCE_FLAGS" <<<"$segment" || grep -Eq "$FORCE_REFSPEC" <<<"$segment"; then
       block "force-push is not allowed."
+    fi
+    if grep -Eq '(^|[[:space:]])--(all|mirror|delete)([[:space:]=]|$)' <<<"$segment"; then
+      block "push --all, --mirror and --delete are not allowed."
     fi
     if grep -Eq "$PROTECTED_REF" <<<"$segment"; then
       block "push to main. Push a feature branch instead."
