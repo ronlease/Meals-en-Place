@@ -14,7 +14,7 @@ Copy the shape of `Features/WasteReduction` (service only) or `Features/Inventor
 - `<Name>Controller.cs`: `[ApiController]`, `[Route("api/v1/<kebab-name>")]`, XML docs on every action, `ProblemDetails` errors. Apply `UnitOfMeasureDisplayConverter` here when returning quantities.
 - `I<Name>Service.cs` and `<Name>Service.cs`: logic in base units.
 - `I<Name>Repository.cs` and `<Name>Repository.cs`: only when the slice needs data access beyond the `DbContext`. Skip it otherwise.
-- DTOs: one file per request and response, XML docs on each property, members in alphabetical order.
+- DTOs: one file per request and response, XML docs on each property.
 - `README.md`: backlog ids, endpoint table, key concepts, files.
 - Register services in `Program.cs` (alphabetical within the block).
 - Entity and configuration in `Models/Entities` and `Infrastructure/Data/Configurations` if new. Then use the `ef-migration` skill.

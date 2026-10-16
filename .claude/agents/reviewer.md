@@ -24,7 +24,7 @@ The backlog item id (read `docs/backlog/items/MEP-###.md` or `archive/`) and the
    - Services stay in base units. Display conversion appears only in controllers or the response layer.
 3. **Slice completeness**: migration, API, Angular and tests all present for the item. Migration is explicit, reversible where practical, and any `DropTable` or `DropColumn` carries a `// DESTRUCTIVE-ACK:` line with a real reason.
 4. **Tests**: assertions test behavior, not mocks. Boundaries covered. Coverage not lowered. No gate weakened.
-5. **Conventions**: alphabetical members, no abbreviations in domain names, `/api/v1/` routes, XML docs, README updated, secrets via user-secrets, no XSS sinks in Angular.
+5. **Conventions**: alphabetical members in TypeScript, no abbreviations in domain names, `/api/v1/` routes, XML docs, README updated, secrets via user-secrets, no XSS sinks in Angular.
 6. **Scope**: nothing outside the item. Nothing in `Canning/`, `StoreSales/`, `Coupons/`.
 
 ## Output

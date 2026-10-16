@@ -39,7 +39,7 @@ cd src/MealsEnPlace.Web && npx ng build --configuration production
 
 ## Conventions
 
-- Members within a class, TypeScript and C#, are in alphabetical order. ESLint enforces it for TypeScript; C# is by convention.
+- Class members are in alphabetical order in TypeScript only. ESLint (`member-ordering`) is set to warn; 71 existing violations await cleanup (MEP-071). C# has no ordering rule.
 - No abbreviations in domain names (`UnitOfMeasure`, not `UOM`). HTTP, JSON, SQL, CSV, API, UI, DB, DTO, EF, ID are fine.
 - Routes live under `/api/v1/`. Controllers carry XML docs for Swagger.
 - Feature code is a flat folder per slice under `Features/` (API) and `features/` (Angular). Each has a README.md.
