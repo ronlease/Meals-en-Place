@@ -73,9 +73,13 @@ else
   [[ -f "$PROJECT_DIR/$rel" ]] && existing="$(cat "$PROJECT_DIR/$rel")"
   old_string="$(json_get tool_input.old_string)"
   new_string="$(json_get tool_input.new_string)"
+  # Normalize line endings first so containment check and substitution agree on CRLF files.
+  existing="${existing//$cr/}"
+  old_string="${old_string//$cr/}"
+  new_string="${new_string//$cr/}"
   if [[ -z "$old_string" ]]; then
     new_text="${existing}${nl}${new_string}"
-  elif [[ "${existing//$cr/}" != *"${old_string//$cr/}"* ]]; then
+  elif [[ "$existing" != *"$old_string"* ]]; then
     # The edit does not apply cleanly to what is on disk. Fail closed: judge the
     # existing text plus the new text, so a drop in new_string is still caught.
     new_text="${existing}${nl}${new_string}"
