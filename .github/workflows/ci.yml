@@ -110,6 +110,18 @@ jobs:
       - name: Check formatting
         run: dotnet format MealsEnPlace.slnx --verify-no-changes --verbosity diagnostic
 
+  # -- C4: committed PNGs match their .puml sources ---------------------------
+  c4-render-check:
+    name: C4 Render Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify rendered diagrams are current
+        run: ./scripts/render-c4.sh --check
+
   # -- .NET: dependency vulnerability scan -----------------------------------
   dotnet-dependency-scan:
     name: .NET Dependency Scan
@@ -168,6 +180,9 @@ jobs:
 
       - name: Lint
         run: npx ng lint
+
+      - name: Check formatting (Prettier)
+        run: npx prettier --check "src/**/*.{ts,html,scss}"
 
   # -- Angular: unit tests with coverage gate ---------------------------------
   # The Vitest suite runs through the first-party @angular/build:unit-test
