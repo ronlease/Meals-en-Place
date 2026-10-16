@@ -51,6 +51,7 @@ expect "rm -rf is not a force-push"     0 guard-main.sh "$feat_repo" "$(bash_jso
 expect "quoted push to main"            2 guard-main.sh "$feat_repo" "$(bash_json 'git push origin "main"')"
 expect "git -C push to main"            2 guard-main.sh "$feat_repo" "$(bash_json 'git -C . push origin main')"
 expect "commit then checkout -b"        2 guard-main.sh "$main_repo" "$(bash_json 'git commit -m x && git checkout -b feat')"
+expect "switch back to main then commit" 2 guard-main.sh "$feat_repo" "$(bash_json 'git switch main && git commit -m x')"
 expect "git -C commit on main"          2 guard-main.sh "$main_repo" "$(bash_json 'git -C . commit -m x')"
 expect "non-git command"                0 guard-main.sh "$main_repo" "$(bash_json 'ls -la')"
 expect "git status on main"             0 guard-main.sh "$main_repo" "$(bash_json 'git status')"
@@ -94,6 +95,7 @@ printf '// DESTRUCTIVE-ACK: reason\nmigrationBuilder.AddColumn<int>(name: "A");\
 expect "Edit DropColumn with ack elsewhere" 0 guard-destructive-migration.sh "$feat_repo" "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$mig\",\"old_string\":\"AddColumn<int>\",\"new_string\":\"DropColumn\"}}"
 printf 'migrationBuilder.DropColumn(name: "A");\n' > "$mig"
 expect "Edit removing the drop" 0 guard-destructive-migration.sh "$feat_repo" "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$mig\",\"old_string\":\"DropColumn\",\"new_string\":\"AddColumn<int>\"}}"
+expect "Edit that does not apply fails closed" 2 guard-destructive-migration.sh "$feat_repo" "{\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$mig\",\"old_string\":\"NotInFile\",\"new_string\":\"migrationBuilder.DropTable(name: 1);\"}}"
 expect "Edit with odd path casing" 2 guard-destructive-migration.sh "$feat_repo" "{\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$feat_repo/src/MealsEnPlace.Api/MIGRATIONS/20260101_Drop.CS\",\"content\":\"DropTable\"}}"
 rm -f "$mig"
 

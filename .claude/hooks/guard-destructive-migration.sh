@@ -13,11 +13,10 @@
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 is_migration_file() {
-  # Case-insensitive so a differently cased path cannot dodge the check.
-  shopt -s nocasematch
-  case "$1" in
-    */Migrations/*.Designer.cs | */Migrations/*ModelSnapshot.cs) return 1 ;;
-    */Migrations/*.cs) return 0 ;;
+  # Lowercased copy so a differently cased path cannot dodge the check.
+  case "${1,,}" in
+    */migrations/*.designer.cs | */migrations/*modelsnapshot.cs) return 1 ;;
+    */migrations/*.cs) return 0 ;;
     *) return 1 ;;
   esac
 }
@@ -67,12 +66,19 @@ if [[ "$tool_name" == "Write" ]]; then
   new_text="$(json_get tool_input.content)"
 else
   # Edit: rebuild the file as it will look after the edit, then judge that.
+  cr="$(printf '\r')"
+  nl="$(printf '\nx')"
+  nl="${nl%x}"
   existing=""
   [[ -f "$PROJECT_DIR/$rel" ]] && existing="$(cat "$PROJECT_DIR/$rel")"
   old_string="$(json_get tool_input.old_string)"
   new_string="$(json_get tool_input.new_string)"
   if [[ -z "$old_string" ]]; then
-    new_text="${existing}"$'\n'"${new_string}"
+    new_text="${existing}${nl}${new_string}"
+  elif [[ "${existing//$cr/}" != *"${old_string//$cr/}"* ]]; then
+    # The edit does not apply cleanly to what is on disk. Fail closed: judge the
+    # existing text plus the new text, so a drop in new_string is still caught.
+    new_text="${existing}${nl}${new_string}"
   elif [[ "$(json_get tool_input.replace_all)" == "true" ]]; then
     new_text="${existing//"$old_string"/"$new_string"}"
   else

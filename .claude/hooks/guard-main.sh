@@ -27,8 +27,12 @@ readonly PROTECTED_REF='(^|[[:space:]:/])(main|master)([[:space:]]|$)'
 while IFS= read -r segment; do
   segment="$(tr -d "\"'" <<<"$segment" | sed -E 's/^[[:space:]]+//')"
 
+  # Track the effective branch. Creating a branch leaves main. Switching to main or master returns to it.
+  # Other checkouts (file restores, unknown refs) leave the state alone, which fails closed.
   if grep -Eq "^${GIT}[[:space:]]+(checkout[[:space:]]+-[bB]|switch[[:space:]]+(-c|-C|--create))${END}" <<<"$segment"; then
     on_protected=false
+  elif grep -Eq "^${GIT}[[:space:]]+(checkout|switch)${END}" <<<"$segment" && grep -Eq "$PROTECTED_REF" <<<"$segment"; then
+    on_protected=true
   fi
 
   if grep -Eq "^${GIT}[[:space:]]+commit${END}" <<<"$segment"; then
