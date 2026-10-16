@@ -75,6 +75,7 @@ Read an item file only when working it.
 | [MEP-068](items/MEP-068.md) | Chore: Audit Constants for Enum Candidates and Convert Where Appropriate | Backlog | Low |
 | [MEP-069](items/MEP-069.md) | Standard Container Size Defaults and Recipe-Stated Container Sizes | Backlog | High |
 | [MEP-070](items/MEP-070.md) | Deferred Unit Token Residue: Stop Non-Unit Words Landing in the Unit Position | Backlog | High |
+| [MEP-071](items/MEP-071.md) | Chore: Fix TypeScript Member Ordering Violations and Raise the Rule to Error | Backlog | Low |
 
 ## Slice review
 
