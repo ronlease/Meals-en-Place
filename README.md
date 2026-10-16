@@ -6,9 +6,9 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 
 - **API:** ASP.NET Core 10, Entity Framework Core 10, PostgreSQL
 - **Frontend:** Angular 22, Angular Material, PWA (service worker, offline support)
-- **AI:** Claude API (dietary classification, ingredient normalization, meal plan optimization)
+- **AI:** Claude API for unit resolution, meal plan optimization and substitution suggestions (the client is a stub today; dietary tagging is rule-based). See [docs/domain.md](docs/domain.md)
 - **Recipe catalog:** Bulk ingested offline from the Kaggle "Recipe Dataset (over 2M)" via `MealsEnPlace.Tools.Ingest` (see [CITATION.cff](CITATION.cff))
-- **External APIs:** Open Food Facts (ingredient metadata), Todoist Unified API v1 (shopping list + meal plan task push — MEP-028 / MEP-029, migrated from REST v2 in MEP-042)
+- **External APIs:** Todoist Unified API v1 (shopping list + meal plan task push — MEP-028 / MEP-029, migrated from REST v2 in MEP-042)
 - **Testing:** xUnit, FluentAssertions, Moq (API); Vitest via `@angular/build:unit-test` (frontend)
 
 ## Getting Started
@@ -25,10 +25,7 @@ A personal recipe and meal planning tool that tracks pantry, fridge, and freezer
 # Start PostgreSQL
 docker compose up -d
 
-# Apply database migrations
-dotnet ef database update --project src/MealsEnPlace.Api
-
-# Start the API (HTTPS on port 7274)
+# Start the API (applies pending migrations on startup in Development only) (HTTPS on port 7274)
 dotnet run --project src/MealsEnPlace.Api --launch-profile https
 
 # In a separate terminal, start the frontend (HTTPS on port 4280)
@@ -38,6 +35,8 @@ ng serve
 ```
 
 Open `https://localhost:4280` in your browser.
+
+Migrations apply automatically when the API starts in the Development environment. Create one with `dotnet ef migrations add <Name> --project src/MealsEnPlace.Api`; apply by hand elsewhere with `dotnet ef database update`.
 
 Swagger docs are available at `https://localhost:7274/swagger`.
 
@@ -73,9 +72,9 @@ src/
       ShoppingList/           # Shopping list derived from meal plan vs inventory
       WasteReduction/         # Waste alerts for expiring items with recipe suggestions
     Infrastructure/
-      Claude/                 # Claude API client (stub) and prompt types
+      Claude/                 # Claude service (stub) and availability checks
       Data/                   # EF Core DbContext, migrations, configurations
-      ExternalApis/           # Open Food Facts client
+      ExternalApis/           # Todoist client
     Models/Entities/          # Domain entities and enums
   MealsEnPlace.Web/           # Angular 22 frontend
     src/app/features/
@@ -89,10 +88,11 @@ src/
     src/app/core/             # Shared services and models
     src/app/shared/           # Reusable UI components (offline banner)
 tests/
-  MealsEnPlace.Unit/          # Unit tests (219 tests)
-  MealsEnPlace.Integration/   # Integration tests (18 tests, WebApplicationFactory)
+  MealsEnPlace.Unit/          # Unit tests
+  MealsEnPlace.Integration/   # Integration tests (WebApplicationFactory)
 docs/
-  backlog.md                  # Product backlog (MEP-001 through MEP-033)
+  backlog/                    # Product backlog: index.md, items/, archive/
+  domain.md                   # Domain rules: units, container resolution, matching, Claude
   c4/                         # PlantUML C4 architecture diagrams (L1–L3)
   spikes/                     # Research artifacts for spike stories (e.g., MEP-025)
 ```
@@ -121,10 +121,18 @@ dotnet run --project src/MealsEnPlace.Tools.Ingest --configuration Release -- \
   --csv src/MealsEnPlace.Tools.Ingest/data/recipes_data.csv
 ```
 
-Rows whose `source` column equals `Recipes1M` are skipped automatically per the [MEP-025 spike](docs/backlog.md) decision to respect MIT's access restriction on the underlying Recipe1M+ subset. The remaining ~1.64M rows are imported.
+Rows whose `source` column equals `Recipes1M` are skipped automatically per the [MEP-025 spike](docs/backlog/archive/MEP-025.md) decision to respect MIT's access restriction on the underlying Recipe1M+ subset. The remaining ~1.64M rows are imported.
 
 See [src/MealsEnPlace.Tools.Ingest/README.md](src/MealsEnPlace.Tools.Ingest/README.md) for full tool documentation and [CITATION.cff](CITATION.cff) for dataset attribution.
 
+
+## Database backup
+
+`./scripts/db-backup.sh` writes a `pg_dump` custom-format dump of the local database to `backups/` (gitignored) through `docker compose`. Nothing runs it automatically; run it before a risky migration or a bulk ingest. The script header shows the `pg_restore` command.
+
+## Claude Code configuration
+
+`CLAUDE.md` (root and in `src/MealsEnPlace.Api`, `src/MealsEnPlace.Web`) holds the working rules. `.claude/agents/` has an implementer and a reviewer, `.claude/skills/` the repeatable workflows, and `.claude/hooks/` the guards run by `.claude/settings.json`. `bash .claude/hooks/test-hooks.sh` tests the hooks. Hooks and scripts need bash (WSL on Windows, native on Fedora).
 
 ## Architecture
 

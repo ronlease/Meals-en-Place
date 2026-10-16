@@ -151,6 +151,13 @@ var app = builder.Build();
 // -- HTTP pipeline ------------------------------------------------------------
 if (app.Environment.IsDevelopment())
 {
+    // Development only: apply pending migrations at startup. Scaffolding stays explicit
+    // (dotnet ef migrations add), and no other environment migrates automatically.
+    using (var scope = app.Services.CreateScope())
+    {
+        scope.ServiceProvider.GetRequiredService<MealsEnPlaceDbContext>().Database.Migrate();
+    }
+
     app.UseSwagger();
     app.UseSwaggerUI(options =>
         options.SwaggerEndpoint("/swagger/v1/swagger.json", "Meals en Place API v1"));

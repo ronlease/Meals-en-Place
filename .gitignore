@@ -61,3 +61,10 @@ src/MealsEnPlace.Tools.Ingest/data/*
 !docs/**/*.csv
 # Scratch directory used by scripts/render-c4.sh (removed on exit)
 .c4-render.*/
+
+# Claude Code local state
+.claude/settings.local.json
+.claude/worktrees/
+
+# Database backups (scripts/db-backup.sh)
+backups/

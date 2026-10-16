@@ -15,6 +15,12 @@ module.exports = defineConfig([
     ],
     processor: angular.processInlineTemplates,
     rules: {
+      // Class members are alphabetical (see CLAUDE.md). memberTypes 'never' ignores kind grouping.
+      // Warn until the existing violations are fixed in their own slice, then raise to 'error'.
+      '@typescript-eslint/member-ordering': [
+        'warn',
+        { default: { memberTypes: 'never', order: 'alphabetically' } },
+      ],
       '@angular-eslint/directive-selector': [
         'error',
         {
