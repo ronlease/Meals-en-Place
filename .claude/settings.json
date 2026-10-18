@@ -56,7 +56,7 @@
   },
   "extraKnownMarketplaces": {
     "i-feel-fine": {
-      "source": { "source": "directory", "path": "../I-Feel-Fine" }
+      "source": { "source": "github", "repo": "ronlease/I-Feel-Fine" }
     }
   },
   "enabledPlugins": {
