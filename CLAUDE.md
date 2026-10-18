@@ -33,12 +33,12 @@ cd src/MealsEnPlace.Web && npx ng build --configuration production
 
 - Work in thin vertical slices. One backlog item = one slice: migration, API, Angular and tests together, by one implementer. If an item does not fit one slice, split it in `docs/backlog/index.md` first.
 - Backlog: `docs/backlog/index.md` lists items (id, title, status, priority). Read an item's file under `items/` only when working it. Done items live in `archive/`. Every feature needs a backlog item before code. Mark it `Done` when the work lands.
-- Use the `implementer` agent to build a slice and the `reviewer` agent to review the diff against acceptance criteria. Skills: `new-backlog-item`, `new-feature-slice`, `ef-migration`, `update-c4`, `pre-pr`.
+- Agents and skills come from the `i-feel-fine` plugins (marketplace `ronlease/I-Feel-Fine`, enabled in `.claude/settings.json`). Use `core:implementer` to build a slice and `core:reviewer` to review the diff against acceptance criteria. Skills: `core:new-backlog-item`, `core:pre-pr`, `core:update-c4`, `dotnet-angular:new-feature-slice`, `dotnet-angular:ef-migration`.
 - Backlog statuses: Backlog, Proposed, In Progress, Blocked, Done, Post-MVP (Backlog).
 - Before committing, remove leftover `coverage-*/`, `**/TestResults/` and `src/MealsEnPlace.Web/coverage/`.
 - Diagrams: `docs/c4/` holds `context`, `container`, `component-api` and `component-web` `.puml` files and their committed PNGs. The render script pulls a pinned PlantUML image and needs network access. Show only built external systems (Claude API, Todoist; add Open Food Facts when a client exists) and never `Canning`, `StoreSales` or `Coupons`.
 - Branch off `main` for all work. Commit locally as you go. Push feature branches when asked. The user opens PRs.
-- Hooks (see `.claude/settings.json`) format edited files, block commits and pushes on `main`, block force-push, protect generated paths and verify the build at stop.
+- Hooks also come from the plugins. They format edited files, block commits and pushes on `main`, block force-push, protect generated paths, guard destructive migrations and verify the build at stop. This repo's settings are in `.claude/ifeelfine.json`: backlog prefix, solution, web dir, protected paths and the C4 render script.
 
 ## Conventions
 
