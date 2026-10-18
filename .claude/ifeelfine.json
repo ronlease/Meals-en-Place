@@ -1,0 +1,12 @@
+{
+  "backlogDir": "docs/backlog",
+  "backlogPrefix": "MEP",
+  "solution": "MealsEnPlace.slnx",
+  "webDir": "src/MealsEnPlace.Web",
+  "protectedPaths": [
+    { "glob": "docs/c4/*.png", "message": "Rendered image. Edit the .puml and run ./scripts/render-c4.sh." },
+    { "glob": "recipes_data.csv", "message": "Kaggle dataset. It is never edited or committed." }
+  ],
+  "renderC4Script": "./scripts/render-c4.sh",
+  "stopVerifyTimeoutSeconds": 25
+}
