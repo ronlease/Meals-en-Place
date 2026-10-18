@@ -54,49 +54,13 @@
       "Read(**/recipes_data.csv)"
     ]
   },
-  "hooks": {
-    "SessionStart": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh\"", "timeout": 10 }
-        ]
-      }
-    ],
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-main.sh\"", "timeout": 10 }
-        ]
-      },
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-paths.sh\"", "timeout": 10 },
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-destructive-migration.sh\"", "timeout": 10 }
-        ]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Edit|Write",
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format-on-edit.sh\"", "timeout": 60 }
-        ]
-      },
-      {
-        "matcher": "Bash",
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-destructive-migration.sh\" scan", "timeout": 10 }
-        ]
-      }
-    ],
-    "Stop": [
-      {
-        "hooks": [
-          { "type": "command", "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-verify.sh\"", "timeout": 30 }
-        ]
-      }
-    ]
+  "extraKnownMarketplaces": {
+    "i-feel-fine": {
+      "source": { "source": "directory", "path": "../I-Feel-Fine" }
+    }
+  },
+  "enabledPlugins": {
+    "core@i-feel-fine": true,
+    "dotnet-angular@i-feel-fine": true
   }
 }
