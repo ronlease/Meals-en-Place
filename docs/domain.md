@@ -93,3 +93,19 @@ Inventory items expiring within 3 days produce alerts listing fully resolved rec
 ## Post-MVP stubs
 
 `Features/Canning/`, `Features/StoreSales/`, `Features/Coupons/` hold a README only. No code until the backlog unblocks them.
+
+## Required tests
+
+The `implementer` agent writes a test for each entry that touches the area it changes. Boundaries are exact: test both sides.
+
+- Cross-type unit conversion (cups to grams) returns a not-possible result, never a number.
+- A to-taste ingredient (quantity 0) never blocks resolution and never creates a shopping deficit.
+- The waste bonus never pushes `FinalScore` above 1.0.
+- A recipe with any unresolved ingredient is excluded from matching, meal plan candidates, waste alerts and shopping derivation. Partial resolution earns no partial participation.
+- A container word inside a longer word or non-food phrase ("pecan", "tin foil") is not a container reference.
+- Substitution calls fire for NearMatch only: at 0.75 inclusive, not at 0.74.
+- Empty inventory returns an empty result without throwing.
+- A recipe made only of container references imports with every ingredient unresolved and no unit set.
+- Display converter: no preferences row gives Imperial. 453 g is oz, 454 g is lb. 58 ml is fl oz, 59 ml and 946 ml are cups, 947 ml is quarts.
+- Claude failures degrade and never throw. Low confidence never applies silently.
+- A meal plan rejects two recipes in one day and slot.

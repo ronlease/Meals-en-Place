@@ -19,11 +19,11 @@ Run in bash (WSL on Windows, native on Fedora).
 ```
 dotnet build MealsEnPlace.slnx
 dotnet test MealsEnPlace.slnx
-dotnet format MealsEnPlace.slnx
+dotnet format MealsEnPlace.slnx [--verify-no-changes]   # CI runs the check form
 cd src/MealsEnPlace.Web && npm test            # Vitest
 cd src/MealsEnPlace.Web && npm run test:coverage
 cd src/MealsEnPlace.Web && npx ng lint
-cd src/MealsEnPlace.Web && npx prettier --write "src/**/*.{ts,html,scss}"
+cd src/MealsEnPlace.Web && npx prettier --write "src/**/*.{ts,html,scss}"   # CI runs --check
 cd src/MealsEnPlace.Web && npx ng build --configuration production
 ./scripts/render-c4.sh [--check]               # needs Docker
 ./scripts/db-backup.sh                         # pg_dump via docker compose; run on request only
@@ -34,6 +34,9 @@ cd src/MealsEnPlace.Web && npx ng build --configuration production
 - Work in thin vertical slices. One backlog item = one slice: migration, API, Angular and tests together, by one implementer. If an item does not fit one slice, split it in `docs/backlog/index.md` first.
 - Backlog: `docs/backlog/index.md` lists items (id, title, status, priority). Read an item's file under `items/` only when working it. Done items live in `archive/`. Every feature needs a backlog item before code. Mark it `Done` when the work lands.
 - Use the `implementer` agent to build a slice and the `reviewer` agent to review the diff against acceptance criteria. Skills: `new-backlog-item`, `new-feature-slice`, `ef-migration`, `update-c4`, `pre-pr`.
+- Backlog statuses: Backlog, Proposed, In Progress, Blocked, Done, Post-MVP (Backlog).
+- Before committing, remove leftover `coverage-*/`, `**/TestResults/` and `src/MealsEnPlace.Web/coverage/`.
+- Diagrams: `docs/c4/` holds `context`, `container`, `component-api` and `component-web` `.puml` files and their committed PNGs. The render script pulls a pinned PlantUML image and needs network access. Show only built external systems (Claude API, Todoist; add Open Food Facts when a client exists) and never `Canning`, `StoreSales` or `Coupons`.
 - Branch off `main` for all work. Commit locally as you go. Push feature branches when asked. The user opens PRs.
 - Hooks (see `.claude/settings.json`) format edited files, block commits and pushes on `main`, block force-push, protect generated paths and verify the build at stop.
 
