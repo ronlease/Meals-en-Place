@@ -24,7 +24,7 @@
     "@angular/router": "^22.2.3",
     "@angular/service-worker": "^22.2.3",
     "rxjs": "~7.8.0",
-    "tslib": "^2.3.0",
+    "tslib": "^2.9.1",
     "undici": "^7.29.1"
   },
   "overrides": {
